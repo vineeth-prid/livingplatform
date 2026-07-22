@@ -40,6 +40,9 @@ const AmcContractsPage = lazy(() => import('./features/amc/contracts-list').then
 const ContractCreatePage = lazy(() => import('./features/amc/contract-create-page').then((m) => ({ default: m.ContractCreatePage })));
 const ContractDetailPage = lazy(() => import('./features/amc/contract-detail').then((m) => ({ default: m.ContractDetailPage })));
 
+// Platform-Admin control plane — community provisioning.
+const AdminCommunitiesPage = lazy(() => import('./features/admin/admin-communities').then((m) => ({ default: m.AdminCommunitiesPage })));
+
 // Community Operations (Frontend Sprint 9).
 const VisitorsPage = lazy(() => import('./features/visitors/visitors-list').then((m) => ({ default: m.VisitorsPage })));
 const VisitorDetailPage = lazy(() => import('./features/visitors/visitor-detail').then((m) => ({ default: m.VisitorDetailPage })));
@@ -84,6 +87,9 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute.addChildren([
     page('/', DashboardPage),
     page('/design-system', DesignSystemPage),
+
+    // Platform-Admin control plane
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/communities', component: AdminCommunitiesPage }),
 
     // Community & People Management (this sprint)
     page('/community', CommunityOverviewPage),

@@ -2,9 +2,36 @@ import type { ListParams, Paginated } from '@living/types';
 
 import type { HttpClient } from '../http';
 
-/** Platform-level reads: RBAC catalog, users, profile, health. */
+export interface ProvisionCommunityInput {
+  name: string;
+  code: string;
+  type: string;
+  city?: string;
+  state?: string;
+  adminEmail: string;
+  adminFirstName: string;
+  adminLastName: string;
+}
+
+export interface ProvisionCommunityResult<C = unknown> {
+  community: C;
+  admin: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    temporaryPassword: string;
+  };
+}
+
+/** Platform-level reads: RBAC catalog, users, profile, health — and provisioning. */
 export class PlatformResource {
   constructor(private readonly http: HttpClient) {}
+
+  /** Provision a community + its Association Admin in one call (Platform Admin only). */
+  provisionCommunity<C = unknown>(input: ProvisionCommunityInput): Promise<ProvisionCommunityResult<C>> {
+    return this.http.post('/admin/communities', input);
+  }
 
   // RBAC
   listRoles<T = unknown>(): Promise<T[]> {

@@ -75,15 +75,22 @@ async function seedRoles() {
         ? allPermissions.map((p) => p.key)
         : role.permissions;
 
-    for (const key of grantedKeys) {
-      const permissionId = idByKey.get(key);
-      if (!permissionId) continue;
+    const grantedIds = grantedKeys
+      .map((key) => idByKey.get(key))
+      .filter((id): id is string => !!id);
+
+    for (const permissionId of grantedIds) {
       await prisma.rolePermission.upsert({
         where: { roleId_permissionId: { roleId: record.id, permissionId } },
         create: { roleId: record.id, permissionId },
         update: {},
       });
     }
+    // Authoritative sync: revoke any grant no longer in the role definition
+    // (e.g. community:create removed from Association Admin).
+    await prisma.rolePermission.deleteMany({
+      where: { roleId: record.id, permissionId: { notIn: grantedIds } },
+    });
   }
   console.log(`✓ ${SYSTEM_ROLES.length} system roles + grants`);
 }

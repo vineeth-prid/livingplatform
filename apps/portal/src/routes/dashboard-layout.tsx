@@ -1,8 +1,8 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   Boxes, Building2, CalendarCheck, CalendarClock, DoorOpen, FileSignature, FileText,
-  Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, Sparkles, Store, UserRound, Users, Wrench,
+  Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, ShieldCheck, Sparkles, Store, UserRound, Users, Wrench,
 } from 'lucide-react';
 import { useAuth } from '@living/hooks';
 import {
@@ -54,6 +54,12 @@ const sections: NavSection[] = [
   },
 ];
 
+// Platform-Admin-only section — provisioning customers (communities + admins).
+const adminSection: NavSection = {
+  title: 'Administration',
+  items: [{ label: 'Communities', icon: ShieldCheck, href: '/admin/communities' }],
+};
+
 /** The authenticated dashboard shell wrapping every protected route. */
 export function DashboardLayout() {
   const { session, logout } = useAuth();
@@ -62,9 +68,16 @@ export function DashboardLayout() {
   const commandPalette = useCommandPalette();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  // Platform Admins get the Administration section; associations never see it.
+  const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
+  const visibleSections = useMemo(
+    () => (isPlatform ? [...sections, adminSection] : sections),
+    [isPlatform],
+  );
+
   // Register global command-palette actions for navigation.
   useEffect(() => {
-    const items = sections.flatMap((s) => s.items);
+    const items = visibleSections.flatMap((s) => s.items);
     return commandPalette.register(
       items.map((item) => ({
         id: `nav:${item.href}`,
@@ -73,7 +86,7 @@ export function DashboardLayout() {
         perform: () => navigate({ to: item.href }),
       })),
     );
-  }, [commandPalette, navigate]);
+  }, [commandPalette, navigate, visibleSections]);
 
   const user = session?.user;
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Living';
@@ -81,7 +94,7 @@ export function DashboardLayout() {
   return (
     <RequireAuth>
       <AppShell
-        sections={sections}
+        sections={visibleSections}
         activeHref={pathname}
         breadcrumbs={[{ label: 'Living' }, { label: 'Dashboard' }]}
         onSearchClick={commandPalette.open}

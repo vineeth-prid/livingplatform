@@ -20,4 +20,8 @@ export { AmcResource } from './resources/amc';
 export {
   VisitorsResource, BookingsResource, AnnouncementsResource, AmenitiesResource, DocumentsResource,
 } from './resources/community-ops';
-export { PlatformResource } from './resources/platform';
+export {
+  PlatformResource,
+  type ProvisionCommunityInput,
+  type ProvisionCommunityResult,
+} from './resources/platform';

@@ -230,9 +230,9 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.TENANT_READ,
       P.TENANT_UPDATE,
       P.COMMUNITY_READ,
-      P.COMMUNITY_CREATE,
+      // Community create/delete is Platform-Admin only — associations operate
+      // *within* their provisioned community, they don't create/remove them.
       P.COMMUNITY_UPDATE,
-      P.COMMUNITY_DELETE,
       P.USER_READ,
       P.USER_CREATE,
       P.USER_UPDATE,

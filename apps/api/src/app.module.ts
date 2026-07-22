@@ -13,6 +13,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { configuration, type AppConfig } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { AmenityModule } from './modules/amenity/amenity.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AmcModule } from './modules/amc/amc.module';
 import { AssetModule } from './modules/asset/asset.module';
 import { CommunityOpsModule } from './modules/community-ops/community-ops.module';
@@ -128,6 +129,9 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
 
     // Community Operations (Sprint 10)
     CommunityOpsModule,
+
+    // Platform-Admin control plane (community provisioning)
+    AdminModule,
   ],
   providers: [
     // Guard chain: rate-limit → authenticate → authorize (permissions, roles).
