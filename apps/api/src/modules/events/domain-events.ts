@@ -53,6 +53,39 @@ export const DomainEventName = {
   WorkCompleted: 'work_order.completed',
   WorkVerified: 'work_order.verified',
   WorkClosed: 'work_order.closed',
+  // Sprint 7 — Asset Foundation
+  AssetCreated: 'asset.created',
+  AssetUpdated: 'asset.updated',
+  AssetStatusChanged: 'asset.status_changed',
+  AssetMoved: 'asset.moved',
+  AssetPhotoAdded: 'asset.photo_added',
+  AssetDocumentAdded: 'asset.document_added',
+  AssetArchived: 'asset.archived',
+  // Sprint 8 — Preventive Maintenance Engine
+  MaintenancePlanCreated: 'maintenance.plan_created',
+  MaintenancePlanUpdated: 'maintenance.plan_updated',
+  MaintenancePlanActivated: 'maintenance.plan_activated',
+  MaintenancePlanPaused: 'maintenance.plan_paused',
+  MaintenanceRunGenerated: 'maintenance.run_generated',
+  MaintenanceRunSkipped: 'maintenance.run_skipped',
+  MaintenanceWorkOrderCreated: 'maintenance.work_order_created',
+  // Sprint 9 — AMC Management Engine
+  AMCContractCreated: 'amc.contract_created',
+  AMCContractActivated: 'amc.contract_activated',
+  AMCContractRenewed: 'amc.contract_renewed',
+  AMCContractExpired: 'amc.contract_expired',
+  AMCAssetCovered: 'amc.asset_covered',
+  AMCAssetRemoved: 'amc.asset_removed',
+  AMCSLAChanged: 'amc.sla_changed',
+  // Sprint 10 — Community Operations (AmenityCreated + DocumentAdded reused from Sprint 2)
+  VisitorCreated: 'visitor.created',
+  VisitorApproved: 'visitor.approved',
+  VisitorCheckedIn: 'visitor.checked_in',
+  VisitorCheckedOut: 'visitor.checked_out',
+  BookingCreated: 'booking.created',
+  BookingCancelled: 'booking.cancelled',
+  AnnouncementPublished: 'announcement.published',
+  AnnouncementExpired: 'announcement.expired',
 } as const;
 
 export type DomainEventName =
@@ -182,6 +215,77 @@ export type WorkOrderEvent = DomainEventEnvelope<
   }
 >;
 
+export type AssetEvent = DomainEventEnvelope<
+  | typeof DomainEventName.AssetCreated
+  | typeof DomainEventName.AssetUpdated
+  | typeof DomainEventName.AssetStatusChanged
+  | typeof DomainEventName.AssetMoved
+  | typeof DomainEventName.AssetPhotoAdded
+  | typeof DomainEventName.AssetDocumentAdded
+  | typeof DomainEventName.AssetArchived,
+  {
+    assetCode: string;
+    name?: string;
+    status?: string;
+    fromStatus?: string;
+  }
+>;
+
+export type MaintenanceEvent = DomainEventEnvelope<
+  | typeof DomainEventName.MaintenancePlanCreated
+  | typeof DomainEventName.MaintenancePlanUpdated
+  | typeof DomainEventName.MaintenancePlanActivated
+  | typeof DomainEventName.MaintenancePlanPaused
+  | typeof DomainEventName.MaintenanceRunGenerated
+  | typeof DomainEventName.MaintenanceRunSkipped
+  | typeof DomainEventName.MaintenanceWorkOrderCreated,
+  {
+    planName: string;
+    assetId?: string;
+    runId?: string;
+    workOrderId?: string;
+    reason?: string;
+  }
+>;
+
+export type AMCEvent = DomainEventEnvelope<
+  | typeof DomainEventName.AMCContractCreated
+  | typeof DomainEventName.AMCContractActivated
+  | typeof DomainEventName.AMCContractRenewed
+  | typeof DomainEventName.AMCContractExpired
+  | typeof DomainEventName.AMCAssetCovered
+  | typeof DomainEventName.AMCAssetRemoved
+  | typeof DomainEventName.AMCSLAChanged,
+  {
+    contractNumber: string;
+    vendorId?: string;
+    assetId?: string;
+    status?: string;
+    fromStatus?: string;
+    priority?: string;
+  }
+>;
+
+export type VisitorEvent = DomainEventEnvelope<
+  | typeof DomainEventName.VisitorCreated
+  | typeof DomainEventName.VisitorApproved
+  | typeof DomainEventName.VisitorCheckedIn
+  | typeof DomainEventName.VisitorCheckedOut,
+  { visitorName: string; residentId: string; status?: string; passCode?: string }
+>;
+
+export type BookingEvent = DomainEventEnvelope<
+  | typeof DomainEventName.BookingCreated
+  | typeof DomainEventName.BookingCancelled,
+  { amenityId: string; residentId: string; status?: string }
+>;
+
+export type AnnouncementEvent = DomainEventEnvelope<
+  | typeof DomainEventName.AnnouncementPublished
+  | typeof DomainEventName.AnnouncementExpired,
+  { title: string; priority?: string }
+>;
+
 export type DomainEvent =
   | CommunityEvent
   | HierarchyEvent
@@ -195,4 +299,10 @@ export type DomainEvent =
   | StaffEvent
   | TicketEvent
   | ServiceRequestEvent
-  | WorkOrderEvent;
+  | WorkOrderEvent
+  | AssetEvent
+  | MaintenanceEvent
+  | AMCEvent
+  | VisitorEvent
+  | BookingEvent
+  | AnnouncementEvent;

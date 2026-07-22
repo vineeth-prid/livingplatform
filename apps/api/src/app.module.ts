@@ -1,6 +1,7 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 
@@ -12,6 +13,10 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { configuration, type AppConfig } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { AmenityModule } from './modules/amenity/amenity.module';
+import { AmcModule } from './modules/amc/amc.module';
+import { AssetModule } from './modules/asset/asset.module';
+import { CommunityOpsModule } from './modules/community-ops/community-ops.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { AuditInterceptor } from './modules/audit/audit.interceptor';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -47,6 +52,9 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
       load: [configuration],
       validate: validateEnv,
     }),
+
+    // In-process cron (Preventive Maintenance scheduler runs every minute).
+    ScheduleModule.forRoot(),
 
     // Structured JSON logging (pretty in dev). Redacts auth headers.
     LoggerModule.forRoot({
@@ -108,6 +116,18 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
 
     // Work Order Engine (Sprint 6)
     WorkOrderModule,
+
+    // Asset Foundation (Sprint 7)
+    AssetModule,
+
+    // Preventive Maintenance Engine (Sprint 8)
+    MaintenanceModule,
+
+    // AMC Management Engine (Sprint 9)
+    AmcModule,
+
+    // Community Operations (Sprint 10)
+    CommunityOpsModule,
   ],
   providers: [
     // Guard chain: rate-limit → authenticate → authorize (permissions, roles).

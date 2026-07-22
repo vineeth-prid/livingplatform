@@ -7,7 +7,10 @@
     ".": "./src/index.ts",
     "./motion": "./src/motion/index.ts"
   },
-  "scripts": { "typecheck": "tsc --noEmit" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0"
+  },
   "dependencies": {
     "@living/utils": "workspace:*",
     "@living/types": "workspace:*",

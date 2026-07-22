@@ -3,7 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 import { qk } from '@living/hooks';
 import { formatDate } from '@living/utils';
 import {
-  Badge, Card, EmptyState, LoadingState, PageContainer, PageHeader,
+  Badge, EmptyState, LoadingState, PageContainer, PageHeader,
   PageTransition, StatCard,
 } from '@living/ui';
 import { Boxes, Building2, DoorOpen, FileText, Layers, Sparkles } from 'lucide-react';

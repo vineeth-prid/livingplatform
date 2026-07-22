@@ -1,8 +1,14 @@
 import type { AccessTokenPayload } from '@living/types';
 
 import { HttpClient } from './http';
+import { AmcResource } from './resources/amc';
+import { AssetCategoryResource, AssetResource } from './resources/assets';
 import { AuthResource } from './resources/auth';
 import { CommunityResource } from './resources/community';
+import {
+  AmenitiesResource, AnnouncementsResource, BookingsResource, DocumentsResource, VisitorsResource,
+} from './resources/community-ops';
+import { MaintenanceResource } from './resources/maintenance';
 import { PeopleResource } from './resources/people';
 import { PlatformResource } from './resources/platform';
 import { ServiceRequestResource } from './resources/service-requests';
@@ -41,6 +47,15 @@ export class LivingClient {
   readonly ticket: TicketResource;
   readonly serviceRequest: ServiceRequestResource;
   readonly workOrder: WorkOrderResource;
+  readonly assets: AssetResource;
+  readonly assetCategories: AssetCategoryResource;
+  readonly maintenance: MaintenanceResource;
+  readonly amc: AmcResource;
+  readonly visitors: VisitorsResource;
+  readonly bookings: BookingsResource;
+  readonly announcements: AnnouncementsResource;
+  readonly amenities: AmenitiesResource;
+  readonly documents: DocumentsResource;
   readonly platform: PlatformResource;
 
   constructor(config: LivingClientConfig) {
@@ -57,6 +72,15 @@ export class LivingClient {
     this.ticket = new TicketResource(this.http);
     this.serviceRequest = new ServiceRequestResource(this.http);
     this.workOrder = new WorkOrderResource(this.http);
+    this.assets = new AssetResource(this.http);
+    this.assetCategories = new AssetCategoryResource(this.http);
+    this.maintenance = new MaintenanceResource(this.http);
+    this.amc = new AmcResource(this.http);
+    this.visitors = new VisitorsResource(this.http);
+    this.bookings = new BookingsResource(this.http);
+    this.announcements = new AnnouncementsResource(this.http);
+    this.amenities = new AmenitiesResource(this.http);
+    this.documents = new DocumentsResource(this.http);
     this.platform = new PlatformResource(this.http);
   }
 

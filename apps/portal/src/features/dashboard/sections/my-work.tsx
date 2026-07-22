@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CheckCircle2, ClipboardCheck, Inbox, LifeBuoy, Wrench } from 'lucide-react';
+import { CheckCircle2, Inbox, LifeBuoy, Wrench } from 'lucide-react';
 import { Badge, Card, EmptyState, Skeleton } from '@living/ui';
 import type { Ticket, ServiceRequest, WorkOrder } from '@living/types';
 

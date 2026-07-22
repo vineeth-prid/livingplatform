@@ -44,7 +44,18 @@ export function configuration() {
       driver: env.STORAGE_DRIVER ?? 'local',
       bucket: env.STORAGE_BUCKET ?? 'living-local',
       publicUrl: env.STORAGE_PUBLIC_URL ?? 'http://localhost:4000/storage',
-      signedUrlTtl: Number(env.STORAGE_SIGNED_URL_TTL ?? 900),
+      // SIGNED_URL_EXPIRY is canonical; STORAGE_SIGNED_URL_TTL kept for back-compat.
+      signedUrlTtl: Number(env.SIGNED_URL_EXPIRY ?? env.STORAGE_SIGNED_URL_TTL ?? 900),
+      s3: {
+        endpoint: env.MINIO_ENDPOINT ?? '',
+        port: Number(env.MINIO_PORT ?? 9000),
+        ssl: String(env.MINIO_SSL) === 'true',
+        accessKey: env.MINIO_ACCESS_KEY ?? '',
+        secretKey: env.MINIO_SECRET_KEY ?? '',
+        bucket: env.MINIO_BUCKET || env.STORAGE_BUCKET || 'living',
+        region: env.MINIO_REGION ?? 'us-east-1',
+        forcePathStyle: String(env.S3_FORCE_PATH_STYLE ?? 'true') !== 'false',
+      },
     },
   };
 }

@@ -9,6 +9,10 @@ import { RequestsScreen } from './screens/requests';
 import { RequestDetailScreen } from './screens/request-detail';
 import { CommunityScreen } from './screens/community';
 import { ProfileScreen } from './screens/profile';
+import { AnnouncementsScreen } from './screens/announcements';
+import { VisitorsScreen } from './screens/visitors';
+import { BookingsScreen } from './screens/bookings';
+import { AmenitiesScreen } from './screens/amenities';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -27,6 +31,11 @@ const routeTree = rootRoute.addChildren([
     tab('/requests/$kind/$id', RequestDetailScreen),
     tab('/community', CommunityScreen),
     tab('/profile', ProfileScreen),
+    // Community Operations (Frontend Sprint 9)
+    tab('/announcements', AnnouncementsScreen),
+    tab('/visitors', VisitorsScreen),
+    tab('/bookings', BookingsScreen),
+    tab('/amenities', AmenitiesScreen),
   ]),
 ]);
 

@@ -7,6 +7,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { StorageService } from '../storage/storage.service';
 
 /** Readiness check: can we reach Postgres? */
 @Injectable()
@@ -43,6 +44,29 @@ export class RedisHealthIndicator extends HealthIndicator {
       throw new HealthCheckError(
         'Redis unreachable',
         this.getStatus(key, false, { message: (err as Error).message }),
+      );
+    }
+  }
+}
+
+/**
+ * Readiness check: is object storage reachable? For `s3` this pings the bucket
+ * (reachable + credentials valid); for the `local` stub it is a no-op (healthy).
+ */
+@Injectable()
+export class StorageHealthIndicator extends HealthIndicator {
+  constructor(private readonly storage: StorageService) {
+    super();
+  }
+
+  async isHealthy(key: string): Promise<HealthIndicatorResult> {
+    try {
+      await this.storage.ping();
+      return this.getStatus(key, true, { driver: this.storage.driver });
+    } catch (err) {
+      throw new HealthCheckError(
+        'Object storage unreachable',
+        this.getStatus(key, false, { driver: this.storage.driver, message: (err as Error).message }),
       );
     }
   }

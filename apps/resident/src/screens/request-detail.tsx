@@ -4,7 +4,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import { useState } from 'react';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
-import { formatDateTime, timeAgo } from '@living/utils';
+import { timeAgo } from '@living/utils';
 import {
   Avatar, Button, Card, EmptyState, LoadingState, Timeline, toast, type TimelineItem,
 } from '@living/ui';

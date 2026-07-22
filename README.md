@@ -23,7 +23,11 @@ auditing, observability, and the design-system integration path.
 | **Sprint 4** — Ticket Engine | ✅ | Generic tickets, categories, assignment (staff XOR vendor), status workflow, comments, attachments, timeline, dashboard |
 | **Sprint 5** — Service Request Engine | ✅ | Service catalog, requests, scheduling, assignment, feedback, optional ticket link |
 | **Sprint 6** — Work Order Engine | ✅ | Generic execution, loose origin link, assignment, progress updates, verify-before-close, attachments, timeline |
-| Prisma schema + migrations + seed | ✅ | 34 tables; 5 incremental migrations through `sprint6_work_order_engine` |
+| **Sprint 7** — Asset Foundation | ✅ | Independent Asset Engine: categories (self-nesting), assets, documents, photos, immutable history; referenced by work orders & service requests (no ownership) |
+| **Sprint 8** — Preventive Maintenance Engine | ✅ | Automation layer: recurring maintenance plans, checklists, immutable runs; a per-minute scheduler auto-generates Work Orders through the existing engine |
+| **Sprint 9** — AMC Management Engine | ✅ | Contractual layer: maintenance contracts, asset coverage, SLA rules, renewal/expiry, immutable history; a daily sweep expires & flags renewals |
+| **Sprint 10** — Community Operations | ✅ | Resident-facing layer: visitor management, amenity bookings, announcements (reusing the Sprint 2 amenity & document registers) |
+| Prisma schema + migrations + seed | ✅ | 49 tables; 9 incremental migrations through `sprint10_community_operations` |
 | Docker Compose (Postgres, Redis, Mailpit) | ✅ | Local infra |
 | **Frontend FS0** — Product Experience Foundation | ✅ | Monorepo (portal + resident + workforce), Living SDK, component library, motion, app shell, auth + permission framework, theme system |
 | **Frontend FS1** — Operations Dashboard | ✅ | Command-center dashboard (KPIs, attention, activity, health, my work) |
@@ -31,6 +35,10 @@ auditing, observability, and the design-system integration path.
 | **Frontend FS3** — Ticket Experience | ✅ | Flagship module: table + kanban, detail, create/edit, assignment, comments, timeline, attachments, workflow-aware status |
 | **Frontend FS4** — Operations Execution | ✅ | Service Requests + Work Orders on one shared Operations framework (workflow, assignment, timeline, kanban, progress, verification) |
 | **Frontend FS5** — Resident Experience (PWA) | ✅ | Consumer-grade installable PWA: bottom nav, home, services, requests, community, profile |
+| **Frontend FS6** — Workforce Experience (PWA) | ✅ | Field-execution PWA for staff & vendors: today, job queue, job detail with progress/photos/timeline, workflow-aware execution actions, offline-ready |
+| **Frontend FS7** — Asset Management Experience | ✅ | Enterprise asset register (table + card), multi-section create, split-layout detail with photos/documents/history/events tabs |
+| **Frontend FS8** — Preventive Maintenance & AMC | ✅ | PM plan + AMC contract workspaces (register/create/detail with tabs, checklists, runs, coverage, SLA, renewals); asset-detail relationships now live |
+| **Frontend FS9** — Community Operations | ✅ | Across all 3 apps: portal admin (visitors/amenities/bookings/documents/announcements), resident PWA (invite/book/read live widgets), workforce PWA security gate |
 
 The `Living Design System/` folder is the UI source of truth (tokens,
 components, brand). It is wired into the frontend in the next pass.
@@ -40,7 +48,11 @@ components, brand). It is wired into the frontend in the next pass.
 (Community Foundation), [`docs/architecture-sprint3.md`](docs/architecture-sprint3.md) (People Foundation),
 [`docs/architecture-sprint4.md`](docs/architecture-sprint4.md) (Ticket Engine),
 [`docs/architecture-sprint5.md`](docs/architecture-sprint5.md) (Service Request Engine),
-and [`docs/architecture-sprint6.md`](docs/architecture-sprint6.md) (Work Order Engine).
+[`docs/architecture-sprint6.md`](docs/architecture-sprint6.md) (Work Order Engine),
+[`docs/architecture-sprint7.md`](docs/architecture-sprint7.md) (Asset Foundation),
+[`docs/architecture-sprint8.md`](docs/architecture-sprint8.md) (Preventive Maintenance Engine),
+[`docs/architecture-sprint9.md`](docs/architecture-sprint9.md) (AMC Management Engine),
+and [`docs/architecture-sprint10.md`](docs/architecture-sprint10.md) (Community Operations).
 
 **Frontend:** [`docs/frontend-architecture.md`](docs/frontend-architecture.md)
 (Product Experience Foundation),
@@ -49,7 +61,11 @@ and [`docs/architecture-sprint6.md`](docs/architecture-sprint6.md) (Work Order E
 [`docs/frontend-master-data.md`](docs/frontend-master-data.md) (Community & People Management),
 [`docs/frontend-tickets.md`](docs/frontend-tickets.md) (Ticket Experience),
 [`docs/frontend-operations.md`](docs/frontend-operations.md) (Service Requests & Work Orders),
-and [`docs/frontend-resident.md`](docs/frontend-resident.md) (Resident Experience PWA).
+[`docs/frontend-resident.md`](docs/frontend-resident.md) (Resident Experience PWA),
+[`docs/frontend-workforce.md`](docs/frontend-workforce.md) (Workforce Experience PWA),
+[`docs/frontend-assets.md`](docs/frontend-assets.md) (Asset Management Experience),
+[`docs/frontend-maintenance-amc.md`](docs/frontend-maintenance-amc.md) (Preventive Maintenance & AMC),
+and [`docs/frontend-community-ops.md`](docs/frontend-community-ops.md) (Community Operations — portal, resident & workforce).
 
 ---
 

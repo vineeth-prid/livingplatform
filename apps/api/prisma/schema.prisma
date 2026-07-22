@@ -250,12 +250,14 @@ enum WorkOrderStatus {
 }
 
 /// Where a Work Order came from. Loose coupling — originId is a plain id with
-/// NO foreign key, so any engine (Ticket, Service Request, future PM/AMC/manual)
-/// can create Work Orders without this engine depending on them.
+/// NO foreign key, so any engine (Ticket, Service Request, Preventive
+/// Maintenance, future AMC/manual) can create Work Orders without this engine
+/// depending on them.
 enum WorkOrderOriginType {
   MANUAL
   TICKET
   SERVICE_REQUEST
+  PREVENTIVE_MAINTENANCE
 }
 
 enum WorkOrderEventType {
@@ -271,6 +273,138 @@ enum WorkOrderEventType {
   VERIFIED
   CLOSED
   CANCELLED
+}
+
+// ── Asset Foundation (Sprint 7) ──────────────────────────────────────────────
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  UNDER_MAINTENANCE
+  OUT_OF_SERVICE
+  RETIRED
+}
+
+enum AssetCriticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  FAILED
+}
+
+/// Append-only asset history event types. WORK_ORDER_LINKED / SERVICE_REQUEST_LINKED
+/// are reserved for when an engine links itself to an asset (forward-compatible).
+enum AssetEventType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  LOCATION_CHANGED
+  DOCUMENT_ADDED
+  PHOTO_ADDED
+  WORK_ORDER_LINKED
+  SERVICE_REQUEST_LINKED
+  ARCHIVED
+}
+
+// ── Preventive Maintenance (Sprint 8) ────────────────────────────────────────
+
+enum MaintenanceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+  CUSTOM
+}
+
+enum MaintenanceRunStatus {
+  SCHEDULED
+  GENERATED
+  SKIPPED
+  FAILED
+}
+
+// ── AMC Management (Sprint 9) ────────────────────────────────────────────────
+
+enum AMCStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  RENEWAL_PENDING
+}
+
+enum CoverageType {
+  FULL
+  PARTIAL
+  LABOUR_ONLY
+  PARTS_ONLY
+  INSPECTION_ONLY
+}
+
+enum PaymentFrequency {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+}
+
+enum AMCEventType {
+  CREATED
+  UPDATED
+  ACTIVATED
+  RENEWED
+  EXPIRED
+  TERMINATED
+  ASSET_ADDED
+  ASSET_REMOVED
+}
+
+// ── Community Operations (Sprint 10) ─────────────────────────────────────────
+
+enum VisitorStatus {
+  PENDING
+  APPROVED
+  CHECKED_IN
+  CHECKED_OUT
+  REJECTED
+}
+
+enum VisitorType {
+  GUEST
+  DELIVERY
+  SERVICE
+  CAB
+  OTHER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum AnnouncementPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  EXPIRED
 }
 
 // ── Tenancy ──────────────────────────────────────────────────────────────────
@@ -354,6 +488,13 @@ model Community {
   tickets         Ticket[]
   serviceRequests ServiceRequest[]
   workOrders      WorkOrder[]
+  assetCategories AssetCategory[]
+  assets          Asset[]
+  maintenancePlans MaintenancePlan[]
+  amcContracts    AMCContract[]
+  visitors        Visitor[]
+  amenityBookings AmenityBooking[]
+  announcements   Announcement[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -624,6 +765,7 @@ model Block {
 
   floors Floor[]
   units  Unit[]
+  assets Asset[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -651,7 +793,8 @@ model Floor {
   status      HierarchyStatus @default(ACTIVE)
   metadata    Json?
 
-  units Unit[]
+  units  Unit[]
+  assets Asset[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -693,6 +836,7 @@ model Unit {
   tickets         Ticket[]
   serviceRequests ServiceRequest[]
   workOrders      WorkOrder[]
+  assets          Asset[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -718,12 +862,18 @@ model Amenity {
   description String?
   capacity    Int?
   location    String?
-  isBookable  Boolean         @default(false) // booking engine arrives later
+  isBookable  Boolean         @default(false)
   operatingHours Json?
   imageKey    String?
   sortOrder   Int             @default(0)
   status      HierarchyStatus @default(ACTIVE)
   metadata    Json?
+
+  // Booking configuration (Sprint 10 — read by the Amenity Booking engine).
+  bookingWindowDays  Int @default(30)
+  slotDurationMinutes Int @default(60)
+
+  bookings AmenityBooking[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -878,6 +1028,8 @@ model Resident {
   unitAssignment  ResidentUnit?
   tickets         Ticket[]
   serviceRequests ServiceRequest[]
+  visitors        Visitor[]
+  amenityBookings AmenityBooking[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -937,6 +1089,8 @@ model Vendor {
   status          PersonStatus     @default(ACTIVE)
   remarks         String?
   metadata        Json?
+
+  amcContracts AMCContract[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1200,6 +1354,10 @@ model ServiceRequest {
   /// Optional loose link to a Ticket (scalar id — Ticket Engine stays independent).
   ticketId String?
 
+  /// Optional loose reference to an Asset (scalar id — NO FK, Asset Engine stays
+  /// independent). Records a SERVICE_REQUEST_LINKED event when set.
+  assetId String?
+
   completedDate DateTime?
   notes         String?
   metadata      Json?
@@ -1221,6 +1379,7 @@ model ServiceRequest {
   @@index([assignedStaffId])
   @@index([assignedVendorId])
   @@index([ticketId])
+  @@index([assetId])
   @@index([createdAt])
   @@map("service_requests")
 }
@@ -1277,6 +1436,11 @@ model WorkOrder {
   originType WorkOrderOriginType @default(MANUAL)
   originId   String?
 
+  /// Optional loose reference to an Asset (scalar id — NO FK, Asset Engine stays
+  /// independent; assets are never owned by a work order). Populated by whoever
+  /// links the asset; the Asset Engine records a WORK_ORDER_LINKED event.
+  assetId String?
+
   estimatedHours Float?
   actualHours    Float?
 
@@ -1307,6 +1471,7 @@ model WorkOrder {
   @@index([assignedStaffId])
   @@index([assignedVendorId])
   @@index([originType, originId])
+  @@index([assetId])
   @@index([createdAt])
   @@map("work_orders")
 }
@@ -1360,4 +1525,488 @@ model WorkOrderTimeline {
   @@index([workOrderId])
   @@index([createdAt])
   @@map("work_order_timeline")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 — Asset Foundation (independent Asset Engine)
+//
+// Assets are first-class citizens. Work Orders and Service Requests REFERENCE an
+// asset via a loose scalar `assetId` (no FK) — assets are never owned by them.
+// The category tree, location (block/floor/unit), documents, photos and an
+// append-only event history make this the foundation for future Preventive
+// Maintenance, AMC, Inspections, QR tracking, Lifecycle and Predictive
+// Maintenance — none of which require refactoring this model. Multi-tenant:
+// every row carries tenantId + communityId, verified through CommunityAccessService.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Community-scoped, self-nesting asset taxonomy (Electrical, HVAC, Lift, …).
+model AssetCategory {
+  id          String  @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  // Self-referencing hierarchy (a category may have a parent + children).
+  parentCategoryId String?
+  parentCategory   AssetCategory?  @relation("AssetCategoryTree", fields: [parentCategoryId], references: [id], onDelete: SetNull)
+  childCategories  AssetCategory[] @relation("AssetCategoryTree")
+
+  name        String
+  code        String
+  icon        String?
+  color       String?
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  assets Asset[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, code])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([parentCategoryId])
+  @@map("asset_categories")
+}
+
+model Asset {
+  id          String @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// Human/admin identifier, unique within a tenant (e.g. "DG-001").
+  assetCode    String
+  name         String
+  description  String?
+  manufacturer String?
+  model        String?
+  serialNumber String?
+  barcode      String?
+  qrCode       String?
+
+  // Location — free text + the property hierarchy (all optional; a chiller sits
+  // in a block, a DG in the basement, a common asset may have none).
+  locationDescription String?
+  blockId String?
+  block   Block? @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  floorId String?
+  floor   Floor? @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  unitId  String?
+  unit    Unit?  @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  // Lifecycle dates
+  purchaseDate      DateTime?
+  installationDate  DateTime?
+  warrantyExpiry    DateTime?
+  expectedLifeMonths Int?
+
+  status      AssetStatus      @default(ACTIVE)
+  criticality AssetCriticality @default(MEDIUM)
+  condition   AssetCondition   @default(GOOD)
+
+  /// Free-form future-ready bag (IoT ids, meter readings, PM config, …).
+  metadata Json?
+
+  documents AssetDocument[]
+  photos    AssetPhoto[]
+  events    AssetEvent[]
+  maintenancePlans MaintenancePlan[]
+  amcCoverages AMCCoverage[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([tenantId, assetCode])
+  @@unique([tenantId, serialNumber])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([categoryId])
+  @@index([blockId])
+  @@index([floorId])
+  @@index([unitId])
+  @@index([status])
+  @@index([criticality])
+  @@index([condition])
+  @@index([warrantyExpiry])
+  @@index([createdAt])
+  @@map("assets")
+}
+
+model AssetDocument {
+  id         String  @id @default(cuid())
+  assetId    String
+  asset      Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  storageKey String
+  fileName   String
+  mimeType   String?
+  uploadedById String
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([assetId])
+  @@map("asset_documents")
+}
+
+model AssetPhoto {
+  id         String  @id @default(cuid())
+  assetId    String
+  asset      Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  storageKey String
+  caption    String?
+  uploadedById String
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([assetId])
+  @@map("asset_photos")
+}
+
+/// Immutable, append-only asset history (never formatted text — structured type
+/// + optional metadata). The asset's timeline; the same pattern as the engines'
+/// structured timelines.
+model AssetEvent {
+  id          String         @id @default(cuid())
+  assetId     String
+  asset       Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  eventType   AssetEventType
+  description String?
+  performedById String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+  @@index([createdAt])
+  @@map("asset_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 8 — Preventive Maintenance Engine (automation layer)
+//
+// A MaintenancePlan decides WHEN maintenance on an asset is due. It NEVER
+// executes: when a plan is due, the scheduler generates a Work Order through the
+// existing Work Order Engine (loose originType=PREVENTIVE_MAINTENANCE / originId=
+// plan.id — no FK) and records an immutable MaintenanceRun. Execution, workflow,
+// assignment, status and timeline all remain in the Work Order Engine.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MaintenancePlan {
+  id          String    @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Recurrence. cronExpression is used only when frequencyType = CUSTOM.
+  frequencyType     MaintenanceFrequency @default(MONTHLY)
+  frequencyInterval Int                  @default(1)
+  cronExpression    String?
+
+  startDate DateTime
+  endDate   DateTime?
+  /// The next due instant the scheduler watches. Advanced after each generation.
+  nextRunAt DateTime
+  lastRunAt DateTime?
+
+  priority                 TicketPriority @default(MEDIUM)
+  estimatedDurationMinutes Int?
+  requiresVerification     Boolean        @default(false)
+  isActive                 Boolean        @default(true)
+
+  checklistTemplates MaintenanceChecklistTemplate[]
+  runs               MaintenanceRun[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([assetId])
+  @@index([isActive])
+  @@index([nextRunAt])
+  @@map("maintenance_plans")
+}
+
+/// Reusable checklist item on a plan. Snapshotted into each generated Work
+/// Order's metadata; checklist EXECUTION is a future sprint.
+model MaintenanceChecklistTemplate {
+  id          String          @id @default(cuid())
+  planId      String
+  plan        MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  title       String
+  sortOrder   Int             @default(0)
+  isMandatory Boolean         @default(true)
+  instructions String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([planId])
+  @@map("maintenance_checklist_templates")
+}
+
+/// Immutable execution history: one row per generation attempt. generatedWorkOrderId
+/// is a loose scalar (no FK — the Work Order Engine stays independent).
+model MaintenanceRun {
+  id                   String               @id @default(cuid())
+  planId               String
+  plan                 MaintenancePlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  scheduledAt          DateTime
+  executedAt           DateTime?
+  generatedWorkOrderId String?
+  status               MaintenanceRunStatus @default(SCHEDULED)
+  generationReason     String?
+  notes                String?
+
+  createdAt DateTime @default(now())
+
+  @@index([planId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("maintenance_runs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — AMC Management Engine (contractual layer)
+//
+// An AMCContract records WHO (vendor) is responsible for maintaining WHICH
+// assets (coverage), UNTIL WHEN (dates), under WHAT SLA, at WHAT cost. It does
+// NOT execute work (Work Order Engine), does NOT schedule (Preventive
+// Maintenance), and does NOT own assets — coverage links to an asset by FK but
+// assets remain independent. Multi-tenant: tenantId + communityId on the
+// contract, verified through CommunityAccessService.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AMCContract {
+  id          String    @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  vendorId    String
+  vendor      Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  /// Human/admin identifier, unique within a tenant (e.g. "AMC-2026-014").
+  contractNumber String
+  name           String
+  description    String?
+  status         AMCStatus @default(DRAFT)
+
+  startDate DateTime
+  endDate   DateTime
+  /// Days before endDate at which the contract flips to RENEWAL_PENDING.
+  renewalReminderDays Int      @default(30)
+
+  annualCost       Decimal          @db.Decimal(14, 2)
+  currency         String           @default("INR")
+  paymentFrequency PaymentFrequency @default(YEARLY)
+
+  contactPerson String?
+  contactPhone  String?
+  contactEmail  String?
+  notes         String?
+  autoRenew     Boolean @default(false)
+
+  coverages AMCCoverage[]
+  slaRules  AMCSLARule[]
+  history   AMCHistory[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([tenantId, contractNumber])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([endDate])
+  @@map("amc_contracts")
+}
+
+/// Which asset a contract covers, and the coverage terms. One row per
+/// (contract, asset) — assets remain independent (FK only, no ownership).
+model AMCCoverage {
+  id         String       @id @default(cuid())
+  contractId String
+  contract   AMCContract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  assetId    String
+  asset      Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  coverageType       CoverageType   @default(FULL)
+  responseTimeHours  Int?
+  resolutionTimeHours Int?
+  visitFrequency     String?
+  priority           TicketPriority @default(MEDIUM)
+  remarks            String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([contractId, assetId])
+  @@index([contractId])
+  @@index([assetId])
+  @@map("amc_coverages")
+}
+
+/// Per-priority SLA targets for a contract. One rule per priority.
+model AMCSLARule {
+  id         String      @id @default(cuid())
+  contractId String
+  contract   AMCContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  priority              TicketPriority
+  responseTimeMinutes   Int
+  resolutionTimeMinutes Int
+  escalationAfterMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contractId, priority])
+  @@index([contractId])
+  @@map("amc_sla_rules")
+}
+
+/// Immutable, append-only contract history (structured type + optional metadata).
+model AMCHistory {
+  id            String       @id @default(cuid())
+  contractId    String
+  contract      AMCContract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  eventType     AMCEventType
+  description   String?
+  performedById String?
+  metadata      Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([contractId])
+  @@index([createdAt])
+  @@map("amc_history")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 10 — Community Operations (resident-facing community life)
+//
+// Visitor management, amenity bookings and announcements. Amenities and
+// community documents are REUSED from the Community Foundation (Sprint 2) — this
+// engine adds no rival models for them. Multi-tenant: tenantId + communityId on
+// every row, verified through CommunityAccessService.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Visitor {
+  id          String    @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  /// The resident hosting the visitor.
+  residentId  String
+  resident    Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+
+  visitorName   String
+  mobileNumber  String
+  vehicleNumber String?
+  visitorType   VisitorType   @default(GUEST)
+  purpose       String?
+  expectedArrival DateTime
+  actualCheckIn   DateTime?
+  actualCheckOut  DateTime?
+  status        VisitorStatus @default(PENDING)
+  /// Unique gate pass code (no QR yet — a short human-readable token).
+  passCode      String        @unique
+  notes         String?
+  approvedById  String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([residentId])
+  @@index([status])
+  @@index([expectedArrival])
+  @@map("visitors")
+}
+
+model AmenityBooking {
+  id          String    @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  amenityId   String
+  amenity     Amenity   @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  residentId  String
+  resident    Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+
+  /// The day of the booking (midnight); startTime/endTime are absolute instants.
+  bookingDate DateTime
+  startTime   DateTime
+  endTime     DateTime
+  status      BookingStatus @default(PENDING)
+  remarks     String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([amenityId])
+  @@index([residentId])
+  @@index([status])
+  @@index([bookingDate])
+  @@map("amenity_bookings")
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  title    String
+  content  String
+  priority AnnouncementPriority @default(NORMAL)
+  publishAt DateTime?
+  expiresAt DateTime?
+  status   AnnouncementStatus   @default(DRAFT)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([status])
+  @@index([priority])
+  @@index([publishAt])
+  @@map("announcements")
 }

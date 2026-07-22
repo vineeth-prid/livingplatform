@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -123,6 +124,53 @@ export class EnvironmentVariables {
   @IsInt()
   @IsOptional()
   STORAGE_SIGNED_URL_TTL = 900;
+
+  // ── S3 / MinIO (required only when STORAGE_DRIVER=s3; validated + fail-fast) ──
+  /** MinIO/S3 host WITHOUT scheme, e.g. "minio" (compose) or "s3.example.com". */
+  @ValidateIf((e: EnvironmentVariables) => e.STORAGE_DRIVER === 's3')
+  @IsString()
+  @MinLength(1, { message: 'MINIO_ENDPOINT is required when STORAGE_DRIVER=s3' })
+  MINIO_ENDPOINT = '';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  MINIO_PORT = 9000;
+
+  /** 'true' for HTTPS endpoints. */
+  @IsString()
+  @IsOptional()
+  MINIO_SSL = 'false';
+
+  @ValidateIf((e: EnvironmentVariables) => e.STORAGE_DRIVER === 's3')
+  @IsString()
+  @MinLength(1, { message: 'MINIO_ACCESS_KEY is required when STORAGE_DRIVER=s3' })
+  MINIO_ACCESS_KEY = '';
+
+  @ValidateIf((e: EnvironmentVariables) => e.STORAGE_DRIVER === 's3')
+  @IsString()
+  @MinLength(1, { message: 'MINIO_SECRET_KEY is required when STORAGE_DRIVER=s3' })
+  MINIO_SECRET_KEY = '';
+
+  /** Falls back to STORAGE_BUCKET when unset. */
+  @IsString()
+  @IsOptional()
+  MINIO_BUCKET = '';
+
+  @IsString()
+  @IsOptional()
+  MINIO_REGION = 'us-east-1';
+
+  /** MinIO requires path-style ('true'); real S3 uses virtual-hosted ('false'). */
+  @IsString()
+  @IsOptional()
+  S3_FORCE_PATH_STYLE = 'true';
+
+  /** Signed-URL lifetime (seconds); falls back to STORAGE_SIGNED_URL_TTL. */
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  SIGNED_URL_EXPIRY = 900;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

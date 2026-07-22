@@ -1,9 +1,8 @@
-import { randomUUID } from 'node:crypto';
-
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { AppConfig } from '../../../config/configuration';
+import { buildObjectKey } from '../object-key';
 import type {
   SignedUrl,
   SignedUrlOptions,
@@ -32,12 +31,7 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   buildKey(scope: string, fileName: string): string {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const safeScope = scope.replace(/^\/+|\/+$/g, '');
-    const safeName = fileName.replace(/[^\w.-]+/g, '-').toLowerCase();
-    return `${safeScope}/${yyyy}/${mm}/${randomUUID()}-${safeName}`;
+    return buildObjectKey(scope, fileName);
   }
 
   getSignedUploadUrl(key: string, options?: SignedUrlOptions): Promise<SignedUrl> {

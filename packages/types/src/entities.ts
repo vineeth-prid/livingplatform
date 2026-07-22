@@ -1,9 +1,14 @@
 import type { AuditFields, ID, ISODate } from './common';
 import type {
-  BlockType, CommunityStatus, CommunityType, DocumentCategory, DocumentStatus,
-  Gender, HierarchyStatus, OwnershipType, PersonStatus, ResidentRole,
+  AMCEventType, AMCStatus, AnnouncementPriority, AnnouncementStatus,
+  AssetCondition, AssetCriticality, AssetEventType, AssetStatus,
+  BlockType, BookingStatus, CommunityStatus, CommunityType, CoverageType,
+  DocumentCategory, DocumentStatus,
+  Gender, HierarchyStatus, MaintenanceFrequency, MaintenanceRunStatus,
+  OwnershipType, PaymentFrequency, PersonStatus, ResidentRole,
   ResidentStatus, ServiceRequestStatus, StaffRole, TicketPriority, TicketSource,
-  TicketStatus, UnitStatus, VendorCategory, WorkOrderOriginType, WorkOrderStatus,
+  TicketStatus, UnitStatus, VendorCategory, VisitorStatus, VisitorType,
+  WorkOrderOriginType, WorkOrderStatus,
 } from './enums';
 
 // ── Community Foundation ─────────────────────────────────────────────────────
@@ -57,8 +62,11 @@ export interface Unit extends AuditFields {
 }
 export interface Amenity extends AuditFields {
   id: ID; communityId: ID; name: string; code?: string | null; category?: string | null;
-  capacity?: number | null; location?: string | null; isBookable: boolean;
-  imageKey?: string | null; imageUrl?: string | null; sortOrder: number; status: HierarchyStatus;
+  description?: string | null; capacity?: number | null; location?: string | null; isBookable: boolean;
+  operatingHours?: unknown; imageKey?: string | null; imageUrl?: string | null;
+  sortOrder: number; status: HierarchyStatus;
+  /** Booking configuration (Sprint 10) — read by the Amenity Booking engine. */
+  bookingWindowDays?: number; slotDurationMinutes?: number;
 }
 export interface CommunityDocument extends AuditFields {
   id: ID; communityId: ID; title: string; description?: string | null;
@@ -180,6 +188,139 @@ export interface TicketDashboardSummary {
   byStatus: { status: TicketStatus; count: number }[];
   byPriority: { priority: TicketPriority; count: number }[];
   byCategory: { categoryId: ID; name: string | null; color: string | null; count: number }[];
+}
+
+// ── Asset Foundation ─────────────────────────────────────────────────────────
+
+export interface AssetCategory extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID; parentCategoryId?: ID | null;
+  name: string; code: string; icon?: string | null; color?: string | null;
+  description?: string | null; sortOrder: number; isActive: boolean;
+  childCategories?: AssetCategory[];
+  _count?: { assets: number; childCategories?: number };
+}
+
+export interface Asset extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID; categoryId: ID;
+  assetCode: string; name: string; description?: string | null;
+  manufacturer?: string | null; model?: string | null; serialNumber?: string | null;
+  barcode?: string | null; qrCode?: string | null;
+  locationDescription?: string | null;
+  blockId?: ID | null; floorId?: ID | null; unitId?: ID | null;
+  purchaseDate?: ISODate | null; installationDate?: ISODate | null;
+  warrantyExpiry?: ISODate | null; expectedLifeMonths?: number | null;
+  status: AssetStatus; criticality: AssetCriticality; condition: AssetCondition;
+  metadata?: unknown;
+  category?: Pick<AssetCategory, 'id' | 'name' | 'code' | 'color' | 'icon'>;
+  block?: { id: ID; name: string; code: string } | null;
+  floor?: { id: ID; name?: string | null; level: number } | null;
+  unit?: Pick<Unit, 'id' | 'unitNumber'> | null;
+  documents?: AssetDocument[]; photos?: AssetPhoto[]; events?: AssetEvent[];
+}
+
+export interface AssetDocument {
+  id: ID; assetId: ID; storageKey: string; fileName: string;
+  mimeType?: string | null; uploadedById: ID; downloadUrl?: string | null; createdAt: ISODate;
+}
+
+export interface AssetPhoto {
+  id: ID; assetId: ID; storageKey: string; caption?: string | null;
+  uploadedById: ID; url?: string | null; createdAt: ISODate;
+}
+
+/** Immutable asset history entry. */
+export interface AssetEvent {
+  id: ID; assetId: ID; eventType: AssetEventType; description?: string | null;
+  performedById?: ID | null; metadata?: Record<string, unknown> | null; createdAt: ISODate;
+}
+
+// ── Preventive Maintenance ───────────────────────────────────────────────────
+
+export interface MaintenanceChecklistTemplate {
+  id: ID; planId: ID; title: string; sortOrder: number;
+  isMandatory: boolean; instructions?: string | null; createdAt: ISODate;
+}
+
+export interface MaintenanceRun {
+  id: ID; planId: ID; scheduledAt: ISODate; executedAt?: ISODate | null;
+  generatedWorkOrderId?: ID | null; status: MaintenanceRunStatus;
+  generationReason?: string | null; notes?: string | null; createdAt: ISODate;
+}
+
+export interface MaintenancePlan extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID; assetId: ID;
+  name: string; description?: string | null;
+  frequencyType: MaintenanceFrequency; frequencyInterval: number;
+  cronExpression?: string | null;
+  startDate: ISODate; endDate?: ISODate | null;
+  nextRunAt: ISODate; lastRunAt?: ISODate | null;
+  priority: TicketPriority; estimatedDurationMinutes?: number | null;
+  requiresVerification: boolean; isActive: boolean;
+  asset?: Pick<Asset, 'id' | 'assetCode' | 'name' | 'status' | 'criticality'> & {
+    category?: { id: ID; name: string; code: string; color?: string | null };
+  };
+  checklistTemplates?: MaintenanceChecklistTemplate[];
+  runs?: MaintenanceRun[];
+  _count?: { runs: number; checklistTemplates?: number };
+}
+
+// ── AMC Management ───────────────────────────────────────────────────────────
+
+export interface AMCCoverage {
+  id: ID; contractId: ID; assetId: ID; coverageType: CoverageType;
+  responseTimeHours?: number | null; resolutionTimeHours?: number | null;
+  visitFrequency?: string | null; priority: TicketPriority; remarks?: string | null;
+  createdAt: ISODate;
+  asset?: Pick<Asset, 'id' | 'assetCode' | 'name' | 'status' | 'criticality'>;
+}
+
+export interface AMCSLARule {
+  id: ID; contractId: ID; priority: TicketPriority;
+  responseTimeMinutes: number; resolutionTimeMinutes: number;
+  escalationAfterMinutes?: number | null; createdAt: ISODate; updatedAt: ISODate;
+}
+
+export interface AMCHistory {
+  id: ID; contractId: ID; eventType: AMCEventType; description?: string | null;
+  performedById?: ID | null; metadata?: Record<string, unknown> | null; createdAt: ISODate;
+}
+
+export interface AMCContract extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID; vendorId: ID;
+  contractNumber: string; name: string; description?: string | null;
+  status: AMCStatus; startDate: ISODate; endDate: ISODate; renewalReminderDays: number;
+  /** Serialized decimal (2-dp) — parse before arithmetic. */
+  annualCost: string; currency: string; paymentFrequency: PaymentFrequency;
+  contactPerson?: string | null; contactPhone?: string | null; contactEmail?: string | null;
+  notes?: string | null; autoRenew: boolean;
+  vendor?: Pick<Vendor, 'id' | 'name' | 'category' | 'companyName'>;
+  coverages?: AMCCoverage[]; slaRules?: AMCSLARule[]; history?: AMCHistory[];
+  _count?: { coverages: number; slaRules?: number };
+}
+
+// ── Community Operations ─────────────────────────────────────────────────────
+
+export interface Visitor extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID; residentId: ID;
+  visitorName: string; mobileNumber: string; vehicleNumber?: string | null;
+  visitorType: VisitorType; purpose?: string | null;
+  expectedArrival: ISODate; actualCheckIn?: ISODate | null; actualCheckOut?: ISODate | null;
+  status: VisitorStatus; passCode: string; notes?: string | null; approvedById?: ID | null;
+  resident?: Pick<Resident, 'id' | 'firstName' | 'lastName'>;
+}
+
+export interface AmenityBooking extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID; amenityId: ID; residentId: ID;
+  bookingDate: ISODate; startTime: ISODate; endTime: ISODate;
+  status: BookingStatus; remarks?: string | null;
+  amenity?: Pick<Amenity, 'id' | 'name' | 'location'>;
+  resident?: Pick<Resident, 'id' | 'firstName' | 'lastName'>;
+}
+
+export interface Announcement extends AuditFields {
+  id: ID; tenantId: ID; communityId: ID;
+  title: string; content: string; priority: AnnouncementPriority;
+  publishAt?: ISODate | null; expiresAt?: ISODate | null; status: AnnouncementStatus;
 }
 
 /** Result of an in-community search. */

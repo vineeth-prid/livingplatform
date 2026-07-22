@@ -29,4 +29,6 @@ export default defineConfig({
     }),
   ],
   server: { port: 5174 },
+  // The resident PWA is a single precached bundle (offline-first); ~200 kB gzip.
+  build: { chunkSizeWarningLimit: 800 },
 });

@@ -41,3 +41,33 @@ export type WorkOrderStatus =
   | 'DRAFT' | 'ASSIGNED' | 'ACCEPTED' | 'IN_PROGRESS' | 'ON_HOLD'
   | 'COMPLETED' | 'VERIFIED' | 'CLOSED' | 'CANCELLED';
 export type WorkOrderOriginType = 'MANUAL' | 'TICKET' | 'SERVICE_REQUEST';
+
+// ── Asset Foundation ──
+export type AssetStatus =
+  | 'ACTIVE' | 'INACTIVE' | 'UNDER_MAINTENANCE' | 'OUT_OF_SERVICE' | 'RETIRED';
+export type AssetCriticality = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type AssetCondition = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'FAILED';
+export type AssetEventType =
+  | 'CREATED' | 'UPDATED' | 'STATUS_CHANGED' | 'LOCATION_CHANGED'
+  | 'DOCUMENT_ADDED' | 'PHOTO_ADDED' | 'WORK_ORDER_LINKED'
+  | 'SERVICE_REQUEST_LINKED' | 'ARCHIVED';
+
+// ── Preventive Maintenance ──
+export type MaintenanceFrequency =
+  | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY' | 'CUSTOM';
+export type MaintenanceRunStatus = 'SCHEDULED' | 'GENERATED' | 'SKIPPED' | 'FAILED';
+
+// ── AMC Management ──
+export type AMCStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED' | 'RENEWAL_PENDING';
+export type CoverageType = 'FULL' | 'PARTIAL' | 'LABOUR_ONLY' | 'PARTS_ONLY' | 'INSPECTION_ONLY';
+export type PaymentFrequency = 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
+export type AMCEventType =
+  | 'CREATED' | 'UPDATED' | 'ACTIVATED' | 'RENEWED' | 'EXPIRED' | 'TERMINATED'
+  | 'ASSET_ADDED' | 'ASSET_REMOVED';
+
+// ── Community Operations ──
+export type VisitorStatus = 'PENDING' | 'APPROVED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'REJECTED';
+export type VisitorType = 'GUEST' | 'DELIVERY' | 'SERVICE' | 'CAB' | 'OTHER';
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+export type AnnouncementPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+export type AnnouncementStatus = 'DRAFT' | 'PUBLISHED' | 'EXPIRED';

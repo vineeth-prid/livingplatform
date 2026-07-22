@@ -44,7 +44,6 @@ export function FormDrawer({
   useEffect(() => {
     setValues(seed(fields, initial));
     setErrors({});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialKey, open]);
 
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));

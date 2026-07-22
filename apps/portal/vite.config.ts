@@ -6,6 +6,9 @@ export default defineConfig({
   server: { port: 5173 },
   build: {
     target: 'es2022',
+    // The app core (React + eagerly-loaded foundation routes) gzips to ~183 kB;
+    // feature routes are lazy-split. 700 kB flags a real regression above that.
+    chunkSizeWarningLimit: 700,
     // Route-level code splitting comes from lazy routes; keep vendor chunks lean.
     rollupOptions: {
       output: {

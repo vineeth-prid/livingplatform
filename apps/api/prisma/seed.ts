@@ -17,6 +17,7 @@ import {
 } from '../src/modules/rbac/rbac.constants';
 import { DEFAULT_TICKET_CATEGORIES } from '../src/modules/ticket/ticket-category.constants';
 import { DEFAULT_SERVICES } from '../src/modules/service-request/service.constants';
+import { DEFAULT_ASSET_CATEGORIES } from '../src/modules/asset/asset.constants';
 
 const prisma = new PrismaClient();
 
@@ -164,6 +165,7 @@ async function seedDemoData() {
 
   await seedCommunityFoundation(community.id);
   await seedPeople(community.id, tenant.id);
+  await seedAssetCategories(community.id, tenant.id);
 
   console.log(`✓ demo tenant "${tenant.name}", community "${community.name}"`);
   console.log(`  platform admin:    ${PLATFORM_ADMIN_EMAIL}`);
@@ -383,6 +385,24 @@ async function seedServices() {
     }
   }
   console.log(`✓ ${DEFAULT_SERVICES.length} system services`);
+}
+
+/** Default asset categories for the demo community (categories are community-scoped). */
+async function seedAssetCategories(communityId: string, tenantId: string) {
+  for (const [i, c] of DEFAULT_ASSET_CATEGORIES.entries()) {
+    const existing = await prisma.assetCategory.findFirst({
+      where: { communityId, code: c.code },
+    });
+    const data = { name: c.name, color: c.color, icon: c.icon, isActive: true };
+    if (existing) {
+      await prisma.assetCategory.update({ where: { id: existing.id }, data });
+    } else {
+      await prisma.assetCategory.create({
+        data: { tenantId, communityId, code: c.code, sortOrder: i, ...data },
+      });
+    }
+  }
+  console.log(`✓ ${DEFAULT_ASSET_CATEGORIES.length} asset categories (demo community)`);
 }
 
 async function main() {

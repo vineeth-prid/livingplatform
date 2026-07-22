@@ -10,6 +10,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import {
   PrismaHealthIndicator,
   RedisHealthIndicator,
+  StorageHealthIndicator,
 } from './health.indicators';
 
 @ApiTags('Health')
@@ -19,6 +20,7 @@ export class HealthController {
     private readonly health: HealthCheckService,
     private readonly prisma: PrismaHealthIndicator,
     private readonly redis: RedisHealthIndicator,
+    private readonly storage: StorageHealthIndicator,
     private readonly memory: MemoryHealthIndicator,
   ) {}
 
@@ -39,6 +41,7 @@ export class HealthController {
     return this.health.check([
       () => this.prisma.isHealthy('database'),
       () => this.redis.isHealthy('redis'),
+      () => this.storage.isHealthy('storage'),
       () => this.memory.checkHeap('memory_heap', 512 * 1024 * 1024),
     ]);
   }

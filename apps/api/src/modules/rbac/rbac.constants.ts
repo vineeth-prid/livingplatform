@@ -123,6 +123,51 @@ export const PERMISSIONS = {
   WORKORDER_COMPLETE: 'workorder:complete',
   WORKORDER_VERIFY: 'workorder:verify',
   WORKORDER_CLOSE: 'workorder:close',
+
+  // ── Sprint 7 — Asset Foundation ──
+  ASSET_READ: 'asset:read',
+  ASSET_CREATE: 'asset:create',
+  ASSET_UPDATE: 'asset:update',
+  ASSET_DELETE: 'asset:delete',
+  ASSET_CATEGORY_MANAGE: 'asset:category:manage',
+  ASSET_DOCUMENT_CREATE: 'asset:document:create',
+  ASSET_PHOTO_CREATE: 'asset:photo:create',
+
+  // ── Sprint 8 — Preventive Maintenance Engine ──
+  MAINTENANCE_READ: 'maintenance:read',
+  MAINTENANCE_CREATE: 'maintenance:create',
+  MAINTENANCE_UPDATE: 'maintenance:update',
+  MAINTENANCE_DELETE: 'maintenance:delete',
+  MAINTENANCE_GENERATE: 'maintenance:generate',
+  MAINTENANCE_CHECKLIST_MANAGE: 'maintenance:checklist:manage',
+
+  // ── Sprint 9 — AMC Management Engine ──
+  AMC_READ: 'amc:read',
+  AMC_CREATE: 'amc:create',
+  AMC_UPDATE: 'amc:update',
+  AMC_DELETE: 'amc:delete',
+  AMC_RENEW: 'amc:renew',
+  AMC_COVERAGE_MANAGE: 'amc:coverage:manage',
+  AMC_SLA_MANAGE: 'amc:sla:manage',
+
+  // ── Sprint 10 — Community Operations ──
+  // (amenity:* and document:* already exist from Sprint 2 and are reused.)
+  VISITOR_READ: 'visitor:read',
+  VISITOR_CREATE: 'visitor:create',
+  VISITOR_UPDATE: 'visitor:update',
+  VISITOR_APPROVE: 'visitor:approve',
+  VISITOR_CHECKIN: 'visitor:checkin',
+  VISITOR_CHECKOUT: 'visitor:checkout',
+
+  BOOKING_READ: 'booking:read',
+  BOOKING_CREATE: 'booking:create',
+  BOOKING_UPDATE: 'booking:update',
+  BOOKING_CANCEL: 'booking:cancel',
+
+  ANNOUNCEMENT_READ: 'announcement:read',
+  ANNOUNCEMENT_CREATE: 'announcement:create',
+  ANNOUNCEMENT_UPDATE: 'announcement:update',
+  ANNOUNCEMENT_PUBLISH: 'announcement:publish',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -254,6 +299,44 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.WORKORDER_COMPLETE,
       P.WORKORDER_VERIFY,
       P.WORKORDER_CLOSE,
+      // Asset Foundation — full control.
+      P.ASSET_READ,
+      P.ASSET_CREATE,
+      P.ASSET_UPDATE,
+      P.ASSET_DELETE,
+      P.ASSET_CATEGORY_MANAGE,
+      P.ASSET_DOCUMENT_CREATE,
+      P.ASSET_PHOTO_CREATE,
+      // Preventive Maintenance — full control.
+      P.MAINTENANCE_READ,
+      P.MAINTENANCE_CREATE,
+      P.MAINTENANCE_UPDATE,
+      P.MAINTENANCE_DELETE,
+      P.MAINTENANCE_GENERATE,
+      P.MAINTENANCE_CHECKLIST_MANAGE,
+      // AMC Management — full control.
+      P.AMC_READ,
+      P.AMC_CREATE,
+      P.AMC_UPDATE,
+      P.AMC_DELETE,
+      P.AMC_RENEW,
+      P.AMC_COVERAGE_MANAGE,
+      P.AMC_SLA_MANAGE,
+      // Community Operations — full control.
+      P.VISITOR_READ,
+      P.VISITOR_CREATE,
+      P.VISITOR_UPDATE,
+      P.VISITOR_APPROVE,
+      P.VISITOR_CHECKIN,
+      P.VISITOR_CHECKOUT,
+      P.BOOKING_READ,
+      P.BOOKING_CREATE,
+      P.BOOKING_UPDATE,
+      P.BOOKING_CANCEL,
+      P.ANNOUNCEMENT_READ,
+      P.ANNOUNCEMENT_CREATE,
+      P.ANNOUNCEMENT_UPDATE,
+      P.ANNOUNCEMENT_PUBLISH,
     ],
   },
   {
@@ -307,6 +390,40 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.WORKORDER_COMPLETE,
       P.WORKORDER_VERIFY,
       P.WORKORDER_CLOSE,
+      // Assets — the FM owns the asset register day-to-day (no hard delete).
+      P.ASSET_READ,
+      P.ASSET_CREATE,
+      P.ASSET_UPDATE,
+      P.ASSET_CATEGORY_MANAGE,
+      P.ASSET_DOCUMENT_CREATE,
+      P.ASSET_PHOTO_CREATE,
+      // Preventive Maintenance — the FM owns the maintenance calendar (no delete).
+      P.MAINTENANCE_READ,
+      P.MAINTENANCE_CREATE,
+      P.MAINTENANCE_UPDATE,
+      P.MAINTENANCE_GENERATE,
+      P.MAINTENANCE_CHECKLIST_MANAGE,
+      // AMC — the FM manages contracts day-to-day (no hard delete).
+      P.AMC_READ,
+      P.AMC_CREATE,
+      P.AMC_UPDATE,
+      P.AMC_RENEW,
+      P.AMC_COVERAGE_MANAGE,
+      P.AMC_SLA_MANAGE,
+      // Community Operations — the FM runs the front desk & notices.
+      P.VISITOR_READ,
+      P.VISITOR_CREATE,
+      P.VISITOR_UPDATE,
+      P.VISITOR_APPROVE,
+      P.VISITOR_CHECKIN,
+      P.VISITOR_CHECKOUT,
+      P.BOOKING_READ,
+      P.BOOKING_UPDATE,
+      P.BOOKING_CANCEL,
+      P.ANNOUNCEMENT_READ,
+      P.ANNOUNCEMENT_CREATE,
+      P.ANNOUNCEMENT_UPDATE,
+      P.ANNOUNCEMENT_PUBLISH,
     ],
   },
   {
@@ -327,6 +444,14 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       // Residents request services and give feedback.
       P.SERVICE_CREATE,
       P.SERVICE_VIEW,
+      // Community life — invite visitors, book amenities, read notices.
+      P.VISITOR_READ,
+      P.VISITOR_CREATE,
+      P.VISITOR_UPDATE,
+      P.BOOKING_READ,
+      P.BOOKING_CREATE,
+      P.BOOKING_CANCEL,
+      P.ANNOUNCEMENT_READ,
     ],
   },
   {
@@ -351,6 +476,8 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.WORKORDER_UPDATE,
       P.WORKORDER_START,
       P.WORKORDER_COMPLETE,
+      // Vendors can see the assets they service (read-only).
+      P.ASSET_READ,
     ],
   },
 ];

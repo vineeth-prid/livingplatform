@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
-  Building2, DoorOpen, Hammer, HardHat, LayoutDashboard, LifeBuoy, Sparkles, Store, Users, Wrench,
+  Boxes, Building2, CalendarCheck, CalendarClock, DoorOpen, FileSignature, FileText,
+  Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, Sparkles, Store, UserRound, Users, Wrench,
 } from 'lucide-react';
 import { useAuth } from '@living/hooks';
 import {
-  AppShell, ProfileMenu, ThemeSwitch, WorkspaceSwitcher,
+  AppShell, LoadingState, ProfileMenu, ThemeSwitch, WorkspaceSwitcher,
   useCommandPalette, type NavSection,
 } from '@living/ui';
 
@@ -27,6 +28,9 @@ const sections: NavSection[] = [
       { label: 'Tickets', icon: LifeBuoy, href: '/tickets' },
       { label: 'Service requests', icon: Wrench, href: '/service-requests' },
       { label: 'Work orders', icon: Hammer, href: '/work-orders' },
+      { label: 'Assets', icon: Boxes, href: '/assets' },
+      { label: 'Maintenance', icon: CalendarClock, href: '/maintenance' },
+      { label: 'AMC', icon: FileSignature, href: '/amc' },
     ],
   },
   {
@@ -37,6 +41,16 @@ const sections: NavSection[] = [
       { label: 'Residents', icon: Users, href: '/residents' },
       { label: 'Staff', icon: HardHat, href: '/staff' },
       { label: 'Vendors', icon: Store, href: '/vendors' },
+    ],
+  },
+  {
+    title: 'Community ops',
+    items: [
+      { label: 'Visitors', icon: UserRound, href: '/visitors' },
+      { label: 'Amenities', icon: Sparkles, href: '/amenities' },
+      { label: 'Bookings', icon: CalendarCheck, href: '/bookings' },
+      { label: 'Documents', icon: FileText, href: '/documents' },
+      { label: 'Announcements', icon: Megaphone, href: '/announcements' },
     ],
   },
 ];
@@ -101,7 +115,9 @@ export function DashboardLayout() {
           </div>
         }
       >
-        <Outlet />
+        <Suspense fallback={<LoadingState className="h-[60vh]" />}>
+          <Outlet />
+        </Suspense>
       </AppShell>
     </RequireAuth>
   );

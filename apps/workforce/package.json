@@ -7,14 +7,21 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
     "@living/design-system": "workspace:*",
     "@living/hooks": "workspace:*",
     "@living/living-sdk": "workspace:*",
+    "@living/types": "workspace:*",
     "@living/ui": "workspace:*",
+    "@living/utils": "workspace:*",
+    "@tanstack/react-query": "^5.62.7",
+    "@tanstack/react-router": "^1.87.0",
     "framer-motion": "^11.15.0",
+    "lucide-react": "^0.469.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -27,6 +34,8 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^2.1.8"
   }
 }

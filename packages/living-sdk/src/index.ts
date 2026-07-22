@@ -14,4 +14,10 @@ export { PeopleResource } from './resources/people';
 export { TicketResource } from './resources/tickets';
 export { ServiceRequestResource } from './resources/service-requests';
 export { WorkOrderResource } from './resources/work-orders';
+export { AssetResource, AssetCategoryResource } from './resources/assets';
+export { MaintenanceResource } from './resources/maintenance';
+export { AmcResource } from './resources/amc';
+export {
+  VisitorsResource, BookingsResource, AnnouncementsResource, AmenitiesResource, DocumentsResource,
+} from './resources/community-ops';
 export { PlatformResource } from './resources/platform';

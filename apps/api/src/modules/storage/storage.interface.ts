@@ -42,6 +42,12 @@ export interface StorageProvider {
   delete(key: string): Promise<void>;
 
   exists(key: string): Promise<boolean>;
+
+  /**
+   * Optional health probe (reachable + credentials valid). Internal — used by
+   * the readiness check only; the app-facing operations above are unchanged.
+   */
+  ping?(): Promise<void>;
 }
 
 /** DI token for the bound StorageProvider implementation. */

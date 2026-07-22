@@ -46,4 +46,9 @@ export class StorageService {
   resolveUrl(key: string | null | undefined): string | null {
     return key ? this.provider.getPublicUrl(key) : null;
   }
+
+  /** Internal readiness probe — delegates to the provider (no-op if unsupported). */
+  ping(): Promise<void> {
+    return this.provider.ping ? this.provider.ping() : Promise.resolve();
+  }
 }
