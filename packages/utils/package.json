@@ -1,0 +1,16 @@
+{
+  "name": "@living/utils",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@living/config": "workspace:*",
+    "typescript": "^5.7.2"
+  }
+}

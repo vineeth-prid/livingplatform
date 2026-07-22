@@ -1,0 +1,25 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"/><link rel="stylesheet" href="styles.css"/>
+<style>
+  html,body{margin:0;height:100%}
+  .tile{width:1280px;height:854px;display:flex;font-family:var(--font-sans)}
+  .main{flex:1;background:var(--pine-600);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px}
+  .main img{width:190px;height:190px;display:block}
+  .name{font-family:var(--font-display);font-weight:500;font-size:112px;line-height:1;letter-spacing:-0.02em;color:var(--stone-50)}
+  .name .dot{color:var(--clay-300)}
+  .strip{width:150px;height:100%;display:flex;flex-direction:column}
+  .strip>span{flex:1;display:block}
+</style></head>
+<body>
+<div class="tile">
+  <div class="main">
+    <img src="assets/living-mark-light.svg" alt=""/>
+    <div class="name">Living<span class="dot">.</span></div>
+  </div>
+  <div class="strip">
+    <span style="background:var(--amber-500)"></span>
+    <span style="background:var(--clay-400)"></span>
+    <span style="background:var(--blue-500)"></span>
+    <span style="background:var(--green-600)"></span>
+  </div>
+</div>
+</body></html>

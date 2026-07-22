@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<style data-omelette-print-defaults>
+@media print {
+  @page { margin: 0.5in; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  figure, table, pre, blockquote, img, svg, tr, [class~="card" i] { break-inside: avoid; }
+  img, svg { max-width: 100%; }
+  p { orphans: 3; widows: 3; }
+}
+</style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Living — Brand Applications</title>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--stone-200); font-family: var(--font-sans); color: var(--text-body); }
+
+  /* ---- Header / selector ---- */
+  header {
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in oklab, var(--stone-100) 88%, transparent);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 20px 40px;
+  }
+  .hrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  h1 { font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: -0.02em; color: var(--text-strong); margin: 0; }
+  h1 .dot { color: var(--clay-500); }
+  .sub { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 0; }
+  .picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    background: var(--surface-raised); border: 1px solid var(--border-default);
+    border-radius: 999px; padding: 6px 14px 6px 8px; transition: all .16s var(--ease-out, ease);
+  }
+  .chip:hover { border-color: var(--border-strong); }
+  .chip[aria-selected="true"] { background: var(--pine-700); border-color: var(--pine-700); }
+  .chip[aria-selected="true"] .clabel, .chip[aria-selected="true"] .cid { color: var(--stone-50); }
+  .chip .prev { width: 30px; height: 30px; background: var(--surface-page); border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .chip[aria-selected="true"] .prev { background: color-mix(in oklab, var(--stone-50) 14%, transparent); }
+  .cid { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-subtle); }
+  .clabel { font-size: 12.5px; font-weight: 600; color: var(--text-body); }
+
+  /* ---- Grid ---- */
+  .grid { padding: 34px 40px 72px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 22px; max-width: 1360px; margin: 0 auto; }
+  .tile { background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: 22px; box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; }
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 30px; background: radial-gradient(circle at 50% 34%, color-mix(in oklab, var(--stone-100) 60%, #fff), var(--stone-200)); position: relative; min-height: 210px; }
+  .cap { padding: 12px 18px; border-top: 1px solid var(--border-subtle); }
+  .cap b { display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); }
+  .cap span { font-size: 11.5px; color: var(--text-subtle); }
+
+  .col3 { grid-column: span 3; } .col4 { grid-column: span 4; } .col5 { grid-column: span 5; }
+  .col6 { grid-column: span 6; } .col7 { grid-column: span 7; } .col8 { grid-column: span 8; }
+  @media (max-width: 1080px){ .grid{ grid-template-columns: repeat(6,1fr);} .col3,.col4,.col5{grid-column:span 3;} .col6,.col7,.col8{grid-column:span 6;} }
+
+  .mark-slot { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+  .word { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
+  .word .dot { color: var(--clay-500); }
+  .eyebrow2 { font-size: 9px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+
+  /* App icon */
+  .appicon { width: 116px; height: 116px; border-radius: 27px; background: linear-gradient(158deg, var(--pine-600), var(--pine-800)); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg); }
+  .iconrow { display: flex; align-items: center; gap: 22px; }
+  .iconsm { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(158deg, var(--pine-600), var(--pine-800)); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); }
+  .iconsm.clay { background: linear-gradient(158deg, var(--clay-400), var(--clay-600)); }
+  .iconsm.ivory { background: var(--surface-raised); border: 1px solid var(--border-subtle); }
+
+  /* Business cards */
+  .bc-wrap { position: relative; width: 300px; height: 188px; }
+  .bcard { position: absolute; width: 300px; height: 178px; border-radius: 14px; box-shadow: var(--shadow-md); }
+  .bc-back { background: linear-gradient(155deg, var(--pine-600), var(--pine-800)); top: 0; left: 0; transform: rotate(-6deg) translate(-14px,4px); display: flex; align-items: center; justify-content: center; }
+  .bc-front { background: var(--surface-raised); border: 1px solid var(--border-subtle); top: 8px; left: 8px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; }
+  .bc-front .who { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+  .bc-front .role { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .bc-front .meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); line-height: 1.6; }
+
+  /* Letterhead */
+  .sheet { width: 210px; height: 288px; background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-lg); padding: 22px 22px; display: flex; flex-direction: column; }
+  .sheet .lines { display: flex; flex-direction: column; gap: 7px; margin-top: 22px; flex: 1; }
+  .sheet .ln { height: 5px; border-radius: 3px; background: var(--stone-200); }
+  .sheet .foot { border-top: 1px solid var(--border-subtle); padding-top: 8px; font-family: var(--font-mono); font-size: 7.5px; color: var(--text-subtle); letter-spacing: .02em; }
+
+  /* T-shirts */
+  .tees { display: flex; gap: 8px; }
+  .tee { position: relative; width: 150px; height: 168px; }
+  .tee .chest { position: absolute; top: 58px; left: 0; right: 0; display: flex; justify-content: center; }
+  .tee.stacklabel { }
+
+  /* Billboard */
+  .bb { width: 340px; }
+  .bb .panel { background: linear-gradient(150deg, var(--pine-600), var(--pine-800)); border-radius: 10px; padding: 26px 30px; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 18px; }
+  .bb .legs { display: flex; justify-content: space-around; padding: 0 60px; }
+  .bb .leg { width: 10px; height: 30px; background: var(--stone-400); }
+  .bb .ground { height: 3px; background: var(--stone-300); border-radius: 3px; margin: 0 20px; }
+  .bb .bigword { font-family: var(--font-display); font-weight: 500; font-size: 34px; color: var(--stone-50); letter-spacing: -0.02em; line-height: 1; }
+  .bb .tag { font-size: 9.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--pine-200); margin-top: 6px; }
+
+  /* Roll-up banner */
+  .banner { width: 320px; background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: 10px; box-shadow: var(--shadow-md); padding: 20px 22px; display: flex; align-items: center; gap: 16px; }
+  .banner .txt { flex: 1; }
+  .banner .btn { background: var(--clay-500); color: var(--stone-50); font-size: 11px; font-weight: 600; padding: 8px 14px; border-radius: 999px; }
+
+  /* Signage / logo board */
+  .sign { background: linear-gradient(160deg, var(--pine-600), var(--pine-800)); border-radius: 8px; padding: 30px 40px; display: flex; align-items: center; gap: 16px; box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,.08); }
+
+  /* Tote */
+  .tote { position: relative; width: 150px; height: 170px; }
+  .tote .face { position: absolute; top: 62px; left: 0; right: 0; display: flex; justify-content: center; }
+
+  /* Avatar + favicon */
+  .badges { display: flex; align-items: center; gap: 26px; }
+  .avatar { width: 84px; height: 84px; border-radius: 50%; background: linear-gradient(155deg, var(--pine-600), var(--pine-800)); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-md); }
+  .tab { display: flex; align-items: center; gap: 8px; background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: 9px 9px 0 0; padding: 8px 14px; box-shadow: var(--shadow-sm); }
+  .tab .ttl { font-size: 12px; color: var(--text-body); font-weight: 500; }
+  .fav { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div>
+      <h1>Living<span class="dot">.</span> — brand applications</h1>
+      <p class="sub">Pick a mark to see it applied across the identity system. Everything updates live.</p>
+    </div>
+    <div class="picker" id="picker"></div>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- App icons -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="iconrow">
+        <div class="appicon"><span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="66"></span></div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="iconsm"><span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="32"></span></div>
+          <div class="iconsm clay"><span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--pine-900)" data-size="32"></span></div>
+          <div class="iconsm ivory"><span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="32"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>App icon</b><span>iOS / Android — pine, clay &amp; ivory</span></div>
+  </div>
+
+  <!-- Business cards -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="bc-wrap">
+        <div class="bcard bc-back"><span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="66"></span></div>
+        <div class="bcard bc-front">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="30"></span>
+            <span class="word" style="font-size:21px;color:var(--text-strong)">Living<span class="dot">.</span></span>
+          </div>
+          <div>
+            <div class="who">Anaya Rao</div>
+            <div class="role">Community Manager</div>
+          </div>
+          <div class="meta">+91 98860 40021<br/>anaya@living.co · living.co</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Business card</b><span>Ivory front · pine reverse</span></div>
+  </div>
+
+  <!-- Letterhead -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="sheet">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="26"></span>
+            <span class="word" style="font-size:18px;color:var(--text-strong)">Living<span class="dot">.</span></span>
+          </div>
+          <span class="eyebrow2" style="color:var(--text-subtle)">Est. 2024</span>
+        </div>
+        <div class="lines">
+          <div class="ln" style="width:52%"></div>
+          <div class="ln" style="width:100%"></div>
+          <div class="ln" style="width:96%"></div>
+          <div class="ln" style="width:90%"></div>
+          <div class="ln" style="width:74%"></div>
+          <div class="ln" style="width:0;height:10px"></div>
+          <div class="ln" style="width:88%"></div>
+          <div class="ln" style="width:80%"></div>
+        </div>
+        <div class="foot">LIVING HOMES PVT LTD · WHITEFIELD, BENGALURU · LIVING.CO</div>
+      </div>
+    </div>
+    <div class="cap"><b>Letterhead</b><span>A4 · quiet mark lockup</span></div>
+  </div>
+
+  <!-- Billboard / hoarding -->
+  <div class="tile col5">
+    <div class="stage" style="background:radial-gradient(circle at 50% 30%, #EEF2EF, var(--stone-200))">
+      <div class="bb">
+        <div class="panel">
+          <span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="70"></span>
+          <div>
+            <div class="bigword">Life Happens Here.</div>
+            <div class="tag">Homes · Community · Care</div>
+          </div>
+        </div>
+        <div class="legs"><div class="leg"></div><div class="leg"></div></div>
+        <div class="ground"></div>
+      </div>
+    </div>
+    <div class="cap"><b>Hoarding / billboard</b><span>Outdoor — reversed on pine</span></div>
+  </div>
+
+  <!-- T-shirts -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="tees">
+        <div class="tee">
+          <svg width="150" height="168" viewBox="0 0 120 134" fill="none">
+            <path d="M45 14 Q60 26 75 14 L98 28 L89 52 L79 46 L79 122 Q60 127 41 122 L41 46 L31 52 L22 28 Z"
+              fill="var(--pine-700)" stroke="var(--pine-800)" stroke-width="1"/>
+          </svg>
+          <div class="chest"><span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="44"></span></div>
+        </div>
+        <div class="tee">
+          <svg width="150" height="168" viewBox="0 0 120 134" fill="none">
+            <path d="M45 14 Q60 26 75 14 L98 28 L89 52 L79 46 L79 122 Q60 127 41 122 L41 46 L31 52 L22 28 Z"
+              fill="var(--stone-100)" stroke="var(--stone-300)" stroke-width="1"/>
+          </svg>
+          <div class="chest"><span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="44"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Apparel</b><span>Team tees — pine &amp; ivory</span></div>
+  </div>
+
+  <!-- Roll-up banner -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="banner">
+        <span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="52"></span>
+        <div class="txt">
+          <div class="word" style="font-size:22px;color:var(--text-strong)">Living<span class="dot">.</span></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Homes that feel like home.</div>
+        </div>
+        <div class="btn">Book a tour</div>
+      </div>
+    </div>
+    <div class="cap"><b>Banner</b><span>Web / roll-up — on ivory</span></div>
+  </div>
+
+  <!-- Signage / logo board -->
+  <div class="tile col4">
+    <div class="stage" style="background:radial-gradient(circle at 50% 30%, #E9EEEB, var(--stone-300))">
+      <div class="sign">
+        <span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="58"></span>
+        <span class="word" style="font-size:30px;color:var(--stone-50)">Living<span class="dot" style="color:var(--clay-300)">.</span></span>
+      </div>
+    </div>
+    <div class="cap"><b>Signage / logo board</b><span>Office &amp; site — dimensional</span></div>
+  </div>
+
+  <!-- Tote -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="tote">
+        <svg width="150" height="170" viewBox="0 0 120 136" fill="none">
+          <path d="M40 34 C40 12 80 12 80 34" stroke="var(--stone-500)" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <rect x="22" y="34" width="76" height="92" rx="7" fill="var(--stone-100)" stroke="var(--stone-300)" stroke-width="1.5"/>
+        </svg>
+        <div class="face"><span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="48"></span></div>
+      </div>
+    </div>
+    <div class="cap"><b>Canvas tote</b><span>Merch — pine on natural</span></div>
+  </div>
+
+  <!-- Avatar + favicon -->
+  <div class="tile col4">
+    <div class="stage">
+      <div class="badges">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+          <div class="avatar"><span class="mark-slot" data-arch="var(--stone-50)" data-dot="var(--clay-300)" data-size="46"></span></div>
+          <span class="cap" style="border:none;padding:0;font-size:11px;color:var(--text-subtle)">Social avatar</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+          <div class="tab">
+            <span class="fav"><span class="mark-slot" data-arch="var(--pine-600)" data-dot="var(--clay-500)" data-size="18"></span></span>
+            <span class="ttl">Living — home</span>
+          </div>
+          <span class="cap" style="border:none;padding:0;font-size:11px;color:var(--text-subtle)">Favicon</span>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Digital</b><span>Avatar 1:1 · favicon 16px</span></div>
+  </div>
+
+</div>
+
+<script>
+  const MARK_IDS = [
+    ["threshold","1a","Threshold"],
+    ["keystone","1b","Keystone"],
+    ["mono","1c","Monogram"],
+    ["shelter","1d","Shelter"],
+    ["window","1e","Window"],
+    ["courtyard","1f","Courtyard"],
+  ];
+  let CUR = "threshold";
+
+  function markHTML(id, arch, dot, s) {
+    if (id === "mono") {
+      return '<span style="font-family:var(--font-display);font-weight:500;font-size:' + s +
+        'px;line-height:1;letter-spacing:-0.04em;color:' + arch + '">L<span style="color:' + dot + '">.</span></span>';
+    }
+    const open = '<svg width="' + s + '" height="' + s + '" viewBox="0 0 48 48" fill="none">';
+    const dotC = '<circle cx="24" cy="35" r="2.8" fill="' + dot + '"/>';
+    let body = "";
+    if (id === "threshold") {
+      body = '<path fill-rule="evenodd" clip-rule="evenodd" fill="' + arch +
+        '" d="M9 21 A15 15 0 0 1 39 21 L39 37 Q39 41 35 41 L13 41 Q9 41 9 37 Z M17 41 L17 25 A7 7 0 0 1 31 25 L31 41 Z"/>' + dotC;
+    } else if (id === "keystone") {
+      body = '<path d="M10 41 V24 A14 14 0 0 1 38 24 V41" stroke="' + arch +
+        '" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="24" cy="11" r="3.4" fill="' + dot + '"/>';
+    } else if (id === "shelter") {
+      body = '<path d="M7 39 A17 17 0 0 1 41 39" stroke="' + arch + '" stroke-width="4.5" stroke-linecap="round" fill="none"/>' +
+        '<path d="M15 39 A9 9 0 0 1 33 39" stroke="' + arch + '" stroke-opacity="0.5" stroke-width="4.5" stroke-linecap="round" fill="none"/>' +
+        '<circle cx="24" cy="37" r="3" fill="' + dot + '"/>';
+    } else if (id === "window") {
+      body = '<path fill-rule="evenodd" clip-rule="evenodd" fill="' + arch +
+        '" d="M8 18 Q8 8 18 8 L30 8 Q40 8 40 18 L40 30 Q40 40 30 40 L18 40 Q8 40 8 30 Z M18.5 18.5 L29.5 18.5 L29.5 29.5 L18.5 29.5 Z"/>' +
+        '<circle cx="24" cy="24" r="3.3" fill="' + dot + '"/>';
+    } else if (id === "courtyard") {
+      body = '<rect x="9" y="9" width="30" height="30" rx="10.5" stroke="' + arch + '" stroke-width="4.5" fill="none"/>' +
+        '<circle cx="24" cy="24" r="4" fill="' + dot + '"/>';
+    }
+    return open + body + '</svg>';
+  }
+
+  function paintAll() {
+    document.querySelectorAll(".mark-slot").forEach(function (el) {
+      el.innerHTML = markHTML(CUR, el.dataset.arch, el.dataset.dot, +el.dataset.size);
+    });
+  }
+
+  // Build picker
+  const picker = document.getElementById("picker");
+  MARK_IDS.forEach(function (m) {
+    const chip = document.createElement("button");
+    chip.className = "chip";
+    chip.setAttribute("aria-selected", m[0] === CUR);
+    chip.innerHTML =
+      '<span class="prev">' + markHTML(m[0], "var(--pine-600)", "var(--clay-500)", 22) + '</span>' +
+      '<span class="cid">' + m[1] + '</span><span class="clabel">' + m[2] + '</span>';
+    chip.onclick = function () {
+      CUR = m[0];
+      document.querySelectorAll(".chip").forEach(function (c, i) {
+        c.setAttribute("aria-selected", MARK_IDS[i][0] === CUR);
+      });
+      paintAll();
+    };
+    picker.appendChild(chip);
+  });
+
+  paintAll();
+</script>
+<script>
+(async () => {
+  if (!document.title || !document.title.trim()) document.title = "brand-applications";
+  // Prepend so page-supplied @page / break rules (deck-stage's margin:0,
+  // author CSS) keep source-order precedence over the baseline.
+  const baseCss = document.createElement('style');
+  baseCss.textContent = "@media print {\n  figure, table { break-inside: avoid; }\n  *, *::before, *::after {\n    print-color-adjust: exact; -webkit-print-color-adjust: exact;\n    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;\n    animation-delay: -99s !important; animation-duration: .001s !important;\n    animation-iteration-count: 1 !important; animation-fill-mode: both !important;\n    animation-play-state: running !important; transition-duration: 0s !important;\n  }\n}";
+  document.head.prepend(baseCss);
+  if (document.readyState === 'loading') {
+    await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
+  }
+  let ds = document.querySelector('deck-stage');
+  // whenDefined never resolves when nothing registers the element, so only
+  // await it when a <deck-stage> tag exists (and race a timeout regardless).
+  if (ds && !customElements.get('deck-stage')) {
+    try {
+      await Promise.race([
+        customElements.whenDefined('deck-stage'),
+        new Promise((r) => setTimeout(r, 3000)),
+      ]);
+    } catch (e) {}
+    ds = document.querySelector('deck-stage');
+  }
+  // dc-runtime assigns window.DCLogic at init and mounts into #dc-root on
+  // DOMContentLoaded; settle on that subtree so React has rendered before
+  // print(). Non-DC pages fall through to weighing body.
+  const isDc = !ds && 'DCLogic' in window;
+  const settleRoot = ds || (isDc ? document.getElementById('dc-root') : null) || document.body;
+  if (settleRoot) {
+    // Weigh only content children — skip script/style/template so inline
+    // Babel/CSS doesn't register as stable "content" before the framework
+    // has mounted anything.
+    const MEDIA = 'img,svg,canvas,video,picture,iframe,embed,object';
+    const weigh = () => {
+      let text = 0, media = 0;
+      for (const c of settleRoot.children) {
+        const t = c.tagName;
+        if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+        text += (c.textContent || '').trim().length;
+        media += c.querySelectorAll(MEDIA).length + (c.matches(MEDIA) ? 1 : 0);
+      }
+      return text + media * 100;
+    };
+    // "Non-zero and stable" alone is not sufficient to mean rendered: generic
+    // body can carry a static shell while async main content is pending, and
+    // #dc-root can carry the root DC's static text while child refs are still
+    // .sc-placeholder boxes. Gate generic on readyState 'complete', and never
+    // accept stability while a dc-runtime placeholder is present.
+    const isGeneric = settleRoot === document.body;
+    const deadline = Date.now() + 15000;
+    let last = -1, stable = 0;
+    while (Date.now() < deadline) {
+      const n = weigh();
+      const ready =
+        (!isGeneric || document.readyState === 'complete') &&
+        !settleRoot.querySelector('.sc-placeholder');
+      if (n > 0 && n === last && ready) { if (++stable >= 2) break; } else { stable = 0; }
+      last = n;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  // Project support.js may predate runtime default-seeding; push via bridge.
+  if (isDc && window.__dcSetProps && window.__dcRootName) {
+    try {
+      const dpEl = document.querySelector('script[data-dc-script]');
+      const meta = JSON.parse((dpEl && dpEl.getAttribute('data-props')) || '{}');
+      const bag = {};
+      for (const k in meta)
+        if (k[0] !== '$' && meta[k] && meta[k].default !== undefined)
+          bag[k] = meta[k].default;
+      if (Object.keys(bag).length) {
+        window.__dcSetProps(window.__dcRootName(), bag);
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    } catch (e) {}
+  }
+  // Reveal content gated on scroll or visibility before printing. Lazy <img>,
+  // IntersectionObserver fade-ins, and collapsed <details> don't render while
+  // off-screen, so a long page would print with them blank or closed. Open
+  // every <details>, force native-lazy images eager, and scroll the document
+  // through its full height to trip lazy-load + IO; then wait (bounded) for the
+  // newly-triggered images. Inert for deck-stage (slides aren't scroll-gated).
+  try {
+    for (const d of document.querySelectorAll('details')) d.open = true;
+    for (const img of document.querySelectorAll('img[loading="lazy"]'))
+      img.loading = 'eager';
+    const scroller = document.scrollingElement || document.documentElement;
+    const full = Math.max(scroller.scrollHeight, document.body.scrollHeight);
+    const step = window.innerHeight || 800;
+    for (let y = 0; y <= full; y += step) {
+      window.scrollTo(0, y);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    window.scrollTo(0, 0);
+    await Promise.race([
+      Promise.all(
+        [...document.images].map((img) =>
+          img.complete
+            ? null
+            : new Promise((res) => {
+                img.addEventListener('load', res, { once: true });
+                img.addEventListener('error', res, { once: true });
+              })
+        )
+      ),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+  } catch (e) {}
+  try { await document.fonts.ready; } catch (e) {}
+  // Jump every animation to its end state so print() never captures a slide
+  // mid-entrance. Ordering matters: the 0s-transition style must be live
+  // BEFORE data-deck-active is set so attribute-keyed transitions don't
+  // start a (now-0s) run from the pre-active base.
+  const st = document.createElement('style');
+  st.textContent = '*,*::before,*::after{animation-delay:-99s !important;animation-duration:.001s !important;animation-iteration-count:1 !important;animation-fill-mode:both !important;animation-play-state:running !important;transition-duration:0s !important}';
+  document.head.appendChild(st);
+  for (const d of document.querySelectorAll('deck-stage')) {
+    for (const c of d.children) {
+      const t = c.tagName;
+      if (t === 'SCRIPT' || t === 'STYLE' || t === 'TEMPLATE') continue;
+      c.setAttribute('data-deck-active', '');
+    }
+  }
+  // Re-append deck-stage's @page last so no author @page can add a margin and
+  // spill each full-bleed slide onto two sheets. Backstop for old copies.
+  if (ds) {
+    let pg = document.getElementById('deck-stage-print-page');
+    if (!pg) {
+      pg = document.createElement('style');
+      pg.textContent = '@page{size:' + (+ds.getAttribute('width') || 1920) +
+        'px ' + (+ds.getAttribute('height') || 1080) + 'px;margin:0}';
+    }
+    document.body.appendChild(pg);
+  }
+  try {
+    const sweep = () => {
+      for (const a of document.getAnimations()) {
+        try { a.finish(); } catch (e) {
+          try { a.currentTime = (a.effect && a.effect.getComputedTiming().duration) || 0; a.pause(); } catch (e2) {}
+        }
+      }
+    };
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+    sweep();
+    await new Promise((r) => requestAnimationFrame(r));
+  } catch (e) {}
+  // Size the PDF page to the rendered design unless the file opted into
+  // standard paper via @page{size:letter|A4|…}. Decks own their own @page.
+  // Wrappers (body, …) lose padding+margin so the frame sits at (0,0); the
+  // frame itself loses only margin — its padding is INSIDE the measured
+  // rect and must stay, or content shifts and leaves a gap at bottom/right.
+  var __m = null;
+  try { __m = (() => {
+  var STAMP = true;
+  var docEl = document.documentElement;
+  var doc = { width: docEl.scrollWidth, height: docEl.scrollHeight };
+
+  var ds = document.querySelector('deck-stage');
+  if (ds) {
+    var dw = Number(ds.getAttribute('width')) || 1920;
+    var dh = Number(ds.getAttribute('height')) || 1080;
+    var n = typeof ds.length === 'number' ? ds.length : ds.children.length;
+    var idx = typeof ds.index === 'number' ? ds.index : 0;
+    var frames = [];
+    for (var i = 0; i < n; i++) frames.push({ left: 0, top: 0, width: dw, height: dh });
+    return { kind: 'deck', source: 'declared', doc: doc, frames: frames,
+      authored: frames.map(function(){return{width:true,height:true}}),
+      deck: { width: dw, height: dh, slideCount: n, index: idx },
+      signals: { paperPage: false, pxPage: false } };
+  }
+
+  // Declared kind: a doc-page tag names the kind outright, so no signal
+  // heuristics run (like the deck branch above, signals report false —
+  // they describe inferred classifications only). The tag alone is not
+  // trusted: the element must have upgraded (shadowRoot present), so a
+  // leftover tag whose script was deleted falls through to the heuristics
+  // that handle plain markup.
+  var stageSx = window.scrollX || 0, stageSy = window.scrollY || 0;
+  var dp = document.querySelector('doc-page');
+  if (dp && dp.shadowRoot) {
+    // Crop to the sheet, not the host — the desk around it is screen-only
+    // chrome that must not land in PNG exports.
+    var sheet = dp.shadowRoot.querySelector('.sheet');
+    var sr = (sheet || dp).getBoundingClientRect();
+    return { kind: 'paper-doc', source: 'declared', doc: doc,
+      frames: [{ left: sr.left + stageSx, top: sr.top + stageSy,
+        width: sr.width, height: sr.height }],
+      authored: [{ width: false, height: false }],
+      signals: { paperPage: false, pxPage: false } };
+  }
+  var paperPage = false, pxPage = false;
+  var eachRule = function (fn) {
+    for (var s = 0; s < document.styleSheets.length; s++) {
+      var rs; try { rs = document.styleSheets[s].cssRules; } catch (e) { continue; }
+      for (var r = 0; r < rs.length; r++) {
+        fn(rs[r]);
+        if (rs[r].cssRules) for (var n = 0; n < rs[r].cssRules.length; n++) fn(rs[r].cssRules[n]);
+      }
+    }
+  };
+  eachRule(function (r) {
+    if (r.type !== 6) return;
+    var m = /\bsize\s*:\s*([^;}]+)/i.exec(r.cssText || '');
+    if (!m) return;
+    if (/\b(letter|a[3-5]|legal|ledger)\b/i.test(m[1])) paperPage = true;
+    if (/\d+(?:\.\d+)?px\b/i.test(m[1])) pxPage = true;
+  });
+  var signals = { paperPage: paperPage, pxPage: pxPage };
+
+  var pxVal = function (v) {
+    var m = /^(\d+(?:\.\d+)?)px$/.exec(v || ''); return m ? +m[1] : 0;
+  };
+  var authoredPx = function (el, prop) {
+    if (pxVal(el.style[prop])) return true;
+    var attr = el.getAttribute(prop);
+    if (attr && /^\d+$/.test(attr)) return true;
+    var hit = false;
+    eachRule(function (r) {
+      if (hit || r.type !== 1 || !r.style) return;
+      try { if (el.matches(r.selectorText) && pxVal(r.style[prop])) hit = true; } catch (e) {}
+    });
+    return hit;
+  };
+
+  var el = document.body, rootPxW = false;
+  for (;;) {
+    var kids = [];
+    for (var c = 0; c < el.children.length; c++) {
+      var t = el.children[c].tagName;
+      if (t !== 'SCRIPT' && t !== 'STYLE' && t !== 'TEMPLATE') kids.push(el.children[c]);
+    }
+    if (kids.length !== 1 || !(kids[0] instanceof HTMLElement)) break;
+    if (STAMP) el.setAttribute('data-om-frame-wrap', '');
+    el = kids[0];
+    rootPxW = authoredPx(el, 'width');
+    if (rootPxW) break;
+  }
+  if (!rootPxW) rootPxW = authoredPx(el, 'width');
+
+  // @page{size:letter} alone is a flowing doc; with a px-width root it's a
+  // fixed sheet pretending to be paper — fall through and size to render.
+  if (paperPage && !rootPxW) {
+    return { kind: 'paper-doc', source: 'inferred', doc: doc, signals: signals,
+      frames: [{ left: 0, top: 0, width: doc.width, height: doc.height }],
+      authored: [{ width: false, height: false }] };
+  }
+
+  var sx = window.scrollX || 0, sy = window.scrollY || 0;
+  var rectOf = function (e) {
+    var r = e.getBoundingClientRect();
+    var oy; try { oy = getComputedStyle(e).overflowY; } catch (err) {}
+    var h = oy === 'visible' ? Math.max(r.height, e.scrollHeight || 0) : r.height;
+    return { left: r.left + sx, top: r.top + sy, width: r.width, height: h };
+  };
+
+  // Multi-frame: ≥2 visible non-fixed children, each with authored px width
+  // AND height, all within ±2px of each other. Off unless the page opts in
+  // via data-om-multi-frame on the stop element — guards against card grids
+  // and pricing tables that match the geometry but aren't separate canvases.
+  if (el.hasAttribute('data-om-multi-frame')) {
+    var cands = [];
+    for (var k = 0; k < el.children.length; k++) {
+      var ch = el.children[k];
+      var cs; try { cs = getComputedStyle(ch); } catch (e) { continue; }
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') continue;
+      var rc = rectOf(ch);
+      if (rc.width < 2 || rc.height < 2) continue;
+      if (!authoredPx(ch, 'width') || !authoredPx(ch, 'height')) continue;
+      cands.push(rc);
+    }
+    if (cands.length >= 2) {
+      var w0 = cands[0].width, h0 = cands[0].height, ok = true;
+      for (var q = 1; q < cands.length; q++)
+        if (Math.abs(cands[q].width - w0) > 2 || Math.abs(cands[q].height - h0) > 2) ok = false;
+      if (ok) return { kind: 'multi-frame', source: 'inferred', doc: doc, signals: signals,
+        frames: cands, authored: cands.map(function(){return{width:true,height:true}}) };
+    }
+  }
+
+  if (STAMP) el.setAttribute('data-om-frame', '');
+  return { kind: 'single-canvas', source: 'inferred', doc: doc, signals: signals,
+    frames: [rectOf(el)],
+    authored: [{ width: rootPxW, height: authoredPx(el, 'height') }] };
+})(); } catch (e) {}
+  var frame = null;
+  if (__m && __m.kind === 'single-canvas') {
+    var f = __m.frames && __m.frames[0];
+    if (f && f.width >= 200 && f.height >= 200) {
+      frame = f;
+      var fst = document.createElement('style');
+      fst.textContent = '@media print{@page{size:' + Math.ceil(f.width) + 'px ' +
+        Math.ceil(f.height) + 'px;margin:0}' +
+        'html,body,[data-om-frame-wrap]{padding:0!important;margin:0!important;background:none!important}' +
+        '[data-om-frame]{margin:0!important}}';
+      document.body.appendChild(fst);
+    }
+  }
+  // Relax break-inside on oversized elements. An element taller than a
+  // printable page can't honor break-inside: avoid — browsers either overflow
+  // it or push it whole to the next page, leaving a blank gap, then break it
+  // anyway at an arbitrary point. After the final layout (content revealed,
+  // animations jumped), find elements taller than a page that still compute
+  // break-inside: avoid and reset them to auto, so the browser breaks them at
+  // their children's boundaries instead (children keep their own avoid). PAGE_PX
+  // is a conservative portrait estimate at 96 CSS px/in — Letter/A4 usable
+  // height minus our 0.5in margins — so only clearly-oversized elements are
+  // touched and under-page elements still stay whole. Skipped for decks (slides
+  // are sized to the page) and for fixed-size canvases (frame set, or an author
+  // px-based @page) — runs as before for flowing docs on letter/A4.
+  try {
+    if (!ds && !frame && !(__m && __m.signals && __m.signals.pxPage)) {
+      const PAGE_PX = 1024;
+      // Our print defaults add a real @page margin only when the source has
+      // no @page of its own; computed style can't tell us (it reports screen
+      // media), so read the injected rule directly.
+      const defaults = document.querySelector('style[data-omelette-print-defaults]');
+      const pageInset = /@page\s*\{[^}]*margin/.test(defaults ? defaults.textContent || '' : '');
+      const SEL = 'section,article,figure,table,pre,blockquote,[class~="card" i],[class~="page" i],[class~="sheet" i]';
+      for (const el of document.body.querySelectorAll(SEL)) {
+        if (el instanceof HTMLElement && el.offsetHeight > PAGE_PX) {
+          el.setAttribute('data-om-oversized', '');
+          // Fake-paged docs simulate sheets with over-tall break-after:page
+          // boxes; honoring the break spills half-blank pages and ends a
+          // colored box mid-sheet. Flow them, and (only when we own the page
+          // inset) drop the redundant padding/background via the rule below.
+          const cs = getComputedStyle(el);
+          if (cs.breakAfter === 'page' || cs.pageBreakAfter === 'always') {
+            el.setAttribute('data-om-fakepage', '');
+          }
+        }
+      }
+      const ost = document.createElement('style');
+      ost.textContent = '@media print{' +
+        '[data-om-oversized]{break-inside:auto !important;page-break-inside:auto !important}' +
+        '[data-om-fakepage]{break-after:auto !important;page-break-after:auto !important}' +
+        (pageInset ? '[data-om-fakepage]{padding:0 !important;background:none !important}' : '') +
+        '}';
+      document.head.appendChild(ost);
+    }
+  } catch (e) {}
+  // macOS Preview renders Skia-PDF Luminosity soft-masks as opaque grey boxes;
+  // swap the CSS that triggers them for Preview-safe forms.
+  try {
+    for (const el of document.body.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+
+      if (cs.boxShadow !== 'none' && cs.filter === 'none') {
+        const outs = [], kept = [];
+        for (const s of cs.boxShadow.split(/,(?![^(]*[)])/)) {
+          const t = s.trim();
+          const m = t.match(/^(rgba?[(][^)]+[)]) (-?[0-9.]+px) (-?[0-9.]+px) ([0-9.]+px) -?[0-9.]+px$/);
+          if (m && parseFloat(m[4]) > 0) outs.push('drop-shadow(' + m[2] + ' ' + m[3] + ' ' + m[4] + ' ' + m[1] + ')');
+          else kept.push(t);
+        }
+        if (outs.length) {
+          el.style.setProperty('filter', outs.join(' '), 'important');
+          el.style.setProperty('box-shadow', kept.join(', ') || 'none', 'important');
+        }
+      }
+
+      const mask = cs.maskImage && cs.maskImage !== 'none' ? cs.maskImage : cs.webkitMaskImage;
+      if (mask && mask !== 'none' && cs.filter === 'none') el.style.setProperty('filter', 'opacity(1)', 'important');
+    }
+  } catch (e) {}
+  setTimeout(() => { try { window.print(); } catch (e) {} }, 200);
+})();
+</script>
+</body>
+</html>

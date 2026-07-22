@@ -1,0 +1,54 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Display" subtitle="Card, Badge, Tag, StatCard, Avatar" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style> body { margin: 0; padding: 28px 32px; background: var(--surface-page); } </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { Card, Badge, Tag, StatCard, Avatar } = window.LivingDesignSystem_bba765;
+  function Demo() {
+    return (
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,alignItems:'start'}}>
+        <div style={{display:'flex',flexDirection:'column',gap:18}}>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <Badge tone="success" dot>Available</Badge>
+            <Badge tone="warning">Pending</Badge>
+            <Badge tone="danger">Sold</Badge>
+            <Badge tone="brand" variant="solid">New</Badge>
+            <Badge tone="accent">Featured</Badge>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <Tag selected>2 BHK</Tag>
+            <Tag>Near metro</Tag>
+            <Tag removable>Furnished</Tag>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <Avatar name="Anaya Rao" status="online" />
+            <Avatar name="Dev Menon" size="lg" />
+            <Avatar name="The Meadows" shape="square" size="lg" />
+          </div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:18}}>
+          <StatCard label="Occupancy" value="94%" delta="2.1%" trend="up" icon={<span>◈</span>} />
+          <Card variant="elevated" interactive>
+            <div className="eyebrow" style={{marginBottom:8}}>Community</div>
+            <div className="display" style={{fontSize:'1.75rem',marginBottom:6}}>Riverside Greens</div>
+            <div className="text-muted" style={{fontSize:'0.9rem'}}>An elevated content surface with a calm hover lift.</div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

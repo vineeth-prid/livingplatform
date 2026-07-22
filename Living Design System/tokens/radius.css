@@ -1,0 +1,23 @@
+/* ============================================================
+   LIVING — Border Radius
+   One unified, restrained system. Soft, not bubbly.
+   Default UI radius is 10–14px. Pills reserved for chips/avatars.
+   ============================================================ */
+
+:root {
+  --radius-none: 0;
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-md:   12px;   /* default control radius */
+  --radius-lg:   16px;   /* cards */
+  --radius-xl:   22px;   /* large panels, media */
+  --radius-2xl:  32px;   /* hero / feature surfaces */
+  --radius-pill: 999px;
+  --radius-full: 50%;
+
+  /* Semantic */
+  --radius-control: var(--radius-md);
+  --radius-card:    var(--radius-lg);
+  --radius-media:   var(--radius-xl);
+  --radius-chip:    var(--radius-pill);
+}

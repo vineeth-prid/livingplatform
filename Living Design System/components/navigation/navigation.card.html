@@ -1,0 +1,49 @@
+<!-- @dsCard group="Components" viewport="700x420" name="Navigation" subtitle="Tabs and sidebar navigation" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style> body { margin: 0; padding: 28px 32px; background: var(--surface-page); } </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { Tabs, SidebarNav } = window.LivingDesignSystem_bba765;
+  function Demo() {
+    const [tab, setTab] = React.useState("residents");
+    const [route, setRoute] = React.useState("residents");
+    return (
+      <div style={{display:'grid',gridTemplateColumns:'240px 1fr',gap:32,alignItems:'start'}}>
+        <div style={{background:'var(--surface-card)',border:'1px solid var(--border-subtle)',borderRadius:'var(--radius-lg)',padding:12}}>
+          <SidebarNav value={route} onChange={setRoute} items={[
+            { section: "Manage" },
+            { value:"overview", label:"Overview", icon:<span>◈</span> },
+            { value:"residents", label:"Residents", icon:<span>◎</span>, badge:248 },
+            { value:"tickets", label:"Tickets", icon:<span>✦</span>, badge:12 },
+            { section: "Operate" },
+            { value:"vendors", label:"Vendors", icon:<span>❖</span> },
+            { value:"billing", label:"Billing", icon:<span>▤</span> },
+          ]} />
+        </div>
+        <div>
+          <Tabs value={tab} onChange={setTab} items={[
+            { value:"overview", label:"Overview" },
+            { value:"residents", label:"Residents", count:248 },
+            { value:"tickets", label:"Tickets", count:12 },
+            { value:"amenities", label:"Amenities" },
+          ]} />
+          <div style={{padding:'24px 4px',color:'var(--text-muted)'}}>Panel content for <strong style={{color:'var(--text-strong)'}}>{tab}</strong>.</div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

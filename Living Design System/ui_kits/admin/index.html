@@ -1,0 +1,70 @@
+<!-- @dsCard group="Admin" viewport="1440x820" name="Community Admin Portal" subtitle="Premium SaaS dashboard — Linear / Stripe calibre" -->
+<!-- @startingPoint section="Admin" subtitle="Living community management dashboard" viewport="1440x900" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Living — Admin</title>
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style> html, body { margin: 0; background: var(--surface-page); } </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="dashboard.jsx"></script>
+<script type="text/babel" src="residents.jsx"></script>
+<script type="text/babel">
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "background": "#FAF8F4",
+    "accent": "#B96A43",
+    "dark": false
+  }/*EDITMODE-END*/;
+
+  function App() {
+    const [route, setRoute] = React.useState("overview");
+    const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+    React.useEffect(() => {
+      const root = document.documentElement;
+      root.setAttribute('data-theme', t.dark ? 'dark' : 'light');
+      if (t.dark) {
+        // let the dark theme own its surfaces; only steer the accent
+        root.style.removeProperty('--surface-page');
+        root.style.removeProperty('--surface-sunken');
+      } else {
+        root.style.setProperty('--surface-page', t.background);
+        // keep the sunken/tint surfaces harmonised with the page
+        root.style.setProperty('--surface-sunken', 'color-mix(in oklab, ' + t.background + ' 82%, var(--stone-950) 5%)');
+      }
+      root.style.setProperty('--brand-accent', t.accent);
+    }, [t.background, t.accent, t.dark]);
+
+    return (
+      <React.Fragment>
+        <AdminShell route={route} setRoute={setRoute}>
+          {route === "residents" ? <Residents /> : <Overview />}
+        </AdminShell>
+        <TweaksPanel>
+          <TweakSection label="Background" />
+          <TweakColor label="Page colour" value={t.background}
+            options={["#FAF8F4", "#FFFDF9", "#FFFFFF", "#F1F3EF", "#F5F1EB", "#EEF2F0"]}
+            onChange={(v) => setTweak('background', v)} />
+          <TweakColor label="Accent" value={t.accent}
+            options={["#B96A43", "#234B39", "#3F6E8C", "#8B8171"]}
+            onChange={(v) => setTweak('accent', v)} />
+          <TweakSection label="Theme" />
+          <TweakToggle label="Dark mode" value={t.dark}
+            onChange={(v) => setTweak('dark', v)} />
+        </TweaksPanel>
+      </React.Fragment>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

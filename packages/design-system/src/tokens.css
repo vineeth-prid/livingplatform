@@ -1,0 +1,273 @@
+/* ============================================================
+   Living — design tokens (from the Living Design System).
+   Reused per the brief: palette, type, radius, shadow, spacing.
+   Light in :root, dark under [data-theme="dark"].
+   ============================================================ */
+
+:root {
+  /* ── Pine (primary) ── */
+  --pine-50: #edf3f0;
+  --pine-100: #d5e3dc;
+  --pine-200: #aac7ba;
+  --pine-300: #7ca695;
+  --pine-400: #4e8069;
+  --pine-500: #2e5f49;
+  --pine-600: #234b39;
+  --pine-700: #1b3b2d;
+  --pine-800: #152e24;
+  --pine-900: #0f211a;
+  --pine-950: #0a1611;
+
+  /* ── Stone (neutral, warm) ── */
+  --stone-50: #faf8f4;
+  --stone-100: #f3efe8;
+  --stone-200: #e7e1d5;
+  --stone-300: #d5ccbc;
+  --stone-400: #b4a995;
+  --stone-500: #8b8171;
+  --stone-600: #6a6255;
+  --stone-700: #4d473f;
+  --stone-800: #322e29;
+  --stone-900: #1e1b18;
+  --stone-950: #14110f;
+
+  /* ── Clay (accent) ── */
+  --clay-50: #faf0e9;
+  --clay-100: #f3ddcd;
+  --clay-200: #e7bc9e;
+  --clay-300: #d9976d;
+  --clay-400: #c9784a;
+  --clay-500: #b96a43;
+  --clay-600: #9c5636;
+  --clay-700: #7c442c;
+  --clay-800: #5e3423;
+  --clay-900: #40241a;
+
+  /* ── Semantic hues (muted, earthy) ── */
+  --green-50: #e9f2ec;
+  --green-500: #3e7c5a;
+  --green-600: #2f6347;
+  --amber-50: #f8f0d9;
+  --amber-500: #c2941f;
+  --amber-600: #9e7817;
+  --red-50: #f7e5e2;
+  --red-500: #b4483c;
+  --red-600: #963a30;
+  --blue-50: #e7eff3;
+  --blue-500: #3f6e8c;
+  --blue-600: #325870;
+
+  /* ── Brand aliases ── */
+  --brand-primary: var(--pine-600);
+  --brand-primary-hover: var(--pine-700);
+  --brand-primary-active: var(--pine-800);
+  --brand-secondary: var(--stone-200);
+  --brand-accent: var(--clay-500);
+  --brand-accent-hover: var(--clay-600);
+  --brand-on-primary: var(--stone-50);
+  --brand-on-accent: var(--stone-50);
+
+  /* ── Surfaces ── */
+  --surface-page: var(--stone-50);
+  --surface-raised: #ffffff;
+  --surface-card: #ffffff;
+  --surface-sunken: var(--stone-100);
+  --surface-inverse: var(--stone-950);
+  --surface-tint: var(--pine-50);
+  --surface-scrim: color-mix(in oklab, var(--stone-950) 45%, transparent);
+  --surface-glass: color-mix(in oklab, #ffffff 62%, transparent);
+
+  /* ── Text ── */
+  --text-strong: var(--stone-950);
+  --text-body: var(--stone-800);
+  --text-muted: var(--stone-600);
+  --text-subtle: var(--stone-500);
+  --text-inverse: var(--stone-50);
+  --text-on-tint: var(--pine-800);
+  --text-brand: var(--pine-600);
+  --text-accent: var(--clay-600);
+  --text-link: var(--pine-600);
+
+  /* ── Borders & focus ── */
+  --border-subtle: var(--stone-200);
+  --border-default: var(--stone-300);
+  --border-strong: var(--stone-400);
+  --border-inverse: color-mix(in oklab, var(--stone-50) 16%, transparent);
+  --ring-focus: color-mix(in oklab, var(--pine-500) 55%, transparent);
+
+  /* ── Semantic states ── */
+  --success-fg: var(--green-600);
+  --success-bg: var(--green-50);
+  --success-solid: var(--green-500);
+  --warning-fg: var(--amber-600);
+  --warning-bg: var(--amber-50);
+  --warning-solid: var(--amber-500);
+  --danger-fg: var(--red-600);
+  --danger-bg: var(--red-50);
+  --danger-solid: var(--red-500);
+  --info-fg: var(--blue-600);
+  --info-bg: var(--blue-50);
+  --info-solid: var(--blue-500);
+
+  /* ── Typography ── */
+  --font-display: "Cormorant", Georgia, "Times New Roman", serif;
+  --font-sans: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: var(--font-sans);
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --text-display-2xl: clamp(3.5rem, 2.4rem + 5.2vw, 6.5rem);
+  --text-display-xl: clamp(2.75rem, 2rem + 3.6vw, 4.75rem);
+  --text-display-lg: clamp(2.25rem, 1.7rem + 2.6vw, 3.5rem);
+  --text-h1: 2.5rem;
+  --text-h2: 2rem;
+  --text-h3: 1.5rem;
+  --text-h4: 1.25rem;
+  --text-lg: 1.125rem;
+  --text-base: 1rem;
+  --text-sm: 0.875rem;
+  --text-xs: 0.75rem;
+  --text-2xs: 0.6875rem;
+
+  --leading-none: 1;
+  --leading-tight: 1.12;
+  --leading-snug: 1.28;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.66;
+
+  --tracking-tighter: -0.03em;
+  --tracking-tight: -0.015em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-wider: 0.08em;
+  --tracking-widest: 0.16em;
+
+  /* ── Spacing (8-pt) ── */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+  --space-9: 4rem;
+  --space-10: 5rem;
+  --space-11: 6rem;
+  --space-12: 8rem;
+  --space-13: 10rem;
+  --page-margin: clamp(1.25rem, 5vw, 6rem);
+  --container-sm: 640px;
+  --container-md: 840px;
+  --container-lg: 1120px;
+  --container-xl: 1320px;
+  --container-2xl: 1520px;
+
+  /* ── Radius ── */
+  --radius-none: 0;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-2xl: 32px;
+  --radius-pill: 999px;
+  --radius-full: 50%;
+  --radius-control: var(--radius-md);
+  --radius-card: var(--radius-lg);
+  --radius-media: var(--radius-xl);
+  --radius-chip: var(--radius-pill);
+
+  /* ── Elevation (warm, low-opacity, layered) ── */
+  --shadow-color: 28 24% 12%;
+  --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.05);
+  --shadow-sm: 0 1px 2px hsl(var(--shadow-color) / 0.04), 0 2px 6px hsl(var(--shadow-color) / 0.06);
+  --shadow-md: 0 2px 4px hsl(var(--shadow-color) / 0.04), 0 8px 20px hsl(var(--shadow-color) / 0.08);
+  --shadow-lg: 0 4px 8px hsl(var(--shadow-color) / 0.05), 0 18px 40px hsl(var(--shadow-color) / 0.1);
+  --shadow-floating: 0 8px 16px hsl(var(--shadow-color) / 0.06), 0 32px 64px hsl(var(--shadow-color) / 0.14);
+  --shadow-inset: inset 0 1px 0 hsl(0 0% 100% / 0.5);
+  --ring-focus-shadow: 0 0 0 3px var(--ring-focus);
+  --opacity-disabled: 0.42;
+  --opacity-muted: 0.64;
+
+  /* ── Motion ── */
+  --duration-instant: 0ms;
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 320ms;
+  --duration-slower: 480ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.6, 0, 0.9, 0.2);
+  --ease-settle: cubic-bezier(0.34, 1.16, 0.64, 1);
+}
+
+[data-theme="dark"] {
+  --brand-primary: var(--pine-400);
+  --brand-primary-hover: var(--pine-300);
+  --brand-primary-active: var(--pine-200);
+  --brand-secondary: var(--stone-800);
+  --brand-accent: var(--clay-400);
+  --brand-accent-hover: var(--clay-300);
+  --brand-on-primary: var(--pine-950);
+  --brand-on-accent: var(--stone-950);
+
+  --surface-page: #100e0c;
+  --surface-raised: #1a1714;
+  --surface-card: #1c1915;
+  --surface-sunken: #131110;
+  --surface-inverse: var(--stone-50);
+  --surface-tint: color-mix(in oklab, var(--pine-500) 20%, #100e0c);
+  --surface-scrim: color-mix(in oklab, #000000 60%, transparent);
+  --surface-glass: color-mix(in oklab, #1c1915 58%, transparent);
+
+  --text-strong: var(--stone-50);
+  --text-body: var(--stone-200);
+  --text-muted: var(--stone-400);
+  --text-subtle: var(--stone-500);
+  --text-inverse: var(--stone-950);
+  --text-on-tint: var(--pine-100);
+  --text-brand: var(--pine-300);
+  --text-accent: var(--clay-300);
+  --text-link: var(--pine-300);
+
+  --border-subtle: color-mix(in oklab, var(--stone-50) 8%, transparent);
+  --border-default: color-mix(in oklab, var(--stone-50) 14%, transparent);
+  --border-strong: color-mix(in oklab, var(--stone-50) 22%, transparent);
+  --border-inverse: color-mix(in oklab, var(--stone-950) 16%, transparent);
+  --ring-focus: color-mix(in oklab, var(--pine-300) 55%, transparent);
+
+  --success-fg: #6fb98c;
+  --success-bg: color-mix(in oklab, var(--green-500) 18%, #100e0c);
+  --warning-fg: #e0b84e;
+  --warning-bg: color-mix(in oklab, var(--amber-500) 18%, #100e0c);
+  --danger-fg: #e08074;
+  --danger-bg: color-mix(in oklab, var(--red-500) 18%, #100e0c);
+  --info-fg: #7faac4;
+  --info-bg: color-mix(in oklab, var(--blue-500) 18%, #100e0c);
+
+  --shadow-color: 0 0% 0%;
+  --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.3);
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.3), 0 2px 6px hsl(0 0% 0% / 0.34);
+  --shadow-md: 0 2px 4px hsl(0 0% 0% / 0.3), 0 8px 20px hsl(0 0% 0% / 0.4);
+  --shadow-lg: 0 4px 8px hsl(0 0% 0% / 0.34), 0 18px 40px hsl(0 0% 0% / 0.48);
+  --shadow-floating: 0 8px 16px hsl(0 0% 0% / 0.4), 0 32px 64px hsl(0 0% 0% / 0.58);
+  --shadow-inset: inset 0 1px 0 hsl(0 0% 100% / 0.04);
+}
+
+/* Honour reduced-motion — collapse all durations to instant. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}

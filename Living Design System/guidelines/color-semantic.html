@@ -1,0 +1,18 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Semantic" subtitle="Success, warning, danger, info — refined, never neon" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"/><link rel="stylesheet" href="../styles.css"/>
+<style>
+  body{margin:0;padding:20px 24px;background:var(--surface-page);font-family:var(--font-sans)}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .cell{border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xs)}
+  .cap{height:52px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+  .meta{padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--surface-card)}
+  .lab{font-size:12px;font-weight:600;color:var(--text-strong)}
+  .hex{font-family:var(--font-mono);font-size:10px;color:var(--text-subtle)}
+</style></head><body>
+<div class="grid">
+  <div class="cell"><div class="cap" style="background:var(--success-bg);color:var(--success-fg)">Available</div><div class="meta"><span class="lab">Success</span><span class="hex">#3E7C5A</span></div></div>
+  <div class="cell"><div class="cap" style="background:var(--warning-bg);color:var(--warning-fg)">Pending</div><div class="meta"><span class="lab">Warning</span><span class="hex">#C2941F</span></div></div>
+  <div class="cell"><div class="cap" style="background:var(--danger-bg);color:var(--danger-fg)">Overdue</div><div class="meta"><span class="lab">Danger</span><span class="hex">#B4483C</span></div></div>
+  <div class="cell"><div class="cap" style="background:var(--info-bg);color:var(--info-fg)">Scheduled</div><div class="meta"><span class="lab">Info</span><span class="hex">#3F6E8C</span></div></div>
+</div>
+</body></html>

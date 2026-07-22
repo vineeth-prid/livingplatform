@@ -1,0 +1,16 @@
+<!-- @dsCard group="Brand" viewport="700x160" name="Motion" subtitle="Calm, intentional — ease-out entrances, gentle settle" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"/><link rel="stylesheet" href="../styles.css"/>
+<style>
+  body{margin:0;padding:24px 30px;background:var(--surface-page);font-family:var(--font-sans)}
+  .track{position:relative;height:34px;background:var(--surface-sunken);border-radius:var(--radius-pill);margin-bottom:12px;overflow:hidden}
+  .dot{position:absolute;top:5px;left:5px;width:24px;height:24px;border-radius:50%;background:var(--brand-primary)}
+  .d1{animation:m 2.4s var(--ease-standard) infinite}
+  .d2{animation:m 2.4s var(--ease-settle) infinite}
+  @keyframes m{0%,12%{left:5px}50%,62%{left:calc(100% - 29px)}100%{left:5px}}
+  .lab{font-family:var(--font-mono);font-size:11px;color:var(--text-subtle);display:flex;justify-content:space-between}
+</style></head><body>
+<div class="track"><div class="dot d1"></div></div>
+<div class="lab" style="margin-bottom:14px"><span>ease-standard · cubic-bezier(.2,0,0,1)</span><span>220ms</span></div>
+<div class="track"><div class="dot d2" style="background:var(--brand-accent)"></div></div>
+<div class="lab"><span>ease-settle · gentle overshoot, no bounce</span><span>360ms</span></div>
+</body></html>

@@ -1,0 +1,147 @@
+/* ============================================================
+   LIVING — Colour System
+   Warm-cool luxury palette: deep Pine, warm Stone, living Clay.
+   Base scales first, then semantic aliases (light + dark theme).
+   ============================================================ */
+
+:root,
+[data-theme="light"] {
+  /* ---- Pine (Primary) — trust, growth, home, calm ---- */
+  --pine-50:  #EDF3F0;
+  --pine-100: #D5E3DC;
+  --pine-200: #AAC7BA;
+  --pine-300: #7CA695;
+  --pine-400: #4E8069;
+  --pine-500: #2E5F49;
+  --pine-600: #234B39;   /* primary action */
+  --pine-700: #1B3B2D;
+  --pine-800: #152E24;
+  --pine-900: #0F211A;
+  --pine-950: #0A1611;
+
+  /* ---- Stone (Neutral) — warm-tinted greys, ivory to ink ---- */
+  --stone-50:  #FAF8F4;   /* page ivory */
+  --stone-100: #F3EFE8;
+  --stone-200: #E7E1D5;
+  --stone-300: #D5CCBC;
+  --stone-400: #B4A995;
+  --stone-500: #8B8171;
+  --stone-600: #6A6255;
+  --stone-700: #4D473F;
+  --stone-800: #322E29;
+  --stone-900: #1E1B18;
+  --stone-950: #14110F;   /* ink */
+
+  /* ---- Clay (Accent) — warmth, life, human touch ---- */
+  --clay-50:  #FAF0E9;
+  --clay-100: #F3DDCD;
+  --clay-200: #E7BC9E;
+  --clay-300: #D9976D;
+  --clay-400: #C9784A;
+  --clay-500: #B96A43;   /* accent */
+  --clay-600: #9C5636;
+  --clay-700: #7C442C;
+  --clay-800: #5E3423;
+  --clay-900: #40241A;
+
+  /* ---- Semantic hues (refined, never neon) ---- */
+  --green-500: #3E7C5A;  --green-600: #2F6347;  --green-50: #E9F2EC;
+  --amber-500: #C2941F;  --amber-600: #9E7817;  --amber-50: #F8F0D9;
+  --red-500:   #B4483C;  --red-600:   #963A30;  --red-50:   #F7E5E2;
+  --blue-500:  #3F6E8C;  --blue-600:  #325870;  --blue-50:  #E7EFF3;
+
+  /* ============================================================
+     SEMANTIC ALIASES — Light theme (default)
+     Also matched by an explicit [data-theme="light"] below so light can be
+     forced on a nested element even when an ancestor is data-theme="dark".
+     ============================================================ */
+
+  /* Brand */
+  --brand-primary:        var(--pine-600);
+  --brand-primary-hover:  var(--pine-700);
+  --brand-primary-active: var(--pine-800);
+  --brand-secondary:      var(--stone-200);
+  --brand-accent:         var(--clay-500);
+  --brand-accent-hover:   var(--clay-600);
+  --brand-on-primary:     var(--stone-50);
+  --brand-on-accent:      var(--stone-50);
+
+  /* Surfaces */
+  --surface-page:      var(--stone-50);
+  --surface-raised:    #FFFFFF;
+  --surface-card:      #FFFFFF;
+  --surface-sunken:    var(--stone-100);
+  --surface-inverse:   var(--stone-950);
+  --surface-tint:      var(--pine-50);
+  --surface-scrim:     color-mix(in oklab, var(--stone-950) 45%, transparent);
+  --surface-glass:     color-mix(in oklab, #FFFFFF 62%, transparent);
+
+  /* Text */
+  --text-strong:   var(--stone-950);
+  --text-body:     var(--stone-800);
+  --text-muted:    var(--stone-600);
+  --text-subtle:   var(--stone-500);
+  --text-inverse:  var(--stone-50);
+  --text-on-tint:  var(--pine-800);
+  --text-brand:    var(--pine-600);
+  --text-accent:   var(--clay-600);
+  --text-link:     var(--pine-600);
+
+  /* Borders / dividers */
+  --border-subtle:  var(--stone-200);
+  --border-default: var(--stone-300);
+  --border-strong:  var(--stone-400);
+  --border-inverse: color-mix(in oklab, var(--stone-50) 16%, transparent);
+  --ring-focus:     color-mix(in oklab, var(--pine-500) 55%, transparent);
+
+  /* Feedback */
+  --success-fg: var(--green-600); --success-bg: var(--green-50); --success-solid: var(--green-500);
+  --warning-fg: var(--amber-600); --warning-bg: var(--amber-50); --warning-solid: var(--amber-500);
+  --danger-fg:  var(--red-600);   --danger-bg:  var(--red-50);   --danger-solid:  var(--red-500);
+  --info-fg:    var(--blue-600);  --info-bg:    var(--blue-50);  --info-solid:    var(--blue-500);
+}
+
+/* ============================================================
+   SEMANTIC ALIASES — Dark theme
+   Applied via [data-theme="dark"]. Warm ink, luminous pine.
+   ============================================================ */
+[data-theme="dark"] {
+  --brand-primary:        var(--pine-400);
+  --brand-primary-hover:  var(--pine-300);
+  --brand-primary-active: var(--pine-200);
+  --brand-secondary:      var(--stone-800);
+  --brand-accent:         var(--clay-400);
+  --brand-accent-hover:   var(--clay-300);
+  --brand-on-primary:     var(--pine-950);
+  --brand-on-accent:      var(--stone-950);
+
+  --surface-page:      #100E0C;
+  --surface-raised:    #1A1714;
+  --surface-card:      #1C1915;
+  --surface-sunken:    #131110;
+  --surface-inverse:   var(--stone-50);
+  --surface-tint:      color-mix(in oklab, var(--pine-500) 20%, #100E0C);
+  --surface-scrim:     color-mix(in oklab, #000000 60%, transparent);
+  --surface-glass:     color-mix(in oklab, #1C1915 58%, transparent);
+
+  --text-strong:   var(--stone-50);
+  --text-body:     var(--stone-200);
+  --text-muted:    var(--stone-400);
+  --text-subtle:   var(--stone-500);
+  --text-inverse:  var(--stone-950);
+  --text-on-tint:  var(--pine-100);
+  --text-brand:    var(--pine-300);
+  --text-accent:   var(--clay-300);
+  --text-link:     var(--pine-300);
+
+  --border-subtle:  color-mix(in oklab, var(--stone-50) 8%, transparent);
+  --border-default: color-mix(in oklab, var(--stone-50) 14%, transparent);
+  --border-strong:  color-mix(in oklab, var(--stone-50) 22%, transparent);
+  --border-inverse: color-mix(in oklab, var(--stone-950) 16%, transparent);
+  --ring-focus:     color-mix(in oklab, var(--pine-300) 55%, transparent);
+
+  --success-fg: #6FB98C; --success-bg: color-mix(in oklab, var(--green-500) 18%, #100E0C);
+  --warning-fg: #E0B84E; --warning-bg: color-mix(in oklab, var(--amber-500) 18%, #100E0C);
+  --danger-fg:  #E08074; --danger-bg:  color-mix(in oklab, var(--red-500) 18%, #100E0C);
+  --info-fg:    #7FAAC4; --info-bg:    color-mix(in oklab, var(--blue-500) 18%, #100E0C);
+}

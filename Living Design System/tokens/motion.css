@@ -1,0 +1,42 @@
+/* ============================================================
+   LIVING — Motion
+   Calm, intentional, subtle. Ease-out for entrances,
+   custom "settle" curve for interactive feedback. No bounce.
+   ============================================================ */
+
+:root {
+  --duration-instant: 80ms;  /* @kind other */
+  --duration-fast:    140ms; /* @kind other */
+  --duration-base:    220ms; /* @kind other */
+  --duration-slow:    360ms; /* @kind other */
+  --duration-slower:  560ms; /* @kind other */
+
+  /* Easings */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);      /* @kind other */ /* default UI */
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);   /* @kind other */ /* entrances */
+  --ease-in:       cubic-bezier(0.6, 0, 0.9, 0.2);  /* @kind other */ /* exits */
+  --ease-settle:   cubic-bezier(0.34, 1.16, 0.64, 1); /* @kind other */ /* gentle overshoot */
+
+  /* Semantic transitions */
+  --transition-color:  color var(--duration-fast) var(--ease-standard),
+                       background-color var(--duration-fast) var(--ease-standard),
+                       border-color var(--duration-fast) var(--ease-standard);
+  --transition-transform: transform var(--duration-base) var(--ease-out);
+  --transition-shadow: box-shadow var(--duration-base) var(--ease-standard);
+
+  /* Micro-interaction magnitudes */
+  --lift-hover: -2px;   /* @kind other */
+  --press-scale: 0.98;  /* @kind other */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms; /* @kind other */
+    --duration-fast: 0ms; /* @kind other */
+    --duration-base: 0ms; /* @kind other */
+    --duration-slow: 0ms; /* @kind other */
+    --duration-slower: 0ms; /* @kind other */
+    --lift-hover: 0px; /* @kind other */
+    --press-scale: 1; /* @kind other */
+  }
+}

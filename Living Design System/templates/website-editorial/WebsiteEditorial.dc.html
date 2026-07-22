@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Property Website — Editorial" description="Magazine-style property marketing site: big photography, long-form copy, editorial rhythm" -->
+<helmet><script src="./ds-base.js"></script></helmet>
+
+<div style="background:var(--surface-page); min-height:100vh; font-family:var(--font-sans); color:var(--text-body);">
+
+  <!-- NAV -->
+  <div style="position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between; padding:20px 64px; background:color-mix(in oklab, var(--surface-page) 88%, transparent); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-bottom:1px solid var(--border-subtle);">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <img src="../../assets/living-mark.svg" width="28" height="28" alt="Living" />
+      <span style="font-family:var(--font-display); font-weight:500; font-size:22px; letter-spacing:-0.02em; color:var(--text-strong);">Living<span style="color:var(--brand-accent)">.</span></span>
+    </div>
+    <div style="display:flex; align-items:center; gap:36px;">
+      <span style="font-size:14px; color:var(--text-body); cursor:pointer;">Homes</span>
+      <span style="font-size:14px; color:var(--text-body); cursor:pointer;">Community</span>
+      <span style="font-size:14px; color:var(--text-body); cursor:pointer;">Services</span>
+      <span style="font-size:14px; color:var(--text-body); cursor:pointer;">About</span>
+    </div>
+    <x-import component-from-global-scope="LivingDesignSystem_bba765.Button" hint-size="140,44">Book a tour</x-import>
+  </div>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <div>
+    <!-- HERO — asymmetric split -->
+    <div style="display:grid; grid-template-columns:1.05fr 0.95fr; min-height:600px;">
+      <div style="display:flex; flex-direction:column; justify-content:center; gap:26px; padding:0 72px;">
+        <span style="font-size:11.5px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--text-accent);">Property Sales · Whitefield</span>
+        <h1 style="font-family:var(--font-display); font-weight:400; font-size:52px; line-height:1.18; letter-spacing:-0.02em; color:var(--text-strong); margin:0; max-width:560px;">An elevated way to find home.</h1>
+        <p style="font-size:16.5px; line-height:1.66; color:var(--text-muted); max-width:460px; margin:0;">Considered listings, calm tours, and a team that treats your search like it matters — because it does.</p>
+        <div style="display:flex; gap:14px; margin-top:8px;">
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Button" variant="primary" size="lg" hint-size="160,54">Explore homes</x-import>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Button" variant="outline" size="lg" hint-size="150,54">Book a tour</x-import>
+        </div>
+      </div>
+      <div style="position:relative; overflow:hidden;">
+        <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80" alt="" style="width:100%; height:100%; object-fit:cover; display:block;" />
+      </div>
+    </div>
+
+    <!-- FEATURED SPOTLIGHT -->
+    <div style="padding:100px 72px; display:grid; grid-template-columns:1.1fr 0.9fr; gap:56px; align-items:center;">
+      <div style="border-radius:22px; overflow:hidden; box-shadow:var(--shadow-lg);">
+        <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1100&q=80" alt="" style="width:100%; height:500px; object-fit:cover; display:block;" />
+      </div>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--text-subtle);">Featured home</span>
+        <h2 style="font-family:var(--font-display); font-weight:400; font-size:38px; line-height:1.14; letter-spacing:-0.015em; color:var(--text-strong); margin:0;">The Whitefield Residence</h2>
+        <p style="font-size:15.5px; line-height:1.7; color:var(--text-muted); margin:0;">Set back from the road behind a wall of rain trees, this three-bedroom home opens onto a private courtyard — cross-ventilated, warm underfoot, built to be lived in slowly.</p>
+        <div style="display:flex; gap:24px; padding:16px 0; border-top:1px solid var(--border-subtle); border-bottom:1px solid var(--border-subtle);">
+          <div><div style="font-family:var(--font-mono); font-size:17px; color:var(--text-strong);">3</div><div style="font-size:11px; color:var(--text-subtle); letter-spacing:0.04em;">BEDS</div></div>
+          <div><div style="font-family:var(--font-mono); font-size:17px; color:var(--text-strong);">3</div><div style="font-size:11px; color:var(--text-subtle); letter-spacing:0.04em;">BATHS</div></div>
+          <div><div style="font-family:var(--font-mono); font-size:17px; color:var(--text-strong);">1,840 sqft</div><div style="font-size:11px; color:var(--text-subtle); letter-spacing:0.04em;">AREA</div></div>
+          <div><div style="font-family:var(--font-mono); font-size:17px; color:var(--text-strong);">₹2.4 Cr</div><div style="font-size:11px; color:var(--text-subtle); letter-spacing:0.04em;">PRICE</div></div>
+        </div>
+        <div>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Button" variant="primary" onClick="{{ openDetail }}" hint-size="140,44">View home</x-import>
+        </div>
+      </div>
+    </div>
+
+    <!-- CURATED GRID -->
+    <div style="padding:0 72px 100px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:32px;">
+        <h2 style="font-family:var(--font-display); font-weight:400; font-size:32px; color:var(--text-strong); margin:0; letter-spacing:-0.015em;">More homes, considered.</h2>
+        <span style="font-size:13.5px; color:var(--text-brand); font-weight:600; cursor:pointer;">View all →</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:28px;">
+        <sc-for list="{{ listings }}" as="item" hint-placeholder-count="5">
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.PropertyCard"
+            image="{{ item.image }}" title="{{ item.title }}" location="{{ item.location }}"
+            price="{{ item.price }}" period="{{ item.period }}" beds="{{ item.beds }}"
+            baths="{{ item.baths }}" area="{{ item.area }}" status="{{ item.status }}"
+            onClick="{{ openDetail }}" hint-size="380,460"></x-import>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- PULL QUOTE -->
+    <div style="padding:96px 40px; text-align:center; background:var(--surface-tint);">
+      <p style="font-family:var(--font-display); font-weight:300; font-style:italic; font-size:32px; line-height:1.42; color:var(--pine-800); max-width:760px; margin:0 auto 20px;">“We didn't just buy a house. Living made it feel like we'd found the one place that was already ours.”</p>
+      <span style="font-size:12px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-subtle);">Meera &amp; Arjun · Whitefield</span>
+    </div>
+
+    <!-- ECOSYSTEM LIST -->
+    <div style="padding:100px 72px 40px;">
+      <span style="font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--text-accent);">The Living ecosystem</span>
+      <h2 style="font-family:var(--font-display); font-weight:400; font-size:34px; color:var(--text-strong); margin:14px 0 8px; letter-spacing:-0.015em;">One account. Every part of home.</h2>
+      <div>
+        <sc-for list="{{ ecosystem }}" as="e" hint-placeholder-count="4">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:26px 0; border-top:1px solid var(--border-subtle);">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-family:var(--font-sans); font-weight:600; font-size:19px; color:var(--text-strong);">{{ e.name }}</span>
+              <span style="font-size:14px; color:var(--text-muted);">{{ e.desc }}</span>
+            </div>
+            <span style="font-size:20px; color:var(--text-subtle);">→</span>
+          </div>
+        </sc-for>
+        <div style="border-top:1px solid var(--border-subtle);"></div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+  <div>
+    <div style="padding:28px 72px 0;">
+      <span onClick="{{ backHome }}" style="font-size:13.5px; color:var(--text-brand); font-weight:600; cursor:pointer;">← Back to homes</span>
+    </div>
+    <div style="padding:24px 72px 0; display:grid; grid-template-columns:2fr 1fr; grid-template-rows:auto auto; gap:14px;">
+      <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80" alt="" style="grid-row:span 2; width:100%; height:520px; object-fit:cover; border-radius:22px; display:block;" />
+      <img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80" alt="" style="width:100%; height:250px; object-fit:cover; border-radius:22px; display:block;" />
+      <img src="https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=800&q=80" alt="" style="width:100%; height:254px; object-fit:cover; border-radius:22px; display:block;" />
+    </div>
+    <div style="padding:56px 72px 0; display:grid; grid-template-columns:1.6fr 1fr; gap:64px;">
+      <div>
+        <span style="font-size:12px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-subtle);">Whitefield, Bengaluru</span>
+        <h1 style="font-family:var(--font-display); font-weight:400; font-size:44px; color:var(--text-strong); margin:10px 0 20px; letter-spacing:-0.02em;">The Whitefield Residence</h1>
+        <div style="display:flex; gap:28px; padding:20px 0; border-top:1px solid var(--border-subtle); border-bottom:1px solid var(--border-subtle); margin-bottom:28px;">
+          <div><div style="font-family:var(--font-mono); font-size:18px; color:var(--text-strong);">3</div><div style="font-size:11px; color:var(--text-subtle);">BEDS</div></div>
+          <div><div style="font-family:var(--font-mono); font-size:18px; color:var(--text-strong);">3</div><div style="font-size:11px; color:var(--text-subtle);">BATHS</div></div>
+          <div><div style="font-family:var(--font-mono); font-size:18px; color:var(--text-strong);">1,840 sqft</div><div style="font-size:11px; color:var(--text-subtle);">AREA</div></div>
+          <div><div style="font-family:var(--font-mono); font-size:18px; color:var(--text-strong);">2019</div><div style="font-size:11px; color:var(--text-subtle);">BUILT</div></div>
+        </div>
+        <p style="font-size:16px; line-height:1.75; color:var(--text-body); margin:0 0 28px;"><span style="font-family:var(--font-display); font-size:50px; float:left; line-height:0.8; padding:6px 8px 0 0; color:var(--pine-700);">S</span>et back from the road behind a wall of rain trees, this three-bedroom home opens onto a private courtyard — cross-ventilated, warm underfoot, and built from real materials that only get better with age. Morning light reaches the kitchen first; by evening, it settles over the courtyard jasmine.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Tag" hint-size="120,32">Private courtyard</x-import>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Tag" hint-size="120,32">Cross-ventilated</x-import>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Tag" hint-size="120,32">Modular kitchen</x-import>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Tag" hint-size="140,32">Covered parking · 2</x-import>
+        </div>
+      </div>
+      <div>
+        <x-import component-from-global-scope="LivingDesignSystem_bba765.Card" variant="elevated" padding="lg" style="position:sticky; top:100px;" hint-size="320,380">
+          <div style="font-family:var(--font-mono); font-size:28px; color:var(--text-strong); margin-bottom:2px;">₹2.4 Cr</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">or ₹1.12L/month EMI est.</div>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Button" variant="primary" fullWidth="{{ true }}" hint-size="260,44">Book a tour</x-import>
+          <div style="height:12px;"></div>
+          <x-import component-from-global-scope="LivingDesignSystem_bba765.Button" variant="outline" fullWidth="{{ true }}" hint-size="260,44">Ask a question</x-import>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:24px; padding-top:20px; border-top:1px solid var(--border-subtle);">
+            <x-import component-from-global-scope="LivingDesignSystem_bba765.Avatar" name="Priya Shet" size="md" hint-size="40,40"></x-import>
+            <div>
+              <div style="font-size:13.5px; font-weight:600; color:var(--text-strong);">Priya Shet</div>
+              <div style="font-size:12px; color:var(--text-subtle);">Your Living advisor</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+    </div>
+    <div style="height:96px;"></div>
+  </div>
+  </sc-if>
+
+  <!-- FOOTER -->
+  <div style="background:var(--pine-800); padding:64px 72px 32px; color:var(--stone-50);">
+    <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:48px; padding-bottom:40px;">
+      <div>
+        <div style="display:flex; align-items:center; gap:9px; margin-bottom:14px;">
+          <img src="../../assets/living-mark-light.svg" width="24" height="24" alt="" />
+          <span style="font-family:var(--font-display); font-weight:500; font-size:19px; color:var(--stone-50);">Living<span style="color:var(--clay-300)">.</span></span>
+        </div>
+        <p style="font-size:13.5px; line-height:1.6; color:var(--pine-200); max-width:280px; margin:0;">Life happens here. A calm, considered way to buy, rent and live.</p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:13.5px; color:var(--pine-200);">
+        <span>Homes</span><span>Community</span><span>Services</span><span>About</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:13.5px; color:var(--pine-200);">
+        <span>hello@living.co</span><span>+91 80 4000 1200</span><span>Whitefield, Bengaluru</span>
+      </div>
+    </div>
+    <div style="border-top:1px solid rgba(255,255,255,0.12); padding-top:20px; font-size:12px; color:var(--pine-300);">© 2026 Living Homes Pvt Ltd.</div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { route: "home" };
+
+  listings = [
+    { image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80", title: "The Whitefield Residence", location: "Whitefield, Bengaluru", price: "₹2.4 Cr", period: "", beds: 3, baths: 3, area: "1,840 sqft", status: "New" },
+    { image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80", title: "Canopy House", location: "Sarjapur Road", price: "₹1.85 Cr", period: "", beds: 3, baths: 2, area: "1,620 sqft", status: null },
+    { image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80", title: "The Courtyard Villa", location: "Devanahalli", price: "₹4.2 Cr", period: "", beds: 4, baths: 4, area: "3,100 sqft", status: "Featured" },
+    { image: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=800&q=80", title: "Stone & Linen Loft", location: "Indiranagar", price: "₹1.35 Cr", period: "", beds: 2, baths: 2, area: "1,120 sqft", status: null },
+    { image: "https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=800&q=80", title: "Fernhill Residences", location: "Yelahanka", price: "₹2.95 Cr", period: "", beds: 3, baths: 3, area: "2,050 sqft", status: null },
+  ];
+
+  ecosystem = [
+    { name: "Rentals", desc: "Find a place to rent, with verified listings and zero broker drama." },
+    { name: "Community", desc: "Announcements, amenity bookings and resident chat, all in one place." },
+    { name: "Home services", desc: "Vetted help for cleaning, repairs and everything in between." },
+    { name: "Facility management", desc: "For owners and managers — maintenance, staff and vendors, handled." },
+  ];
+
+  openDetail = () => this.setState({ route: "detail" });
+  backHome = () => this.setState({ route: "home" });
+
+  renderVals() {
+    return {
+      isHome: this.state.route === "home",
+      isDetail: this.state.route === "detail",
+      listings: this.listings,
+      ecosystem: this.ecosystem,
+      openDetail: this.openDetail,
+      backHome: this.backHome,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

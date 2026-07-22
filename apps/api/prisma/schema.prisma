@@ -1,0 +1,1363 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Living Platform — Prisma schema
+//
+// Sprint 1 scope: PLATFORM FOUNDATION ONLY. No business tables (tickets,
+// vendors, residents-as-domain, assets, marketplace, …). Everything here is
+// the multi-tenant, RBAC, auth and audit substrate that every future Living
+// module builds on.
+//
+// Tenancy model:
+//   Tenant 1───N Community          (a Tenant is a customer/org; Communities
+//   Tenant 1───N User                are the buildings/associations under it)
+//   User   N───N Role  (via UserRole, optionally scoped to a Community)
+//   Role   N───N Permission (via RolePermission)  ← permissions are DATA, not code
+//
+// Platform-level users (Platform Admin) have tenantId = null and a PLATFORM
+// scoped role assignment with communityId = null.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum CommunityStatus {
+  ONBOARDING
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum UserStatus {
+  PENDING // registered, email not yet verified
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+/// Level at which a role assignment applies. Drives how the UserRole.communityId
+/// is interpreted and how guards resolve the effective permission set.
+enum RoleScope {
+  PLATFORM // spans all tenants (Platform Admin)
+  TENANT // spans all communities within one tenant (Association Admin)
+  COMMUNITY // a single community (Facility Manager, Resident, Vendor)
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// ── Sprint 2 — Community Foundation enums ────────────────────────────────────
+
+enum CommunityType {
+  APARTMENT
+  VILLA
+  MIXED
+  COMMERCIAL
+}
+
+/// Shared lifecycle status for hierarchy nodes and amenities.
+enum HierarchyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+/// The kind of a Block node — keeps the hierarchy flexible across community
+/// types (towers for apartments, clusters for villas, blocks for commercial).
+enum BlockType {
+  TOWER
+  VILLA_CLUSTER
+  COMMERCIAL_BLOCK
+  PLOT
+  PODIUM
+  OTHER
+}
+
+/// Physical occupancy state of a unit.
+enum UnitStatus {
+  VACANT
+  OCCUPIED
+  RESERVED
+  UNDER_MAINTENANCE
+}
+
+/// How a unit is held. Owner/Resident links arrive with the People engine.
+enum OwnershipType {
+  OWNER_OCCUPIED
+  TENANTED
+  VACANT
+  UNKNOWN
+}
+
+enum DocumentCategory {
+  ASSOCIATION
+  RULES
+  POLICY
+  EMERGENCY_CONTACT
+  CERTIFICATE
+  GOVERNMENT_APPROVAL
+  MINUTES_OF_MEETING
+  OTHER
+}
+
+enum DocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+// ── Sprint 3 — People Foundation enums ───────────────────────────────────────
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNDISCLOSED
+}
+
+enum ResidentStatus {
+  ACTIVE
+  INACTIVE
+  MOVED_OUT
+}
+
+/// A resident's role on their unit assignment.
+enum ResidentRole {
+  PRIMARY
+  SECONDARY
+}
+
+/// Shared active/inactive status for vendors and staff.
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum VendorCategory {
+  ELECTRICAL
+  PLUMBING
+  CIVIL
+  HOUSEKEEPING
+  SECURITY
+  GARDENING
+  PEST_CONTROL
+  LIFT
+  DG
+  STP
+  HVAC
+  PAINTING
+  GENERAL
+}
+
+enum StaffRole {
+  FACILITY_MANAGER
+  SUPERVISOR
+  SECURITY
+  HOUSEKEEPING
+  ELECTRICIAN
+  PLUMBER
+  TECHNICIAN
+  ADMIN
+}
+
+// ── Sprint 4 — Ticket Engine enums ───────────────────────────────────────────
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum TicketSource {
+  RESIDENT_APP
+  ADMIN_PORTAL
+  INTERNAL
+}
+
+/// Structured timeline event types — the engine never stores formatted text.
+enum TicketEventType {
+  CREATED
+  UPDATED
+  ASSIGNED
+  REASSIGNED
+  UNASSIGNED
+  STATUS_CHANGED
+  COMMENT_ADDED
+  ATTACHMENT_ADDED
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
+// ── Sprint 5 — Service Request Engine enum (reuses TicketPriority) ────────────
+
+enum ServiceRequestStatus {
+  REQUESTED
+  ASSIGNED
+  ACCEPTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+// ── Sprint 6 — Work Order Engine enums (reuses TicketPriority) ────────────────
+
+enum WorkOrderStatus {
+  DRAFT
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  VERIFIED
+  CLOSED
+  CANCELLED
+}
+
+/// Where a Work Order came from. Loose coupling — originId is a plain id with
+/// NO foreign key, so any engine (Ticket, Service Request, future PM/AMC/manual)
+/// can create Work Orders without this engine depending on them.
+enum WorkOrderOriginType {
+  MANUAL
+  TICKET
+  SERVICE_REQUEST
+}
+
+enum WorkOrderEventType {
+  CREATED
+  ASSIGNED
+  REASSIGNED
+  ACCEPTED
+  STARTED
+  PROGRESS_UPDATED
+  ON_HOLD
+  RESUMED
+  COMPLETED
+  VERIFIED
+  CLOSED
+  CANCELLED
+}
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id     String       @id @default(cuid())
+  name   String
+  slug   String       @unique
+  status TenantStatus @default(TRIAL)
+
+  communities Community[]
+  users       User[]
+  roles       Role[] // tenant-scoped custom roles (system roles have tenantId = null)
+  vendors     Vendor[] // vendors are tenant-scoped (cover many communities)
+
+  // Audit / soft-delete base columns (see docs/architecture.md — Audit).
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model Community {
+  id       String          @id @default(cuid())
+  tenantId String
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+  slug     String
+  code     String // human/admin code, unique within a tenant
+  description String?
+  type     CommunityType   @default(APARTMENT)
+  status   CommunityStatus @default(ONBOARDING)
+
+  // Location
+  addressLine1 String?
+  addressLine2 String?
+  country      String?
+  state        String?
+  city         String?
+  district     String?
+  pincode      String?
+  latitude     Float?
+  longitude    Float?
+  timezone     String  @default("Asia/Kolkata")
+
+  // Branding assets (storage keys — resolved via StorageService, never raw URLs)
+  logoKey       String?
+  coverImageKey String?
+
+  // Contact
+  contactEmail String?
+  contactPhone String?
+  website      String?
+  /// Array of { name, role, phone } objects.
+  emergencyContacts Json?
+
+  // Builder / association
+  builderName        String?
+  associationName    String?
+  registrationNumber String?
+  goLiveDate         DateTime?
+
+  /// Free-form future-ready metadata bag.
+  metadata Json?
+
+  // Children (Community Foundation)
+  userRoles UserRole[]
+  phases    Phase[]
+  blocks    Block[]
+  floors    Floor[]
+  units     Unit[]
+  amenities Amenity[]
+  documents CommunityDocument[]
+  settings  CommunitySettings?
+  residents       Resident[]
+  staff           Staff[]
+  tickets         Ticket[]
+  serviceRequests ServiceRequest[]
+  workOrders      WorkOrder[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([status])
+  @@index([type])
+  @@map("communities")
+}
+
+// ── Identity ─────────────────────────────────────────────────────────────────
+
+model User {
+  id       String  @id @default(cuid())
+  // Null for platform-level users (Platform Admin). Tenant users are scoped here.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  email           String     @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String
+  firstName       String
+  lastName        String
+  status          UserStatus @default(PENDING)
+  lastLoginAt     DateTime?
+
+  roles              UserRole[]
+  refreshTokens      RefreshToken[]
+  verificationTokens VerificationToken[]
+  profile            UserProfile?
+  // People Foundation — a user represents at most ONE of these (enforced in
+  // UserLinkService; each link column is independently unique).
+  residentProfile    Resident?
+  vendorProfile      Vendor?
+  staffProfile       Staff?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("users")
+}
+
+// ── RBAC (configurable — roles & permissions are rows, never hardcoded) ──────
+
+model Role {
+  id String @id @default(cuid())
+  // Null = system role, available to every tenant. Non-null = tenant custom role.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  key         String // e.g. "PLATFORM_ADMIN", "RESIDENT"
+  name        String // display name, e.g. "Resident"
+  description String?
+  scope       RoleScope
+  isSystem    Boolean   @default(false) // system roles cannot be deleted/renamed
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([scope])
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique // canonical "resource:action", e.g. "community:read"
+  resource    String // e.g. "community"
+  action      String // e.g. "read"
+  description String?
+  isSystem    Boolean @default(true)
+
+  roles RolePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// A role granted to a user, optionally scoped to a single community.
+/// communityId = null means the assignment applies at the role's own scope
+/// (PLATFORM or TENANT). Uniqueness for null-community rows is enforced in the
+/// service layer (Postgres treats NULLs as distinct in unique indexes).
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  assignedById String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId, communityId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([communityId])
+  @@map("user_roles")
+}
+
+// ── Auth tokens ──────────────────────────────────────────────────────────────
+
+/// Opaque refresh tokens are stored HASHED. Rotation: each use issues a new
+/// token and marks the old one replaced; reuse of an already-rotated token
+/// revokes the whole family (theft detection).
+model RefreshToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String  @unique
+  familyId  String // shared across a rotation chain
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  replacedById String?       @unique
+  replacedBy   RefreshToken? @relation("TokenRotation", fields: [replacedById], references: [id])
+  replaces     RefreshToken? @relation("TokenRotation")
+
+  userAgent String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+/// Single-use, hashed tokens for email verification and password reset.
+model VerificationToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type       VerificationTokenType
+  tokenHash  String                @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("verification_tokens")
+}
+
+// ── Audit trail ──────────────────────────────────────────────────────────────
+
+/// Append-only audit log. actorId/tenantId/communityId are plain ids (no FK
+/// relations) so the log survives deletion of the referenced rows and stays
+/// cheap to write on the hot path. Join in the reporting layer when needed.
+model AuditLog {
+  id String @id @default(cuid())
+
+  tenantId    String?
+  communityId String?
+  actorId     String?
+  actorEmail  String?
+
+  action     String // e.g. "auth.login", "user.create"
+  resource   String // e.g. "user"
+  resourceId String?
+
+  method     String?
+  path       String?
+  statusCode Int?
+  ipAddress  String?
+  userAgent  String?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([actorId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 2 — Community Foundation
+//
+// Flexible property hierarchy:  Community → Phase? → Block? → Floor? → Unit
+// Every level below Community is OPTIONAL so the same tables model apartments
+// (Tower → Floor → Unit), villas (Cluster → Unit, no floor) and commercial
+// (Block → Floor → Shop). `communityId` is DENORMALIZED onto every descendant:
+// this is a materialized ancestor key (not redundant data) so tenant scoping
+// and "everything connects to a community" queries never walk the tree.
+// Tenant isolation flows through Community.tenantId.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Phase {
+  id          String          @id @default(cuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  code        String
+  description String?
+  sortOrder   Int             @default(0)
+  status      HierarchyStatus @default(ACTIVE)
+  metadata    Json?
+
+  blocks Block[]
+  units  Unit[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, code])
+  @@index([communityId])
+  @@index([status])
+  @@map("phases")
+}
+
+model Block {
+  id          String          @id @default(cuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  // Optional — a community may have blocks with no phase layer.
+  phaseId     String?
+  phase       Phase?          @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  name        String
+  code        String
+  type        BlockType       @default(TOWER)
+  totalFloors Int?
+  description String?
+  sortOrder   Int             @default(0)
+  status      HierarchyStatus @default(ACTIVE)
+  metadata    Json?
+
+  floors Floor[]
+  units  Unit[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, code])
+  @@index([communityId])
+  @@index([phaseId])
+  @@index([status])
+  @@map("blocks")
+}
+
+model Floor {
+  id          String          @id @default(cuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  blockId     String
+  block       Block           @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  level       Int // e.g. -1 (basement), 0 (ground), 1, 2 …
+  name        String? // display label, e.g. "Ground", "Podium 1"
+  description String?
+  sortOrder   Int             @default(0)
+  status      HierarchyStatus @default(ACTIVE)
+  metadata    Json?
+
+  units Unit[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([blockId, level])
+  @@index([communityId])
+  @@index([blockId])
+  @@map("floors")
+}
+
+model Unit {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  // All three ancestors optional — set whichever the community's shape uses.
+  phaseId String?
+  phase   Phase?  @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  blockId String?
+  block   Block?  @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  floorId String?
+  floor   Floor?  @relation(fields: [floorId], references: [id], onDelete: SetNull)
+
+  unitNumber String
+  type       String? // configurable, e.g. "2BHK", "Studio", "Villa", "Shop"
+  carpetArea Float?
+  builtUpArea Float?
+  areaUnit   String        @default("sqft")
+  bedrooms   Int?
+  bathrooms  Int?
+  parkingSlots Int         @default(0)
+  status     UnitStatus    @default(VACANT)
+  ownership  OwnershipType @default(UNKNOWN)
+  metadata   Json?
+
+  residentUnits   ResidentUnit[]
+  tickets         Ticket[]
+  serviceRequests ServiceRequest[]
+  workOrders      WorkOrder[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, unitNumber])
+  @@index([communityId])
+  @@index([blockId])
+  @@index([floorId])
+  @@index([status])
+  @@map("units")
+}
+
+model Amenity {
+  id          String          @id @default(cuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  code        String?
+  category    String? // configurable grouping, e.g. "Sports", "Recreation"
+  description String?
+  capacity    Int?
+  location    String?
+  isBookable  Boolean         @default(false) // booking engine arrives later
+  operatingHours Json?
+  imageKey    String?
+  sortOrder   Int             @default(0)
+  status      HierarchyStatus @default(ACTIVE)
+  metadata    Json?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([status])
+  @@map("amenities")
+}
+
+/// One row per community (1:1). Config-heavy, so flexible JSON columns dominate
+/// alongside a few typed toggles/colors that the UI binds directly.
+model CommunitySettings {
+  id          String    @id @default(cuid())
+  communityId String    @unique
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  /// { mon: { open, close, closed }, … }
+  workingHours       Json?
+  maintenanceWindows Json?
+  supportContacts    Json?
+
+  // Branding
+  primaryColor   String?
+  secondaryColor String?
+
+  // Communication channel toggles
+  emailEnabled    Boolean @default(true)
+  smsEnabled      Boolean @default(false)
+  whatsappEnabled Boolean @default(false)
+  pushEnabled     Boolean @default(true)
+
+  // Policies (structured, extensible)
+  petPolicy     Json?
+  parkingPolicy Json?
+
+  /// Escape hatch for tenant-specific settings not yet promoted to columns.
+  customSettings Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("community_settings")
+}
+
+model CommunityDocument {
+  id          String           @id @default(cuid())
+  communityId String
+  community   Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  category    DocumentCategory @default(OTHER)
+  status      DocumentStatus   @default(DRAFT)
+
+  // Storage metadata only — the actual bytes are managed via StorageService.
+  // storageKey stays null until a real upload lands (no file uploads this sprint).
+  storageKey String?
+  fileName   String?
+  mimeType   String?
+  fileSize   Int?
+
+  version   String?
+  issuedOn  DateTime?
+  expiresOn DateTime?
+  tags      String[]
+  metadata  Json?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([category])
+  @@index([status])
+  @@map("community_documents")
+}
+
+/// Per-user profile & preferences (1:1 with User).
+model UserProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName String?
+  avatarKey   String?
+  phone       String?
+  bio         String?
+
+  language String          @default("en")
+  theme    ThemePreference @default(SYSTEM)
+  timezone String          @default("Asia/Kolkata")
+
+  /// { channels: { email, sms, push, whatsapp }, categories: { … } }
+  notificationPreferences Json?
+
+  // Security preferences (foundation — enforcement arrives with the auth engine)
+  twoFactorEnabled Boolean @default(false)
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 3 — People Foundation (Residents, Vendors, Staff)
+//
+// The minimum people data the Ticket Engine (Sprint 4) needs: who raises a
+// ticket (Resident, tied to a Unit), who fulfils it (Staff / Vendor). Each can
+// optionally link to a platform User (unique per table; a user maps to at most
+// one profile — enforced in UserLinkService) so they can log in without a
+// duplicate account. Residents/Staff are community-scoped; Vendors are
+// tenant-scoped and cover many communities.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Resident {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  // Optional login link — unique so a user backs at most one resident.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  residentCode String
+  firstName    String
+  lastName     String
+  mobile       String
+  email        String?
+  photoKey     String?
+  gender       Gender?
+  dateOfBirth  DateTime?
+  occupation   String?
+
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+
+  moveInDate DateTime?
+  status     ResidentStatus @default(ACTIVE)
+  notes      String?
+  metadata   Json?
+
+  // 1:1 current unit assignment (no historical occupancy this sprint).
+  unitAssignment  ResidentUnit?
+  tickets         Ticket[]
+  serviceRequests ServiceRequest[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, residentCode])
+  @@index([communityId])
+  @@index([status])
+  @@index([mobile])
+  @@map("residents")
+}
+
+/// Maps a Resident to a Unit. One resident → one unit (unique residentId);
+/// one unit → many residents. `role` distinguishes primary vs secondary.
+model ResidentUnit {
+  id         String   @id @default(cuid())
+  residentId String   @unique
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  unitId     String
+  unit       Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  role        ResidentRole   @default(PRIMARY)
+  moveInDate  DateTime?
+  moveOutDate DateTime?
+  status      ResidentStatus @default(ACTIVE)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
+
+  @@index([unitId])
+  @@map("resident_units")
+}
+
+model Vendor {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  code            String?
+  name            String
+  companyName     String?
+  category        VendorCategory
+  serviceCategories VendorCategory[]
+  phone           String
+  email           String?
+  addressLine     String?
+  city            String?
+  /// Communities this vendor covers (denormalized ids; vendors span communities).
+  communityIds    String[]
+  status          PersonStatus     @default(ACTIVE)
+  remarks         String?
+  metadata        Json?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([tenantId])
+  @@index([category])
+  @@index([status])
+  @@map("vendors")
+}
+
+model Staff {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  employeeId String
+  firstName  String
+  lastName   String
+  role       StaffRole
+  department String?
+  phone      String
+  email      String?
+  photoKey   String?
+  status     PersonStatus @default(ACTIVE)
+  metadata   Json?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, employeeId])
+  @@index([communityId])
+  @@index([role])
+  @@index([status])
+  @@map("staff")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 4 — Ticket Engine (the generic operational core)
+//
+// A Ticket belongs to exactly one Community and references exactly one Unit and
+// one Reporter. Assignment is optional and is Staff XOR Vendor (never both) —
+// enforced in the service. The Category carries the business context, so the
+// engine stays generic (no plumbing/electrical/etc. logic). Reporter/assignee/
+// actor ids are plain columns (the AuditLog pattern) — validated in services,
+// not FK-linked, so the engine never reaches back into the People tables.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Configurable ticket categories. tenantId = null is a SYSTEM default
+/// (available to every tenant); non-null is a tenant's own category — the same
+/// pattern as system vs. tenant Roles.
+model TicketCategory {
+  id          String  @id @default(cuid())
+  tenantId    String?
+  key         String
+  name        String
+  description String?
+  color       String?
+  iconKey     String?
+  isActive    Boolean @default(true)
+  isSystem    Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  tickets Ticket[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("ticket_categories")
+}
+
+model Ticket {
+  id     String @id @default(cuid())
+  /// Monotonic sequence → display number "TKT-000123" (built in the service).
+  number Int    @unique @default(autoincrement())
+
+  communityId String
+  community   Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit           @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  categoryId  String
+  category    TicketCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  residentId  String?
+  resident    Resident?      @relation(fields: [residentId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+  source      TicketSource   @default(ADMIN_PORTAL)
+
+  // Reporter + assignee: plain ids (validated in services). Staff XOR Vendor.
+  reportedById     String
+  assignedStaffId  String?
+  assignedVendorId String?
+  assignedById     String?
+  assignedAt       DateTime?
+  reassignedCount  Int       @default(0)
+
+  dueDate      DateTime?
+  resolvedDate DateTime?
+  closedDate   DateTime?
+  notes        String?
+  metadata     Json?
+
+  comments    TicketComment[]
+  attachments TicketAttachment[]
+  timeline    TicketTimeline[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([unitId])
+  @@index([residentId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedStaffId])
+  @@index([assignedVendorId])
+  @@index([reportedById])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String  @id @default(cuid())
+  ticketId   String
+  ticket     Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String // User id (plain)
+  body       String
+  /// Internal comments are visible only to staff/admin (see TicketCommentService).
+  isInternal Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+model TicketAttachment {
+  id           String @id @default(cuid())
+  ticketId     String
+  ticket       Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fileName     String
+  contentType  String
+  size         Int
+  storageKey   String
+  uploadedById String
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+/// Append-only, STRUCTURED timeline (never formatted text). The UI renders the
+/// sentence from type + actor + reference + metadata.
+model TicketTimeline {
+  id        String          @id @default(cuid())
+  ticketId  String
+  ticket    Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type      TicketEventType
+  actorId   String?
+  reference String? // related entity id, or "OPEN->ASSIGNED" for status changes
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
+  @@map("ticket_timeline")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 5 — Service Request Engine
+//
+// A Service Request is requested WORK (resident asks for an electrician, a
+// cleaning, …) — NOT an operational issue (that's a Ticket). It is a separate
+// engine that may OPTIONALLY link to a Ticket via a nullable scalar `ticketId`
+// (no FK, so the Ticket Engine stays independent). Reuses the Ticket Engine's
+// patterns: system/tenant catalog, SERIAL number, staff-XOR-vendor assignment,
+// status-service-driven workflow, plain actor ids.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Configurable service catalog. tenantId = null is a seeded system default.
+model Service {
+  id                       String  @id @default(cuid())
+  tenantId                 String?
+  key                      String
+  name                     String
+  description              String?
+  estimatedDurationMinutes Int?
+  iconKey                  String?
+  color                    String?
+  isActive                 Boolean @default(true)
+  isSystem                 Boolean @default(false)
+  sortOrder                Int     @default(0)
+
+  requests ServiceRequest[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("services")
+}
+
+model ServiceRequest {
+  id     String @id @default(cuid())
+  /// Monotonic sequence → display number "SRQ-000123" (built in the service).
+  number Int    @unique @default(autoincrement())
+
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  residentId  String?
+  resident    Resident? @relation(fields: [residentId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String
+  priority    TicketPriority       @default(MEDIUM)
+  status      ServiceRequestStatus @default(REQUESTED)
+
+  // Requester + assignee: plain ids (validated in services). Staff XOR Vendor.
+  requestedById    String
+  assignedStaffId  String?
+  assignedVendorId String?
+  assignedById     String?
+  assignedAt       DateTime?
+  reassignedCount  Int       @default(0)
+
+  // Scheduling — no calendar engine, no recurrence.
+  preferredDate     DateTime?
+  preferredTimeSlot String?
+  actualStart       DateTime?
+  actualEnd         DateTime?
+
+  /// Optional loose link to a Ticket (scalar id — Ticket Engine stays independent).
+  ticketId String?
+
+  completedDate DateTime?
+  notes         String?
+  metadata      Json?
+
+  feedback ServiceFeedback?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([unitId])
+  @@index([residentId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedStaffId])
+  @@index([assignedVendorId])
+  @@index([ticketId])
+  @@index([createdAt])
+  @@map("service_requests")
+}
+
+/// Resident feedback, submitted once after completion (1:1 with the request).
+model ServiceFeedback {
+  id               String         @id @default(cuid())
+  serviceRequestId String         @unique
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  rating           Int // 1..5 (validated in the DTO/service)
+  comment          String?
+  createdById      String
+
+  createdAt DateTime @default(now())
+
+  @@map("service_feedback")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 6 — Work Order Engine (generic execution)
+//
+// A Work Order is executed WORK assigned to a staff member or vendor. It may
+// ORIGINATE from any engine (Ticket, Service Request, future PM/AMC/manual) via
+// a loose { originType, originId } pair — NO foreign key — so this engine never
+// depends on the origin engines. Reuses the Ticket Engine's patterns (SERIAL
+// number, staff-XOR-vendor assignment, status service, structured timeline,
+// plain actor ids). Adds progress updates and a verify-before-close gate.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model WorkOrder {
+  id     String @id @default(cuid())
+  /// Monotonic sequence → display number "WO-000001" (built in the service).
+  number Int    @unique @default(autoincrement())
+
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  // Optional — some work is community/common-area wide, not unit-specific.
+  unitId String?
+  unit   Unit?   @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String
+  priority    TicketPriority  @default(MEDIUM)
+  status      WorkOrderStatus @default(DRAFT)
+
+  // Assignee: plain ids (validated in the service). Staff XOR Vendor.
+  assignedStaffId  String?
+  assignedVendorId String?
+  assignedById     String?
+  assignedAt       DateTime?
+  reassignedCount  Int       @default(0)
+
+  // Loose origin link — NO FK to Ticket / ServiceRequest.
+  originType WorkOrderOriginType @default(MANUAL)
+  originId   String?
+
+  estimatedHours Float?
+  actualHours    Float?
+
+  dueDate             DateTime?
+  startedDate         DateTime?
+  completedDate       DateTime?
+  verifiedDate        DateTime?
+  verifiedById        String?
+  verificationRemarks String?
+
+  notes    String?
+  metadata Json?
+
+  updates     WorkOrderUpdate[]
+  attachments WorkOrderAttachment[]
+  timeline    WorkOrderTimeline[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([unitId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedStaffId])
+  @@index([assignedVendorId])
+  @@index([originType, originId])
+  @@index([createdAt])
+  @@map("work_orders")
+}
+
+model WorkOrderUpdate {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  authorId    String
+  comment     String
+  progressPercent Int? // 0..100 (validated in the DTO)
+  isInternal  Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([workOrderId])
+  @@map("work_order_updates")
+}
+
+model WorkOrderAttachment {
+  id           String    @id @default(cuid())
+  workOrderId  String
+  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  fileName     String
+  contentType  String
+  size         Int
+  storageKey   String
+  uploadedById String
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([workOrderId])
+  @@map("work_order_attachments")
+}
+
+/// Append-only, STRUCTURED timeline (never formatted text).
+model WorkOrderTimeline {
+  id          String             @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder          @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  type        WorkOrderEventType
+  actorId     String?
+  reference   String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([workOrderId])
+  @@index([createdAt])
+  @@map("work_order_timeline")
+}

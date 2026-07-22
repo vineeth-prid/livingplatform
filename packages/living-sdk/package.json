@@ -1,0 +1,16 @@
+{
+  "name": "@living/living-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@living/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@living/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

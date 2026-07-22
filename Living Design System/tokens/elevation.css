@@ -1,0 +1,50 @@
+/* ============================================================
+   LIVING — Elevation (soft luxury shadows)
+   Low-opacity, warm-tinted, multi-layer. Never harsh black.
+   Shadows imply calm lift, not drama.
+   ============================================================ */
+
+:root,
+[data-theme="light"] {
+  --shadow-color: 28 24% 12%;   /* warm ink, used as hsl base */
+
+  --shadow-xs:
+    0 1px 2px hsl(var(--shadow-color) / 0.05);
+
+  --shadow-sm:
+    0 1px 2px hsl(var(--shadow-color) / 0.04),
+    0 2px 6px hsl(var(--shadow-color) / 0.06);
+
+  --shadow-md:
+    0 2px 4px hsl(var(--shadow-color) / 0.04),
+    0 8px 20px hsl(var(--shadow-color) / 0.08);
+
+  --shadow-lg:
+    0 4px 8px hsl(var(--shadow-color) / 0.05),
+    0 18px 40px hsl(var(--shadow-color) / 0.10);
+
+  --shadow-floating:
+    0 8px 16px hsl(var(--shadow-color) / 0.06),
+    0 32px 64px hsl(var(--shadow-color) / 0.14);
+
+  /* Inset / hairline for glass + inputs */
+  --shadow-inset: inset 0 1px 0 hsl(0 0% 100% / 0.5);
+  --ring-1: 0 0 0 1px var(--border-default);
+  --ring-focus-shadow: 0 0 0 3px var(--ring-focus);
+
+  /* Opacity scale */
+  --opacity-disabled: 0.42; /* @kind other */
+  --opacity-muted:    0.64; /* @kind other */
+  --opacity-hover:    0.86; /* @kind other */
+  --opacity-scrim:    0.45; /* @kind other */
+}
+
+[data-theme="dark"] {
+  --shadow-color: 0 0% 0%;
+  --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.30);
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.30), 0 2px 6px hsl(0 0% 0% / 0.34);
+  --shadow-md: 0 2px 4px hsl(0 0% 0% / 0.30), 0 8px 20px hsl(0 0% 0% / 0.40);
+  --shadow-lg: 0 4px 8px hsl(0 0% 0% / 0.34), 0 18px 40px hsl(0 0% 0% / 0.48);
+  --shadow-floating: 0 8px 16px hsl(0 0% 0% / 0.40), 0 32px 64px hsl(0 0% 0% / 0.58);
+  --shadow-inset: inset 0 1px 0 hsl(0 0% 100% / 0.04);
+}

@@ -1,0 +1,5 @@
+/* Living Design System — single stylesheet consumers import.
+   Order matters: fonts, then token variables, then the base layer. */
+@import "./fonts.css";
+@import "./tokens.css";
+@import "./base.css";

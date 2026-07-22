@@ -1,0 +1,91 @@
+# Living Platform — local development infrastructure.
+# Usage: `pnpm infra:up` (or `docker compose up -d`).
+# App containers (api) live behind the `apps` profile so plain `up` only
+# starts backing services for local `pnpm dev`.
+name: living-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: living-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-living}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-living}
+      POSTGRES_DB: ${POSTGRES_DB:-living}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-living} -d ${POSTGRES_DB:-living}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: living-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Local SMTP catcher for email verification / password reset flows.
+  # UI at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: living-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  # Optional DB admin UI — start with: docker compose --profile tools up -d
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: living-pgadmin
+    restart: unless-stopped
+    profiles: ["tools"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@living.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-living}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - postgres
+
+  # The API container — start with: docker compose --profile apps up -d
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: living-api
+    restart: unless-stopped
+    profiles: ["apps"]
+    env_file:
+      - ./apps/api/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-living}:${POSTGRES_PASSWORD:-living}@postgres:5432/${POSTGRES_DB:-living}?schema=public
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,80 @@
+/* ============================================================
+   LIVING — Base layer
+   Minimal resets + typographic defaults + a few brand utilities.
+   Kept light: components own their own styling via tokens.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: var(--body-weight);
+  font-size: var(--text-base);
+  line-height: var(--body-leading);
+  color: var(--text-body);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+/* Headings default to the sans grotesque; opt into display serif with .display */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-family: var(--heading-family);
+  font-weight: var(--heading-weight);
+  letter-spacing: var(--heading-tracking);
+  line-height: var(--leading-tight);
+  color: var(--text-strong);
+}
+
+p { margin: 0; }
+
+a { color: var(--text-link); text-decoration: none; transition: var(--transition-color); }
+a:hover { color: var(--brand-primary-hover); }
+
+img, svg, video { display: block; max-width: 100%; }
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus-shadow);
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: color-mix(in oklab, var(--clay-500) 24%, transparent); }
+
+/* ---- Brand typographic utilities ---- */
+.display {
+  font-family: var(--display-family);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+  color: var(--text-strong);
+}
+.display-2xl { font-size: var(--text-display-2xl); }
+.display-xl  { font-size: var(--text-display-xl); }
+.display-lg  { font-size: var(--text-display-lg); }
+
+.eyebrow {
+  font-family: var(--eyebrow-family);
+  font-weight: var(--eyebrow-weight);
+  letter-spacing: var(--eyebrow-tracking);
+  font-size: var(--eyebrow-size);
+  text-transform: uppercase;
+  color: var(--text-accent);
+}
+
+.text-muted  { color: var(--text-muted); }
+.text-subtle { color: var(--text-subtle); }
+.mono        { font-family: var(--font-mono); font-feature-settings: "tnum"; }
+
+.living-container {
+  width: 100%;
+  max-width: var(--container-xl);
+  margin-inline: auto;
+  padding-inline: var(--page-margin);
+}

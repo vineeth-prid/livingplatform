@@ -1,0 +1,39 @@
+/* Minimal base layer — composes with Tailwind's layers regardless of order.
+   Brand surface + body type + calm focus ring + refined selection. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--surface-page);
+    color: var(--text-body);
+    font-family: var(--font-body);
+    font-weight: var(--fw-regular);
+    line-height: var(--leading-relaxed);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Calm 3px Pine focus ring everywhere — never a hard outline. */
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus-shadow);
+    border-radius: var(--radius-xs);
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--brand-primary) 22%, transparent);
+    color: var(--text-strong);
+  }
+
+  /* Data/money uses tabular mono figures. */
+  .font-mono,
+  [data-numeric] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}

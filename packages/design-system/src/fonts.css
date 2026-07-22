@@ -1,0 +1,4 @@
+/* Living brand fonts: Cormorant (display serif), Schibsted Grotesk (UI/body),
+   IBM Plex Mono (data/money). Swap for self-hosted @fontsource in production
+   if an external font request is undesirable. */
+@import url("https://fonts.googleapis.com/css2?family=Cormorant:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap");
