@@ -14,15 +14,10 @@ export interface KpiCardProps {
   tone?: 'default' | 'warning' | 'danger';
 }
 
-const toneRing: Record<NonNullable<KpiCardProps['tone']>, string> = {
-  default: '',
-  warning: 'ring-1 ring-[var(--warning-bg)]',
-  danger: 'ring-1 ring-[var(--danger-bg)]',
-};
-
 /**
  * Clickable KPI: reuses the shared StatCard, adds an animated counter, a
  * navigation link, and a calm hover lift. Composition — not a new component.
+ * The icon chip lights up in its tone only when the number warrants attention.
  */
 export function KpiCard({ label, value, icon, href, tone = 'default' }: KpiCardProps) {
   const reduced = useReducedMotion();
@@ -41,7 +36,8 @@ export function KpiCard({ label, value, icon, href, tone = 'default' }: KpiCardP
           label={label}
           value={<AnimatedCounter value={value} />}
           icon={icon}
-          className={`transition-shadow hover:shadow-md ${emphasize ? toneRing[tone] : ''}`}
+          tone={emphasize ? tone : 'default'}
+          className="transition-shadow hover:shadow-md"
         />
       </Link>
     </motion.div>
