@@ -68,12 +68,21 @@ export function DashboardLayout() {
   const commandPalette = useCommandPalette();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // Platform Admins get the Administration section; associations never see it.
+  // Platform Admins run the control plane only — provisioning/config. The
+  // operational sections (assets, AMC, tickets, community ops…) belong to the
+  // association that runs each community, so a Platform Admin never sees them.
   const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const visibleSections = useMemo(
-    () => (isPlatform ? [...sections, adminSection] : sections),
+    () => (isPlatform ? [adminSection] : sections),
     [isPlatform],
   );
+
+  // A Platform Admin has no operational dashboard — land them on the control plane.
+  useEffect(() => {
+    if (isPlatform && pathname === '/') {
+      navigate({ to: '/admin/communities', replace: true });
+    }
+  }, [isPlatform, pathname, navigate]);
 
   // Register global command-palette actions for navigation.
   useEffect(() => {
@@ -104,15 +113,22 @@ export function DashboardLayout() {
           </Link>
         )}
         sidebarHeader={
-          <WorkspaceSwitcher
-            workspaces={communities.map((c) => ({
-              id: c.id,
-              name: c.name,
-              subtitle: [c.city, c.state].filter(Boolean).join(', ') || undefined,
-            }))}
-            activeId={communityId ?? undefined}
-            onSelect={setCommunityId}
-          />
+          isPlatform ? (
+            <div className="flex items-center gap-2 px-1 py-1.5">
+              <ShieldCheck className="h-5 w-5 text-brand" />
+              <span className="text-sm font-semibold text-strong">Platform admin</span>
+            </div>
+          ) : (
+            <WorkspaceSwitcher
+              workspaces={communities.map((c) => ({
+                id: c.id,
+                name: c.name,
+                subtitle: [c.city, c.state].filter(Boolean).join(', ') || undefined,
+              }))}
+              activeId={communityId ?? undefined}
+              onSelect={setCommunityId}
+            />
+          )
         }
         headerRight={
           <div className="flex items-center gap-2">

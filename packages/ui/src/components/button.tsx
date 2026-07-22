@@ -53,8 +53,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled ?? loading}
         {...props}
       >
-        {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-        {children}
+        {/* Slot (asChild) requires exactly one child — never inject a sibling. */}
+        {asChild ? (
+          children
+        ) : (
+          <>
+            {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+            {children}
+          </>
+        )}
       </Comp>
     );
   },
