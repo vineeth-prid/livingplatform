@@ -1,14 +1,16 @@
+import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueries } from '@tanstack/react-query';
 import { qk } from '@living/hooks';
 import { formatDate } from '@living/utils';
 import {
-  Badge, EmptyState, LoadingState, PageContainer, PageHeader,
+  Badge, Button, EmptyState, LoadingState, PageContainer, PageHeader,
   PageTransition, StatCard,
 } from '@living/ui';
-import { Boxes, Building2, DoorOpen, FileText, Layers, Sparkles } from 'lucide-react';
+import { Boxes, Building2, DoorOpen, FileText, Layers, Plus, Sparkles } from 'lucide-react';
 
 import { useCommunity } from './community-context';
+import { CommunityForm } from './community-form';
 import { living } from '../../lib/living';
 import { DetailSection, Field, FieldGrid, StatusBadge } from '../master-data';
 
@@ -21,6 +23,7 @@ const typeLabel = (t: string) => t.charAt(0) + t.slice(1).toLowerCase();
 export function CommunityOverviewPage() {
   const { community, communityId } = useCommunity();
   const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
 
   const [detail, blocks, amenities, documents] = useQueries({
     queries: [
@@ -34,7 +37,17 @@ export function CommunityOverviewPage() {
   if (!communityId) {
     return (
       <PageContainer>
-        <EmptyState icon={Building2} title="No community yet" description="Set up a community to see its overview here." />
+        <EmptyState
+          icon={Building2}
+          title="No community yet"
+          description="Set up your first community to start managing units, residents and operations."
+          action={
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" /> New community
+            </Button>
+          }
+        />
+        <CommunityForm open={creating} onOpenChange={setCreating} />
       </PageContainer>
     );
   }
@@ -49,8 +62,16 @@ export function CommunityOverviewPage() {
           eyebrow="Master data"
           title={c?.name ?? 'Community'}
           description={c ? `${typeLabel(c.type)} · ${[c.city, c.state].filter(Boolean).join(', ')}` : undefined}
-          actions={c ? <StatusBadge status={c.status} size="md" /> : undefined}
+          actions={
+            <div className="flex items-center gap-3">
+              {c ? <StatusBadge status={c.status} size="md" /> : null}
+              <Button variant="secondary" onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" /> New community
+              </Button>
+            </div>
+          }
         />
+        <CommunityForm open={creating} onOpenChange={setCreating} />
 
         {detail.isLoading ? (
           <LoadingState />

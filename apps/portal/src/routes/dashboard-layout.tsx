@@ -19,7 +19,6 @@ const sections: NavSection[] = [
   {
     items: [
       { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-      { label: 'Design system', icon: Sparkles, href: '/design-system' },
     ],
   },
   {

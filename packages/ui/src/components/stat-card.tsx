@@ -4,7 +4,7 @@ import { cn } from '@living/utils';
 
 import { Card } from './card';
 
-/** Dashboard KPI widget — Cormorant value, optional delta, tabular figures. */
+/** Dashboard KPI widget — large Geist display value, optional delta, tabular figures. */
 export function StatCard({
   label,
   value,
