@@ -1,0 +1,5 @@
+Subject: Ticket {{ticketNumber}} closed
+<h1>Ticket closed</h1>
+<p>{{t "greeting"}} {{recipientName}},</p>
+<p>Ticket <strong>{{ticketNumber}}</strong> — “{{ticketTitle}}” — has been closed. Thank you for your patience.</p>
+{{#if feedbackUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{feedbackUrl}}">Share feedback</a></p>{{/if}}

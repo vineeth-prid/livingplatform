@@ -15,6 +15,11 @@ export enum NodeEnv {
   Production = 'production',
 }
 
+export enum EmailProvider {
+  Ses = 'ses',
+  Smtp = 'smtp',
+}
+
 /**
  * The full set of environment variables the API needs, validated at boot.
  * A missing or malformed required variable fails fast with a clear message —
@@ -95,6 +100,85 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   WEB_APP_URL = 'http://localhost:5173';
+
+  // ── Notification Engine · Email Service ──
+  /** Active email provider — the ONLY switch between SES and SMTP. */
+  @IsEnum(EmailProvider)
+  @IsOptional()
+  EMAIL_PROVIDER: EmailProvider = EmailProvider.Smtp;
+
+  @IsString()
+  @IsOptional()
+  EMAIL_DEFAULT_LOCALE = 'en';
+
+  // Amazon SES (required only when EMAIL_PROVIDER=ses).
+  @IsString()
+  @IsOptional()
+  AWS_REGION = 'us-east-1';
+
+  @ValidateIf((e: EnvironmentVariables) => e.EMAIL_PROVIDER === EmailProvider.Ses)
+  @IsString()
+  @MinLength(1, { message: 'AWS_ACCESS_KEY_ID is required when EMAIL_PROVIDER=ses' })
+  AWS_ACCESS_KEY_ID = '';
+
+  @ValidateIf((e: EnvironmentVariables) => e.EMAIL_PROVIDER === EmailProvider.Ses)
+  @IsString()
+  @MinLength(1, { message: 'AWS_SECRET_ACCESS_KEY is required when EMAIL_PROVIDER=ses' })
+  AWS_SECRET_ACCESS_KEY = '';
+
+  @ValidateIf((e: EnvironmentVariables) => e.EMAIL_PROVIDER === EmailProvider.Ses)
+  @IsString()
+  @MinLength(1, { message: 'SES_FROM_EMAIL is required when EMAIL_PROVIDER=ses' })
+  SES_FROM_EMAIL = '';
+
+  @IsString()
+  @IsOptional()
+  SES_FROM_NAME = 'Living';
+
+  @IsString()
+  @IsOptional()
+  SES_REPLY_TO = '';
+
+  @IsString()
+  @IsOptional()
+  SES_CONFIGURATION_SET = '';
+
+  // SMTP (spec adds secure/username/from-name/from-email/reply-to on top of the
+  // existing SMTP_HOST/PORT/PASSWORD used by the legacy MailService).
+  @IsString()
+  @IsOptional()
+  SMTP_SECURE = 'false';
+
+  @IsString()
+  @IsOptional()
+  SMTP_USERNAME = '';
+
+  @IsString()
+  @IsOptional()
+  SMTP_FROM_NAME = 'Living';
+
+  @IsString()
+  @IsOptional()
+  SMTP_FROM_EMAIL = '';
+
+  @IsString()
+  @IsOptional()
+  SMTP_REPLY_TO = '';
+
+  // Queue / retry.
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  EMAIL_QUEUE_CONCURRENCY = 5;
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  EMAIL_MAX_ATTEMPTS = 5;
+
+  @IsString()
+  @IsOptional()
+  EMAIL_RETRY_BACKOFF_MS = '60000,300000,900000,3600000';
 
   // ── Rate limiting ──
   @Type(() => Number)

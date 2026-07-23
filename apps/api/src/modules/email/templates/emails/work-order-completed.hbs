@@ -1,0 +1,5 @@
+Subject: Work order {{workOrderNumber}} completed
+<h1>Work order completed</h1>
+<p>{{t "greeting"}} {{recipientName}},</p>
+<p>Work order <strong>{{workOrderNumber}}</strong> — “{{title}}” — has been completed{{#if completedAt}} on {{completedAt}}{{/if}}.</p>
+{{#if workOrderUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{workOrderUrl}}">View work order</a></p>{{/if}}

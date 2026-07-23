@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="{{__locale}}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{subject}}</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f5f4; color: #1c1e1c; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 24px 16px; }
+    .card { background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #e6e8e6; }
+    .content { padding: 28px 28px 8px; font-size: 15px; line-height: 1.6; }
+    .content h1 { font-size: 20px; margin: 0 0 12px; }
+    .btn { display: inline-block; background: #2f5d50; color: #ffffff !important; text-decoration: none; padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; }
+    .muted { color: #6a6d6a; font-size: 13px; }
+    a { color: #2f5d50; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      {{> header}}
+      <div class="content">
+        {{{body}}}
+      </div>
+      {{> footer}}
+    </div>
+  </div>
+</body>
+</html>

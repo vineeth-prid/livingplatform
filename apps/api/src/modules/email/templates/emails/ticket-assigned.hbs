@@ -1,0 +1,6 @@
+Subject: Ticket {{ticketNumber}} assigned to you
+<h1>New ticket assigned</h1>
+<p>{{t "greeting"}} {{assigneeName}},</p>
+<p>Ticket <strong>{{ticketNumber}}</strong> — “{{ticketTitle}}” — has been assigned to you{{#if communityName}} at {{communityName}}{{/if}}.</p>
+{{#if priority}}<p class="muted">Priority: {{upper priority}}</p>{{/if}}
+{{#if ticketUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{ticketUrl}}">View ticket</a></p>{{/if}}

@@ -1,0 +1,5 @@
+Subject: Service request {{requestNumber}} received
+<h1>Service request received</h1>
+<p>{{t "greeting"}} {{recipientName}},</p>
+<p>Your request <strong>{{requestNumber}}</strong> — “{{serviceName}}” — has been received{{#if scheduledFor}} and is scheduled for {{scheduledFor}}{{/if}}.</p>
+{{#if requestUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{requestUrl}}">View request</a></p>{{/if}}

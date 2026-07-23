@@ -1,0 +1,6 @@
+Subject: Ticket {{ticketNumber}} updated
+<h1>Ticket update</h1>
+<p>{{t "greeting"}} {{recipientName}},</p>
+<p>Ticket <strong>{{ticketNumber}}</strong> — “{{ticketTitle}}” — is now <strong>{{upper status}}</strong>.</p>
+{{#if note}}<p class="muted">{{note}}</p>{{/if}}
+{{#if ticketUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{ticketUrl}}">View ticket</a></p>{{/if}}

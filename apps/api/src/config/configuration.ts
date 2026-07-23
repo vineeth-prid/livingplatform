@@ -36,6 +36,39 @@ export function configuration() {
       password: env.SMTP_PASSWORD,
       from: env.MAIL_FROM,
     },
+    email: {
+      // Active provider — the ONLY thing that decides SES vs SMTP.
+      provider: (env.EMAIL_PROVIDER ?? 'smtp').toLowerCase(),
+      defaultLocale: env.EMAIL_DEFAULT_LOCALE ?? 'en',
+      ses: {
+        region: env.AWS_REGION ?? 'us-east-1',
+        accessKeyId: env.AWS_ACCESS_KEY_ID ?? '',
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY ?? '',
+        fromName: env.SES_FROM_NAME ?? 'Living',
+        fromEmail: env.SES_FROM_EMAIL ?? '',
+        replyTo: env.SES_REPLY_TO ?? '',
+        configurationSet: env.SES_CONFIGURATION_SET ?? '',
+      },
+      smtp: {
+        host: env.SMTP_HOST ?? 'localhost',
+        port: Number(env.SMTP_PORT ?? 1025),
+        secure: String(env.SMTP_SECURE ?? '') === 'true' || Number(env.SMTP_PORT ?? 1025) === 465,
+        username: env.SMTP_USERNAME ?? env.SMTP_USER ?? '',
+        password: env.SMTP_PASSWORD ?? '',
+        fromName: env.SMTP_FROM_NAME ?? 'Living',
+        fromEmail: env.SMTP_FROM_EMAIL ?? '',
+        replyTo: env.SMTP_REPLY_TO ?? '',
+      },
+      queue: {
+        concurrency: Number(env.EMAIL_QUEUE_CONCURRENCY ?? 5),
+        attempts: Number(env.EMAIL_MAX_ATTEMPTS ?? 5),
+        // Per-attempt delays (ms): 1m, 5m, 15m, 1h. Exhausting them → DLQ.
+        backoffMs: (env.EMAIL_RETRY_BACKOFF_MS ?? '60000,300000,900000,3600000')
+          .split(',')
+          .map((n) => Number(n.trim()))
+          .filter((n) => Number.isFinite(n) && n >= 0),
+      },
+    },
     throttle: {
       ttl: Number(env.THROTTLE_TTL ?? 60),
       limit: Number(env.THROTTLE_LIMIT ?? 120),

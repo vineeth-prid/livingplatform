@@ -1,0 +1,5 @@
+Subject: Work order {{workOrderNumber}} created
+<h1>New work order</h1>
+<p>{{t "greeting"}} {{recipientName}},</p>
+<p>Work order <strong>{{workOrderNumber}}</strong> — “{{title}}” — has been created{{#if assetName}} for {{assetName}}{{/if}}.</p>
+{{#if workOrderUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{workOrderUrl}}">View work order</a></p>{{/if}}
