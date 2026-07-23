@@ -1,22 +1,21 @@
 import { Boxes, Database, HardDrive, Server } from 'lucide-react';
 import {
-  Card, ChartWrapper, PageContainer, PageHeader, PageTransition, StatCard,
+  Card, ChartWrapper, LoadingState, PageContainer, PageHeader, PageTransition, StatCard,
 } from '@living/ui';
 
-import { AreaChart, BarChart } from './charts';
-import { InfoRow, KpiGrid, MockBadge, PlatformSection, StatusCard } from './components';
-import { useJobs, usePlatformHealth, useStorageStats, useSystemInfo } from './hooks';
+import { BarChart } from './charts';
+import { InfoRow, KpiGrid, PlatformSection, StatusCard } from './components';
+import { usePlatformHealth, useSystemInfo } from './hooks';
 
 /**
- * System — infrastructure visibility for the Living platform: application info,
- * dependency health (live), storage, queues and environment. Non-health panels
- * are placeholder adapters until their endpoints ship (flagged). No secrets.
+ * System — live infrastructure visibility for the Living platform: application
+ * info, dependency health, storage (summed from stored file metadata), queues
+ * and environment. All read from the backend; no secrets are exposed.
  */
 export function PlatformSystemPage() {
-  const info = useSystemInfo();
   const health = usePlatformHealth();
-  const storage = useStorageStats();
-  const jobs = useJobs();
+  const system = useSystemInfo();
+  const info = system.data;
 
   const deps = health.data?.deps ?? [];
   const depOk = (name: string) => deps.find((d) => d.name === name)?.ok ?? false;
@@ -30,63 +29,73 @@ export function PlatformSystemPage() {
           description="Infrastructure, storage and environment for the Living platform."
         />
 
-        {/* Application (placeholder) */}
-        <PlatformSection title="Application" action={<MockBadge />}>
-          <Card variant="elevated">
-            <InfoRow label="Current version" value={info.version} />
-            <InfoRow label="Release version" value={info.releaseVersion} />
-            <InfoRow label="Build date" value={info.buildDate} />
-            <InfoRow label="Environment" value={<span className="font-mono">{info.environment}</span>} />
-            <InfoRow label="Uptime" value={info.uptime} />
-          </Card>
-        </PlatformSection>
+        {system.isLoading || !info ? (
+          <LoadingState />
+        ) : (
+          <>
+            {/* Application */}
+            <PlatformSection title="Application">
+              <Card variant="elevated">
+                <InfoRow label="Current version" value={info.app.version} />
+                <InfoRow label="Release version" value={info.app.releaseVersion} />
+                <InfoRow label="Build date" value={info.app.buildDate ?? '—'} />
+                <InfoRow label="Environment" value={<span className="font-mono">{info.app.environment}</span>} />
+                <InfoRow label="Uptime" value={info.app.uptime} />
+                <InfoRow label="Storage driver" value={<span className="font-mono">{info.app.storageDriver}</span>} />
+              </Card>
+            </PlatformSection>
 
-        {/* Infrastructure (health live) */}
-        <PlatformSection title="Infrastructure" description="Live readiness probe for core dependencies.">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <StatusCard name="PostgreSQL" ok={depOk('PostgreSQL')} />
-            <StatusCard name="Redis" ok={depOk('Redis')} />
-            <StatusCard name="MinIO" ok={depOk('MinIO')} />
-            <StatusCard name="API" ok={!health.isError} />
-            <StatusCard name="Workers" ok />
-            <StatusCard name="Scheduler" ok />
-          </div>
-        </PlatformSection>
+            {/* Infrastructure (health live) */}
+            <PlatformSection title="Infrastructure" description="Live readiness probe for core dependencies.">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+                <StatusCard name="PostgreSQL" ok={depOk('PostgreSQL')} />
+                <StatusCard name="Redis" ok={depOk('Redis')} />
+                <StatusCard name="MinIO" ok={depOk('MinIO')} />
+                <StatusCard name="API" ok={!health.isError} />
+                <StatusCard name="Memory" ok={depOk('Memory')} />
+                <StatusCard name="Scheduler" ok={info.jobs.scheduled.length > 0} detail={`${info.jobs.scheduled.length} jobs`} />
+              </div>
+            </PlatformSection>
 
-        {/* Storage (placeholder) */}
-        <PlatformSection title="Storage" action={<MockBadge />}>
-          <KpiGrid>
-            <StatCard label="Total storage" value={`${storage.totalGb} GB`} icon={HardDrive} tone="brand" />
-            <StatCard label="Used storage" value={`${storage.usedGb} GB`} icon={HardDrive} />
-            <StatCard label="Community storage" value={`${storage.communityStorageGb} GB`} icon={Boxes} />
-            <StatCard label="Upload growth (mo)" value={`+${storage.growth.at(-1)?.value ?? 0} GB`} icon={Server} />
-          </KpiGrid>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <ChartWrapper title="Storage growth"><AreaChart data={storage.growth} /></ChartWrapper>
-            <ChartWrapper title="Storage by community"><BarChart data={storage.byCommunity} horizontal /></ChartWrapper>
-          </div>
-        </PlatformSection>
+            {/* Storage (summed from stored file metadata) */}
+            <PlatformSection title="Storage" description="From stored document & attachment metadata.">
+              <KpiGrid cols={3}>
+                <StatCard label="Used storage" value={fmtMb(info.storage.usedMb)} icon={HardDrive} tone="brand" />
+                <StatCard label="Community documents" value={fmtMb(info.storage.communityStorageMb)} icon={Boxes} />
+                <StatCard label="Communities with files" value={info.storage.byCommunity.length} icon={Server} />
+              </KpiGrid>
+              {info.storage.byCommunity.length > 0 && (
+                <div className="mt-4">
+                  <ChartWrapper title="Storage by community (MB)">
+                    <BarChart data={info.storage.byCommunity} horizontal />
+                  </ChartWrapper>
+                </div>
+              )}
+            </PlatformSection>
 
-        {/* Queues (placeholder) */}
-        <PlatformSection title="Queues" action={<MockBadge />}>
-          <KpiGrid cols={3}>
-            <StatCard label="Running jobs" value={jobs.running.length} icon={Server} />
-            <StatCard label="Pending jobs" value={jobs.scheduled.length} icon={Server} />
-            <StatCard label="Failed jobs" value={jobs.failed.length} icon={Server} tone={jobs.failed.length ? 'danger' : 'default'} />
-          </KpiGrid>
-        </PlatformSection>
+            {/* Queues (real scheduled crons; run history not persisted) */}
+            <PlatformSection title="Queues">
+              <KpiGrid cols={3}>
+                <StatCard label="Scheduled jobs" value={info.jobs.scheduled.length} icon={Server} />
+                <StatCard label="Running jobs" value={info.jobs.running.length} icon={Server} />
+                <StatCard label="Failed jobs" value={info.jobs.failed.length} icon={Server} tone={info.jobs.failed.length ? 'danger' : 'default'} />
+              </KpiGrid>
+            </PlatformSection>
 
-        {/* Environment (placeholder, no secrets) */}
-        <PlatformSection title="Environment" action={<MockBadge />} description="No secrets are exposed.">
-          <Card variant="elevated">
-            <InfoRow label="Environment" value={<span className="font-mono">{info.environment}</span>} />
-            <InfoRow label="Docker version" value={info.dockerVersion} />
-            <InfoRow label="Node version" value={info.nodeVersion} />
-            <InfoRow label="Database version" value={<span className="inline-flex items-center gap-1.5"><Database className="h-3.5 w-3.5" /> {info.databaseVersion}</span>} />
-            <InfoRow label="Redis version" value={info.redisVersion} />
-          </Card>
-        </PlatformSection>
+            {/* Environment (no secrets) */}
+            <PlatformSection title="Environment" description="No secrets are exposed.">
+              <Card variant="elevated">
+                <InfoRow label="Environment" value={<span className="font-mono">{info.app.environment}</span>} />
+                <InfoRow label="Node version" value={info.app.nodeVersion} />
+                <InfoRow label="Database" value={<span className="inline-flex items-center gap-1.5"><Database className="h-3.5 w-3.5" /> {info.versions.database ?? 'Unknown'}</span>} />
+                <InfoRow label="Redis" value={info.versions.redis ? `Redis ${info.versions.redis}` : 'Unknown'} />
+              </Card>
+            </PlatformSection>
+          </>
+        )}
       </PageContainer>
     </PageTransition>
   );
 }
+
+const fmtMb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);

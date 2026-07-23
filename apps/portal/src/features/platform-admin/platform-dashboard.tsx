@@ -3,25 +3,20 @@ import {
   UserRound, Users, UsersRound, Wallet,
 } from 'lucide-react';
 import {
-  ChartWrapper, LoadingState, PageContainer, PageHeader, PageTransition, StatCard,
+  ChartWrapper, ErrorState, LoadingState, PageContainer, PageHeader, PageTransition, StatCard,
 } from '@living/ui';
 
 import { AreaChart, BarChart, DonutChart } from './charts';
-import { FutureTile, KpiGrid, MockBadge, PlatformSection } from './components';
-import {
-  useBusinessIntelligence, useCommunityGrowth, usePlatformUsers,
-} from './hooks';
+import { FutureTile, KpiGrid, PlatformSection } from './components';
+import { useOverview } from './hooks';
 
 /**
- * Executive Dashboard — the platform-wide command centre for Living founders
- * and platform administrators. Community Growth is derived live from the
- * communities API; user/occupancy/growth metrics are placeholder adapters until
- * their aggregate endpoints land (each panel is flagged).
+ * Executive Dashboard — the platform-wide command centre for Living founders and
+ * platform administrators. Every figure is a live aggregate from
+ * /admin/stats/overview; it polls and reflects real data as it is populated.
  */
 export function PlatformDashboardPage() {
-  const growth = useCommunityGrowth();
-  const users = usePlatformUsers();
-  const bi = useBusinessIntelligence();
+  const { data, isLoading, isError, error, refetch } = useOverview();
 
   return (
     <PageTransition>
@@ -32,70 +27,72 @@ export function PlatformDashboardPage() {
           description="Real-time overview of the Living business — growth, adoption and scale."
         />
 
-        {growth.isLoading || !growth.data ? (
+        {isLoading ? (
           <LoadingState />
+        ) : isError || !data ? (
+          <ErrorState error={error} onRetry={() => void refetch()} />
         ) : (
           <>
-            {/* SECTION 1 — Community Growth (live) */}
-            <PlatformSection title="Community growth" description="Live, from the communities directory.">
+            {/* SECTION 1 — Community Growth */}
+            <PlatformSection title="Community growth">
               <KpiGrid>
-                <StatCard label="Total communities" value={growth.data.total} icon={Building2} tone="brand" />
-                <StatCard label="Active" value={growth.data.active} icon={CheckCircle2} tone="success" />
-                <StatCard label="New (30 days)" value={growth.data.newThisMonth} icon={TrendingUp} />
-                <StatCard label="Suspended" value={growth.data.suspended} icon={PauseCircle} tone={growth.data.suspended ? 'warning' : 'default'} />
+                <StatCard label="Total communities" value={data.communities.total} icon={Building2} tone="brand" />
+                <StatCard label="Active" value={data.communities.active} icon={CheckCircle2} tone="success" />
+                <StatCard label="New (30 days)" value={data.communities.newThisMonth} icon={TrendingUp} />
+                <StatCard label="Suspended" value={data.communities.suspended} icon={PauseCircle} tone={data.communities.suspended ? 'warning' : 'default'} />
               </KpiGrid>
               <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <ChartWrapper title="Community growth trend" className="lg:col-span-1">
-                  <AreaChart data={growth.data.growthTrend} />
+                <ChartWrapper title="Community growth trend">
+                  <AreaChart data={data.communities.growthTrend} />
                 </ChartWrapper>
                 <ChartWrapper title="Communities by state">
-                  <BarChart data={growth.data.byState} horizontal />
+                  <BarChart data={data.communities.byState} horizontal />
                 </ChartWrapper>
                 <ChartWrapper title="Communities by city">
-                  <BarChart data={growth.data.byCity} horizontal />
+                  <BarChart data={data.communities.byCity} horizontal />
                 </ChartWrapper>
               </div>
             </PlatformSection>
 
-            {/* SECTION 2 — Platform Users (placeholder) */}
-            <PlatformSection title="Platform users" action={<MockBadge />}>
+            {/* SECTION 2 — Platform Users */}
+            <PlatformSection title="Platform users">
               <KpiGrid cols={5}>
-                <StatCard label="Registered users" value={users.totalUsers} icon={Users} tone="brand" />
-                <StatCard label="Owners" value={users.owners} icon={UserRound} />
-                <StatCard label="Tenants" value={users.tenants} icon={UsersRound} />
-                <StatCard label="Residents" value={users.residents} icon={Users} />
-                <StatCard label="Community admins" value={users.admins} icon={Building2} />
+                <StatCard label="Registered users" value={data.users.total} icon={Users} tone="brand" />
+                <StatCard label="Owners" value={data.users.owners} icon={UserRound} />
+                <StatCard label="Tenants" value={data.users.tenants} icon={UsersRound} />
+                <StatCard label="Residents" value={data.users.residents} icon={Users} />
+                <StatCard label="Community admins" value={data.users.admins} icon={Building2} />
               </KpiGrid>
               <div className="mt-4 grid gap-4 lg:grid-cols-3">
                 <ChartWrapper title="User growth" className="lg:col-span-2">
-                  <AreaChart data={users.userGrowth} />
+                  <AreaChart data={data.users.growth} />
                 </ChartWrapper>
                 <ChartWrapper title="Owner vs tenant">
-                  <DonutChart data={users.ownerVsTenant} height={160} />
+                  <DonutChart data={data.users.ownerVsTenant} height={160} />
                 </ChartWrapper>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-3">
-                <StatCard label="Active users" value={users.activeUsers} icon={CheckCircle2} />
-                <StatCard label="Monthly active (MAU)" value={users.mau} icon={TrendingUp} />
-                <StatCard label="Daily active (DAU)" value={users.dau} icon={TrendingUp} />
+                <StatCard label="Active users (30d)" value={data.users.active} icon={CheckCircle2} />
+                <StatCard label="Monthly active (MAU)" value={data.users.mau} icon={TrendingUp} />
+                <StatCard label="Daily active (DAU)" value={data.users.dau} icon={TrendingUp} />
               </div>
             </PlatformSection>
 
-            {/* SECTION 3 — Business Intelligence (placeholder) */}
-            <PlatformSection title="Business intelligence" action={<MockBadge />}>
+            {/* SECTION 3 — Business Intelligence */}
+            <PlatformSection title="Business intelligence">
               <KpiGrid cols={5}>
-                <StatCard label="Total units" value={bi.totalUnits} icon={DoorOpen} tone="brand" />
-                <StatCard label="Occupied units" value={bi.occupied} icon={CheckCircle2} />
-                <StatCard label="Occupancy" value={`${bi.occupancyPct}%`} icon={TrendingUp} tone="success" />
-                <StatCard label="Avg units / community" value={bi.avgUnitsPerCommunity} icon={Layers} />
-                <StatCard label="Avg residents / unit" value={bi.avgResidentsPerUnit} icon={Users} />
+                <StatCard label="Total units" value={data.units.total} icon={DoorOpen} tone="brand" />
+                <StatCard label="Occupied units" value={data.units.occupied} icon={CheckCircle2} />
+                <StatCard label="Occupancy" value={`${data.units.occupancyPct}%`} icon={TrendingUp} tone="success" />
+                <StatCard label="Avg units / community" value={data.units.avgPerCommunity} icon={Layers} />
+                <StatCard label="Avg residents / unit" value={data.units.avgResidentsPerUnit} icon={Users} />
               </KpiGrid>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <ChartWrapper title="Occupancy trend">
-                  <AreaChart data={bi.occupancyTrend} />
-                </ChartWrapper>
                 <ChartWrapper title="Community type distribution">
-                  <DonutChart data={growth.data.byType} height={180} />
+                  <DonutChart data={data.communities.byType} height={180} />
+                </ChartWrapper>
+                <ChartWrapper title="Community size by type">
+                  <BarChart data={data.communities.byType} horizontal />
                 </ChartWrapper>
               </div>
             </PlatformSection>
@@ -103,22 +100,22 @@ export function PlatformDashboardPage() {
             {/* SECTION 4 — Platform Growth */}
             <PlatformSection title="Platform growth">
               <KpiGrid>
-                <StatCard label="New registrations today" value={users.dau > 0 ? Math.round(users.dau * 0.04) : 0} icon={TrendingUp} />
-                <StatCard label="New this month" value={users.userGrowth.at(-1)?.value ?? 0} icon={TrendingUp} />
-                <StatCard label="Active communities today" value={growth.data.active} icon={Sparkles} />
-                <StatCard label="Growth rate" value={`${growth.data.growthRatePct}%`} icon={TrendingUp} tone={growth.data.growthRatePct >= 0 ? 'success' : 'danger'} />
+                <StatCard label="New registrations today" value={data.users.newToday} icon={TrendingUp} />
+                <StatCard label="New this month" value={data.users.newThisMonth} icon={TrendingUp} />
+                <StatCard label="Active communities" value={data.communities.active} icon={Sparkles} />
+                <StatCard label="New communities today" value={data.communities.newToday} icon={TrendingUp} />
               </KpiGrid>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <ChartWrapper title="Monthly growth">
-                  <BarChart data={growth.data.growthTrend} />
+                <ChartWrapper title="Monthly community growth">
+                  <BarChart data={data.communities.growthTrend} />
                 </ChartWrapper>
-                <ChartWrapper title="User acquisition trend" actions={<MockBadge />}>
-                  <AreaChart data={users.userGrowth} />
+                <ChartWrapper title="User acquisition trend">
+                  <AreaChart data={data.users.growth} />
                 </ChartWrapper>
               </div>
             </PlatformSection>
 
-            {/* Future — billing placeholders (not implemented) */}
+            {/* Future — billing placeholders (out of scope) */}
             <PlatformSection title="Revenue" description="Reserved — billing arrives in a later sprint.">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                 {['Revenue', 'MRR', 'ARR', 'Churn', 'Trials', 'Subscriptions'].map((l) => (

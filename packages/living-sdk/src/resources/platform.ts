@@ -78,4 +78,21 @@ export class PlatformResource {
   readiness<T = unknown>(): Promise<T> {
     return this.http.get('/health/ready');
   }
+
+  // Platform Admin analytics (real DB aggregates)
+  statsOverview<T = unknown>(): Promise<T> {
+    return this.http.get('/admin/stats/overview');
+  }
+  auditLog<T = unknown>(params?: ListParams & Record<string, unknown>): Promise<Paginated<T>> {
+    return this.http.get('/admin/stats/audit', params);
+  }
+  auditSummary<T = unknown>(): Promise<T> {
+    return this.http.get('/admin/stats/audit/summary');
+  }
+  auditModules(): Promise<string[]> {
+    return this.http.get('/admin/stats/audit/modules');
+  }
+  systemInfo<T = unknown>(): Promise<T> {
+    return this.http.get('/admin/stats/system');
+  }
 }

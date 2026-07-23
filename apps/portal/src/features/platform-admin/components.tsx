@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Badge, Card } from '@living/ui';
+import { Card } from '@living/ui';
 import { cn } from '@living/utils';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
@@ -21,11 +21,6 @@ export function PlatformSection({
       {children}
     </section>
   );
-}
-
-/** Marks a panel as showing placeholder data (no backend endpoint yet). */
-export function MockBadge() {
-  return <Badge tone="warning" size="sm">Placeholder</Badge>;
 }
 
 /** Grid of KPI cards — responsive columns. */
