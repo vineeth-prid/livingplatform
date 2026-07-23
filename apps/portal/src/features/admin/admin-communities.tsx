@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@living/hooks';
 import { LivingApiError, type ProvisionCommunityResult } from '@living/living-sdk';
+import type { Community } from '@living/types';
 import {
   Badge, Button, Card, EmptyState, LoadingState, PageContainer, PageHeader,
   PageTransition, toast,
 } from '@living/ui';
-import { Building2, Copy, KeyRound, LogIn, Plus } from 'lucide-react';
+import { Building2, Copy, KeyRound, LogIn, Pencil, Plus, Power } from 'lucide-react';
 
 import { living } from '../../lib/living';
 import { beginImpersonation, cancelImpersonation } from './impersonation';
+import { CommunityEditForm } from './community-edit-form';
 import { ProvisionCommunityForm } from './provision-community-form';
 import { StatusBadge } from '../master-data';
+import { Tabs } from '../shared/tabs';
 
 const typeLabel = (t: string) => t.charAt(0) + t.slice(1).toLowerCase();
 
@@ -20,17 +23,35 @@ const typeLabel = (t: string) => t.charAt(0) + t.slice(1).toLowerCase();
  * one-flow provisioning of a new community + its Association Admin. Associations
  * cannot reach this — it's the operator's oversight of what exists "under him".
  */
+const TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'inactive', label: 'Inactive' },
+];
+
 export function AdminCommunitiesPage() {
+  const qc = useQueryClient();
   const [provisioning, setProvisioning] = useState(false);
   const [credentials, setCredentials] = useState<ProvisionCommunityResult['admin'] | null>(null);
   const [loggingInId, setLoggingInId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Community | null>(null);
+  const [tab, setTab] = useState('all');
 
   const { data, isLoading } = useQuery({
     queryKey: qk.communities({ limit: 100 }),
     queryFn: () => living.community.list({ limit: 100, sortBy: 'name', sortDir: 'asc' }),
   });
 
-  const communities = data?.items ?? [];
+  const toggleStatus = useMutation({
+    mutationFn: (c: Community) =>
+      living.community.update(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['communities'] }); toast.success('Status updated'); },
+    onError: (e) => toast.error(e instanceof LivingApiError ? e.message : 'Could not update status'),
+  });
+
+  const all = data?.items ?? [];
+  const communities = all.filter((c) =>
+    tab === 'all' ? true : tab === 'active' ? c.status === 'ACTIVE' : c.status !== 'ACTIVE');
 
   const copy = (text: string) => {
     void navigator.clipboard.writeText(text).then(() => toast.success('Copied'));
@@ -84,12 +105,16 @@ export function AdminCommunitiesPage() {
           </Card>
         )}
 
+        <div className="mb-4">
+          <Tabs tabs={TABS} active={tab} onChange={setTab} />
+        </div>
+
         {isLoading ? (
           <LoadingState />
         ) : communities.length === 0 ? (
           <EmptyState
             icon={Building2}
-            title="No communities yet"
+            title="No communities"
             description="Provision your first community and its association admin to get started."
             action={<Button onClick={() => setProvisioning(true)}><Plus className="h-4 w-4" /> Provision community</Button>}
           />
@@ -98,17 +123,30 @@ export function AdminCommunitiesPage() {
             <ul className="flex flex-col divide-y divide-border-subtle">
               {communities.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
-                  <span className="flex items-center gap-3">
+                  <button type="button" onClick={() => setEditing(c)}
+                    className="flex items-center gap-3 text-left transition-colors hover:text-brand">
                     <Building2 className="h-4 w-4 text-muted" />
                     <span className="text-sm font-medium text-strong">{c.name}</span>
                     <span className="font-mono text-xs text-subtle">{c.code}</span>
-                  </span>
+                  </button>
                   <span className="flex items-center gap-2">
                     <span className="hidden text-xs text-subtle sm:inline">
                       {[c.city, c.state].filter(Boolean).join(', ')}
                     </span>
                     <Badge tone="neutral" size="sm">{typeLabel(c.type)}</Badge>
                     <StatusBadge status={c.status} />
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm"
+                      loading={toggleStatus.isPending && toggleStatus.variables?.id === c.id}
+                      onClick={() => toggleStatus.mutate(c)}
+                      aria-label={c.status === 'ACTIVE' ? `Deactivate ${c.name}` : `Activate ${c.name}`}
+                    >
+                      <Power className={`h-4 w-4 ${c.status === 'ACTIVE' ? 'text-success-fg' : 'text-muted'}`} />
+                      {c.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -129,6 +167,13 @@ export function AdminCommunitiesPage() {
           onOpenChange={setProvisioning}
           onProvisioned={(r) => setCredentials(r.admin)}
         />
+        {editing && (
+          <CommunityEditForm
+            community={editing}
+            open={!!editing}
+            onOpenChange={(o) => !o && setEditing(null)}
+          />
+        )}
       </PageContainer>
     </PageTransition>
   );

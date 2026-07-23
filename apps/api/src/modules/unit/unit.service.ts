@@ -12,7 +12,12 @@ import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
-import { CreateUnitDto, QueryUnitDto, UpdateUnitDto } from './dto/unit.dto';
+import {
+  BulkUnitUploadDto,
+  CreateUnitDto,
+  QueryUnitDto,
+  UpdateUnitDto,
+} from './dto/unit.dto';
 
 const SORTABLE = ['unitNumber', 'createdAt', 'status', 'type'] as const;
 
@@ -44,6 +49,8 @@ export class UnitService {
         parkingSlots: dto.parkingSlots ?? 0,
         status: dto.status ?? 'VACANT',
         ownership: dto.ownership ?? 'UNKNOWN',
+        ownerName: dto.ownerName,
+        ownerPhone: dto.ownerPhone,
         metadata: dto.metadata as Prisma.InputJsonValue | undefined,
         createdById: actor.id,
         updatedById: actor.id,
@@ -56,6 +63,114 @@ export class UnitService {
       data: { unitNumber: unit.unitNumber },
     });
     return unit;
+  }
+
+  /**
+   * Bulk upload units from parsed rows. Blocks (by name/code) and floors (by
+   * level within a block) are resolved and created on demand. Rows are processed
+   * individually so one bad row (e.g. duplicate unitNumber) doesn't sink the batch.
+   */
+  async bulkCreate(communityId: string, dto: BulkUnitUploadDto, actor: AuthenticatedUser) {
+    const community = await this.access.assert(communityId);
+    const blockCache = new Map<string, string>(); // key: lower name/code → blockId
+    const floorCache = new Map<string, string>(); // key: `${blockId}:${level}` → floorId
+    let created = 0;
+    const errors: { row: number; unitNumber: string; error: string }[] = [];
+
+    for (let i = 0; i < dto.rows.length; i++) {
+      const row = dto.rows[i]!;
+      try {
+        let blockId: string | null = null;
+        if (row.block) {
+          blockId = await this.resolveBlock(communityId, community.tenantId, row.block, blockCache, actor);
+        }
+        let floorId: string | null = null;
+        if (blockId && row.floorLevel != null) {
+          floorId = await this.resolveFloor(communityId, blockId, row.floorLevel, floorCache, actor);
+        }
+        await this.prisma.unit.create({
+          data: {
+            communityId,
+            blockId,
+            floorId,
+            unitNumber: row.unitNumber,
+            type: row.type,
+            bedrooms: row.bedrooms,
+            bathrooms: row.bathrooms,
+            parkingSlots: row.parkingSlots ?? 0,
+            builtUpArea: row.builtUpArea,
+            ownership: row.ownership ?? 'UNKNOWN',
+            ownerName: row.ownerName,
+            ownerPhone: row.ownerPhone,
+            createdById: actor.id,
+            updatedById: actor.id,
+          },
+        });
+        created++;
+      } catch (err) {
+        errors.push({
+          row: i + 1,
+          unitNumber: row.unitNumber,
+          error: err instanceof Error ? err.message : 'Failed',
+        });
+      }
+    }
+    return { created, failed: errors.length, errors };
+  }
+
+  private async resolveBlock(
+    communityId: string,
+    tenantId: string,
+    ref: string,
+    cache: Map<string, string>,
+    actor: AuthenticatedUser,
+  ): Promise<string> {
+    void tenantId;
+    const key = ref.trim().toLowerCase();
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const found = await this.prisma.block.findFirst({
+      where: {
+        communityId,
+        deletedAt: null,
+        OR: [
+          { name: { equals: ref.trim(), mode: 'insensitive' } },
+          { code: { equals: ref.trim(), mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+    });
+    const id = found?.id ?? (await this.prisma.block.create({
+      data: {
+        communityId, name: ref.trim(), code: ref.trim().toUpperCase().slice(0, 12),
+        type: 'TOWER', createdById: actor.id, updatedById: actor.id,
+      },
+      select: { id: true },
+    })).id;
+    cache.set(key, id);
+    return id;
+  }
+
+  private async resolveFloor(
+    communityId: string,
+    blockId: string,
+    level: number,
+    cache: Map<string, string>,
+    actor: AuthenticatedUser,
+  ): Promise<string> {
+    const key = `${blockId}:${level}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const found = await this.prisma.floor.findFirst({
+      where: { blockId, level, deletedAt: null },
+      select: { id: true },
+    });
+    const id = found?.id ?? (await this.prisma.floor.create({
+      data: { communityId, blockId, level, createdById: actor.id, updatedById: actor.id },
+      select: { id: true },
+    })).id;
+    cache.set(key, id);
+    return id;
   }
 
   async findMany(communityId: string, query: QueryUnitDto): Promise<Paginated<unknown>> {
@@ -117,6 +232,8 @@ export class UnitService {
         parkingSlots: dto.parkingSlots,
         status: dto.status,
         ownership: dto.ownership,
+        ownerName: dto.ownerName,
+        ownerPhone: dto.ownerPhone,
         metadata: dto.metadata as Prisma.InputJsonValue | undefined,
         updatedById: actor.id,
       },

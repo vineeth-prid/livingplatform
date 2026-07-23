@@ -8,6 +8,7 @@ import {
   PageContainer, PageHeader, PageTransition, Pagination, SearchInput,
 } from '@living/ui';
 
+import { Tabs, type TabDef } from '../shared/tabs';
 import type { ListQuery } from './use-list-query';
 
 /** A DataTable column that may be sortable via a backend field. */
@@ -38,6 +39,8 @@ interface ListScaffoldProps<T> {
   /** Replace the default table+pagination body (e.g. a Kanban board). Filters,
    *  search and header stay shared, so no list plumbing is duplicated. */
   renderContent?: ReactNode;
+  /** Optional tab strip rendered under the header (e.g. Owners / Tenants). */
+  tabs?: { items: TabDef[]; active: string; onChange: (k: string) => void };
 }
 
 /**
@@ -47,7 +50,7 @@ interface ListScaffoldProps<T> {
  */
 export function ListScaffold<T>({
   title, description, query, columns, rowKey, onRowClick, searchPlaceholder,
-  filters = [], createPermission, onCreate, createLabel = 'New', headerActions, renderContent,
+  filters = [], createPermission, onCreate, createLabel = 'New', headerActions, renderContent, tabs,
 }: ListScaffoldProps<T>) {
   // Local input value for instant typing; the query updates debounced + URL-synced.
   const [text, setText] = useState(query.q);
@@ -90,6 +93,12 @@ export function ListScaffold<T>({
             </>
           }
         />
+
+        {tabs && (
+          <div className="mb-4">
+            <Tabs tabs={tabs.items} active={tabs.active} onChange={tabs.onChange} />
+          </div>
+        )}
 
         <FilterBar className="mb-4">
           <SearchInput

@@ -4,6 +4,10 @@ import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import { EmptyState, PageContainer, PageHeader, PageTransition, toast } from '@living/ui';
 
+import { useQueryClient } from '@tanstack/react-query';
+
+import { living } from '../../lib/living';
+import { toKey } from '../shared/entity-select';
 import { useCommunity } from '../community/community-context';
 import { AssetForm } from './asset-form';
 import { useAssetCategories, useAssetMutations, useLocationOptions } from './queries';
@@ -13,9 +17,16 @@ export function AssetCreatePage() {
   const { communityId } = useCommunity();
   const { hasPermission } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { create } = useAssetMutations();
   const categoriesQ = useAssetCategories(communityId);
   const { blocks, floors } = useLocationOptions(communityId);
+
+  const createCategory = async (name: string) => {
+    const cat = await living.assetCategories.create({ communityId: communityId!, name, code: toKey(name) });
+    await qc.invalidateQueries({ queryKey: ['asset-categories', communityId] });
+    return (cat as { id: string }).id;
+  };
 
   const categories = (categoriesQ.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }));
   const blockOpts = blocks.map((b) => ({ value: b.id, label: b.name }));
@@ -54,6 +65,7 @@ export function AssetCreatePage() {
             submitting={create.isPending}
             onSubmit={onSubmit}
             onCancel={() => navigate({ to: '/assets' })}
+            onCreateCategory={createCategory}
           />
         ) : (
           <EmptyState title="Select a community" description="Choose a community from the switcher to add an asset." />

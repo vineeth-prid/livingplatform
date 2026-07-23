@@ -16,6 +16,12 @@ export class PeopleResource {
   createResident(communityId: string, input: Body): Promise<Resident> {
     return this.http.post(`/communities/${communityId}/residents`, input);
   }
+  bulkCreateResidents(
+    communityId: string,
+    rows: Body[],
+  ): Promise<{ created: number; failed: number; errors: { row: number; mobile: string; error: string }[] }> {
+    return this.http.post(`/communities/${communityId}/residents/bulk`, { rows });
+  }
   getResident(id: string): Promise<Resident> {
     return this.http.get(`/residents/${id}`);
   }

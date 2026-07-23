@@ -16,6 +16,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AuthService } from './auth.service';
 import {
+  ChangePasswordDto,
   ForgotPasswordDto,
   LoginDto,
   RefreshTokenDto,
@@ -111,6 +112,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Set a new password using a reset token' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
+  }
+
+  @Post('change-password')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change the current user’s password (first-login flow)' })
+  changePassword(@CurrentUser('id') userId: string, @Body() dto: ChangePasswordDto) {
+    return this.auth.changePassword(userId, dto.currentPassword, dto.password);
   }
 
   @Get('me')

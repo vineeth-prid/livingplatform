@@ -146,6 +146,8 @@ enum ResidentStatus {
 enum ResidentRole {
   PRIMARY
   SECONDARY
+  OWNER
+  TENANT
 }
 
 /// Shared active/inactive status for vendors and staff.
@@ -154,32 +156,8 @@ enum PersonStatus {
   INACTIVE
 }
 
-enum VendorCategory {
-  ELECTRICAL
-  PLUMBING
-  CIVIL
-  HOUSEKEEPING
-  SECURITY
-  GARDENING
-  PEST_CONTROL
-  LIFT
-  DG
-  STP
-  HVAC
-  PAINTING
-  GENERAL
-}
-
-enum StaffRole {
-  FACILITY_MANAGER
-  SUPERVISOR
-  SECURITY
-  HOUSEKEEPING
-  ELECTRICIAN
-  PLUMBER
-  TECHNICIAN
-  ADMIN
-}
+// StaffRole / VendorCategory are no longer enums — staff.role and
+// vendor.category are free strings managed per-tenant via CatalogOption.
 
 // ── Sprint 4 — Ticket Engine enums ───────────────────────────────────────────
 
@@ -238,6 +216,11 @@ enum ServiceRequestStatus {
 // ── Sprint 6 — Work Order Engine enums (reuses TicketPriority) ────────────────
 
 enum WorkOrderStatus {
+  // Approval lane — a Work Order is APPROVED work. Recommendations enter here;
+  // only APPROVED (or an emergency MANUAL) work order reaches the execution lane.
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
   DRAFT
   ASSIGNED
   ACCEPTED
@@ -258,10 +241,14 @@ enum WorkOrderOriginType {
   TICKET
   SERVICE_REQUEST
   PREVENTIVE_MAINTENANCE
+  AMC
 }
 
 enum WorkOrderEventType {
   CREATED
+  RECOMMENDED
+  APPROVED
+  REJECTED
   ASSIGNED
   REASSIGNED
   ACCEPTED
@@ -519,8 +506,14 @@ model User {
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   email           String     @unique
+  /// Login handle for people accounts — the person's mobile number. Unique
+  /// across residents/staff/vendors: one phone = one login.
+  username        String?    @unique
   emailVerifiedAt DateTime?
   passwordHash    String
+  /// Set on provisioned accounts (common one-time password) — the portal
+  /// forces a password change on first login.
+  mustChangePassword Boolean @default(false)
   firstName       String
   lastName        String
   status          UserStatus @default(PENDING)
@@ -830,6 +823,9 @@ model Unit {
   parkingSlots Int         @default(0)
   status     UnitStatus    @default(VACANT)
   ownership  OwnershipType @default(UNKNOWN)
+  // Owner contact (kept on the unit — an owner may not be a resident here).
+  ownerName  String?
+  ownerPhone String?
   metadata   Json?
 
   residentUnits   ResidentUnit[]
@@ -1078,8 +1074,9 @@ model Vendor {
   code            String?
   name            String
   companyName     String?
-  category        VendorCategory
-  serviceCategories VendorCategory[]
+  // Free strings (admin-managed via CatalogOption), not a hard enum.
+  category        String
+  serviceCategories String[]
   phone           String
   email           String?
   addressLine     String?
@@ -1115,7 +1112,8 @@ model Staff {
   employeeId String
   firstName  String
   lastName   String
-  role       StaffRole
+  // Free string (admin-managed via CatalogOption), not a hard enum.
+  role       String
   department String?
   phone      String
   email      String?
@@ -1134,6 +1132,22 @@ model Staff {
   @@index([role])
   @@index([status])
   @@map("staff")
+}
+
+/// Tenant-managed option lists (staff roles, vendor categories, …). Plain
+/// tenantId column (AuditLog pattern) — validated in the service, no FK.
+model CatalogOption {
+  id       String @id @default(cuid())
+  tenantId String
+  kind     String // 'STAFF_ROLE' | 'VENDOR_CATEGORY'
+  name     String
+
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  @@unique([tenantId, kind, name])
+  @@index([tenantId, kind])
+  @@map("catalog_options")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1435,6 +1449,21 @@ model WorkOrder {
   // Loose origin link — NO FK to Ticket / ServiceRequest.
   originType WorkOrderOriginType @default(MANUAL)
   originId   String?
+
+  // Approval model — a Work Order is APPROVED work (cost/procurement/major repair).
+  // Recommendations start PENDING_APPROVAL; a manager approves → APPROVED (enters
+  // execution) or rejects → REJECTED. Manual/emergency work orders skip this.
+  requestedById   String?
+  requestedDate   DateTime?
+  recommendedById String?
+  approvedById    String?
+  approvedDate    DateTime?
+  rejectionReason String?
+
+  // Estimated cost (procurement/budget context). Total is stored (labour + material).
+  estimatedLabourCost   Decimal? @db.Decimal(14, 2)
+  estimatedMaterialCost Decimal? @db.Decimal(14, 2)
+  estimatedTotalCost    Decimal? @db.Decimal(14, 2)
 
   /// Optional loose reference to an Asset (scalar id — NO FK, Asset Engine stays
   /// independent; assets are never owned by a work order). Populated by whoever

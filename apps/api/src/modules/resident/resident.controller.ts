@@ -17,6 +17,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import {
   AssignUnitDto,
+  BulkResidentUploadDto,
   CreateResidentDto,
   QueryResidentDto,
   UpdateResidentDto,
@@ -45,6 +46,17 @@ export class ResidentController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.residents.create(communityId, dto, user);
+  }
+
+  @Post('communities/:communityId/residents/bulk')
+  @RequirePermissions(PERMISSIONS.RESIDENT_CREATE)
+  @ApiOperation({ summary: 'Bulk upload residents (unit mapped by unit number)' })
+  bulkCreate(
+    @Param('communityId') communityId: string,
+    @Body() dto: BulkResidentUploadDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.residents.bulkCreate(communityId, dto, user);
   }
 
   @Get('residents/:id')

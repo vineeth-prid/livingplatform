@@ -107,6 +107,7 @@ export class ProvisioningService {
           tenantId: tenant.id,
           status: 'ACTIVE',
           emailVerifiedAt: new Date(),
+          mustChangePassword: true,
           createdById: actor.id,
         },
         select: { id: true, email: true, firstName: true, lastName: true },

@@ -43,6 +43,10 @@ export class AuthResource {
     return this.http.get('/auth/me');
   }
 
+  changePassword(currentPassword: string, password: string): Promise<{ message: string }> {
+    return this.http.post('/auth/change-password', { currentPassword, password });
+  }
+
   async logout(): Promise<void> {
     const refreshToken = this.tokenStore.getRefresh();
     try {

@@ -12,6 +12,7 @@ import {
 
 import { useCommunity } from '../features/community/community-context';
 import { exitImpersonation, getImpersonation } from '../features/admin/impersonation';
+import { ChangePasswordGate } from '../pages/change-password';
 import { RequireAuth } from './guards';
 
 // Foundation nav — feature sprints extend these sections. Hrefs are illustrative;
@@ -105,6 +106,9 @@ export function DashboardLayout() {
 
   return (
     <RequireAuth>
+      {user?.mustChangePassword ? (
+        <ChangePasswordGate />
+      ) : (
       <AppShell
         sections={visibleSections}
         activeHref={pathname}
@@ -164,6 +168,7 @@ export function DashboardLayout() {
           <Outlet />
         </Suspense>
       </AppShell>
+      )}
     </RequireAuth>
   );
 }

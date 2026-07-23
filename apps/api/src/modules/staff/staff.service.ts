@@ -6,6 +6,7 @@ import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
+import { AccountProvisioningService } from '../people/account-provisioning.service';
 import { UserLinkService } from '../people/user-link.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -25,6 +26,7 @@ export class StaffService {
     private readonly access: CommunityAccessService,
     private readonly storage: StorageService,
     private readonly userLink: UserLinkService,
+    private readonly accounts: AccountProvisioningService,
     private readonly events: DomainEventsService,
   ) {}
 
@@ -33,11 +35,24 @@ export class StaffService {
     if (dto.userId) {
       await this.userLink.assertLinkable(dto.userId, community.tenantId);
     }
+
+    const userId = dto.userId ?? (await this.accounts.provisionLogin({
+      kind: 'staff',
+      tenantId: community.tenantId,
+      communityId,
+      phone: dto.phone,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      email: dto.email,
+      actorId: actor.id,
+    }));
+    const employeeId = dto.employeeId ?? (await this.nextEmployeeId(communityId));
+
     const staff = await this.prisma.staff.create({
       data: {
         communityId,
-        userId: dto.userId,
-        employeeId: dto.employeeId,
+        userId,
+        employeeId,
         firstName: dto.firstName,
         lastName: dto.lastName,
         role: dto.role,
@@ -137,6 +152,11 @@ export class StaffService {
       data: { deletedAt: new Date(), updatedById: actor.id },
     });
     return { id, deleted: true };
+  }
+
+  private async nextEmployeeId(communityId: string): Promise<string> {
+    const count = await this.prisma.staff.count({ where: { communityId } });
+    return `EMP-${String(count + 1).padStart(4, '0')}`;
   }
 
   private present<T extends { photoKey: string | null }>(staff: T) {

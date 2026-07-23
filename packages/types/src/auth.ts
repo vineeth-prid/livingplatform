@@ -30,6 +30,7 @@ export interface PublicUser {
   tenantId: ID | null;
   status: UserStatus;
   emailVerified: boolean;
+  mustChangePassword?: boolean;
   roles: string[];
 }
 

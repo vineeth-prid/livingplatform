@@ -135,8 +135,10 @@ export class MaintenanceGenerationService {
         },
       };
 
+      // Routine maintenance does NOT create executable work directly — it
+      // recommends a work order (PENDING_APPROVAL) for a manager to approve.
       const wos = await this.resolveWorkOrderService(actor);
-      const workOrder = (await wos.create(plan.communityId, dto, actor)) as { id: string };
+      const workOrder = (await wos.recommend(plan.communityId, dto, actor)) as { id: string };
 
       // Populate the loose assetId reference on the generated WO (column added in
       // Sprint 7 for exactly this — the WO engine's code is not modified).

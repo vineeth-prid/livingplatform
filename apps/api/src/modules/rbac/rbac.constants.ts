@@ -116,6 +116,8 @@ export const PERMISSIONS = {
 
   // ── Sprint 6 — Work Order Engine ──
   WORKORDER_CREATE: 'workorder:create',
+  WORKORDER_RECOMMEND: 'workorder:recommend',
+  WORKORDER_APPROVE: 'workorder:approve',
   WORKORDER_VIEW: 'workorder:view',
   WORKORDER_UPDATE: 'workorder:update',
   WORKORDER_ASSIGN: 'workorder:assign',
@@ -195,6 +197,7 @@ export const ROLE_KEYS = {
   ASSOCIATION_ADMIN: 'ASSOCIATION_ADMIN',
   FACILITY_MANAGER: 'FACILITY_MANAGER',
   RESIDENT: 'RESIDENT',
+  STAFF: 'STAFF',
   VENDOR: 'VENDOR',
 } as const;
 
@@ -290,8 +293,10 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.SERVICE_ASSIGN,
       P.SERVICE_COMPLETE,
       P.SERVICE_CANCEL,
-      // Work Order Engine — full control.
+      // Work Order Engine — full control (incl. recommend + approve).
       P.WORKORDER_CREATE,
+      P.WORKORDER_RECOMMEND,
+      P.WORKORDER_APPROVE,
       P.WORKORDER_VIEW,
       P.WORKORDER_UPDATE,
       P.WORKORDER_ASSIGN,
@@ -381,8 +386,10 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.SERVICE_ASSIGN,
       P.SERVICE_COMPLETE,
       P.SERVICE_CANCEL,
-      // Work orders — run execution incl. verification and closure.
+      // Work orders — run execution incl. recommend/approve, verification, closure.
       P.WORKORDER_CREATE,
+      P.WORKORDER_RECOMMEND,
+      P.WORKORDER_APPROVE,
       P.WORKORDER_VIEW,
       P.WORKORDER_UPDATE,
       P.WORKORDER_ASSIGN,
@@ -451,6 +458,36 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.BOOKING_READ,
       P.BOOKING_CREATE,
       P.BOOKING_CANCEL,
+      P.ANNOUNCEMENT_READ,
+    ],
+  },
+  {
+    key: ROLE_KEYS.STAFF,
+    name: 'Staff',
+    description: 'A community staff member working the operational queues.',
+    scope: RoleScope.COMMUNITY,
+    permissions: [
+      P.COMMUNITY_READ,
+      P.HIERARCHY_READ,
+      P.UNIT_READ,
+      P.AMENITY_READ,
+      // Staff work their assigned tickets and service requests.
+      P.TICKET_VIEW,
+      P.TICKET_UPDATE,
+      P.TICKET_COMMENT,
+      P.TICKET_RESOLVE,
+      P.SERVICE_VIEW,
+      P.SERVICE_UPDATE,
+      P.SERVICE_COMPLETE,
+      // Staff execute work orders (not verify/close).
+      P.WORKORDER_VIEW,
+      P.WORKORDER_UPDATE,
+      P.WORKORDER_START,
+      P.WORKORDER_COMPLETE,
+      P.ASSET_READ,
+      P.VISITOR_READ,
+      P.VISITOR_CHECKIN,
+      P.VISITOR_CHECKOUT,
       P.ANNOUNCEMENT_READ,
     ],
   },

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { qk } from '@living/hooks';
-import { Avatar } from '@living/ui';
+import { qk, Can } from '@living/hooks';
+import { Avatar, Button } from '@living/ui';
+import { Upload } from 'lucide-react';
 import type { Resident } from '@living/types';
 
 import { useCommunity } from '../community/community-context';
@@ -10,6 +11,7 @@ import {
   ListScaffold, StatusBadge, useListQuery, type ListColumn,
 } from '../master-data';
 import { opt, RESIDENT_STATUS } from '../master-data/options';
+import { BulkUploadDrawer } from '../shared/bulk-upload';
 import { ResidentForm } from './resident-form';
 
 const columns: ListColumn<Resident>[] = [
@@ -32,22 +34,40 @@ const columns: ListColumn<Resident>[] = [
       ? <span className="font-mono">{r.unitAssignment.unit.unitNumber}</span>
       : <span className="text-subtle">—</span>,
   },
+  {
+    key: 'occupancy', header: 'Occupancy',
+    cell: (r) => {
+      const role = r.unitAssignment?.role;
+      return role === 'OWNER' || role === 'TENANT'
+        ? <span className="text-sm">{role === 'OWNER' ? 'Owner' : 'Tenant'}</span>
+        : <span className="text-subtle">—</span>;
+    },
+  },
   { key: 'status', header: 'Status', sortKey: 'status', cell: (r) => <StatusBadge status={r.status} /> },
+];
+
+const TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'OWNER', label: 'Owners' },
+  { key: 'TENANT', label: 'Tenants' },
 ];
 
 export function ResidentsListPage() {
   const { communityId } = useCommunity();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const query = useListQuery<Resident>({
     queryKey: qk.residents(communityId ?? '', 'list'),
     basePath: '/residents',
-    filterKeys: ['status'],
+    filterKeys: ['status', 'role'],
     defaultSort: 'createdAt',
     enabled: !!communityId,
     fetch: (params) => living.people.listResidents(communityId!, params),
   });
+
+  const activeTab = query.filters.role ?? 'all';
 
   return (
     <>
@@ -60,17 +80,34 @@ export function ResidentsListPage() {
         onRowClick={(r) => navigate({ to: `/residents/${r.id}` })}
         searchPlaceholder="Search name, mobile, email, code…"
         filters={[{ key: 'status', placeholder: 'All statuses', options: opt(RESIDENT_STATUS) }]}
+        tabs={{ items: TABS, active: activeTab, onChange: (k) => query.setFilter('role', k === 'all' ? '' : k) }}
         createPermission="resident:create"
         createLabel="Add resident"
         onCreate={() => setCreating(true)}
+        headerActions={
+          <Can perm="resident:create">
+            <Button variant="secondary" onClick={() => setUploading(true)}>
+              <Upload className="h-4 w-4" /> Bulk upload
+            </Button>
+          </Can>
+        }
       />
       {communityId && (
-        <ResidentForm
-          open={creating}
-          onOpenChange={setCreating}
-          communityId={communityId}
-          onSaved={() => query.refetch()}
-        />
+        <>
+          <ResidentForm
+            open={creating}
+            onOpenChange={setCreating}
+            communityId={communityId}
+            onSaved={() => query.refetch()}
+          />
+          <BulkUploadDrawer
+            open={uploading}
+            onOpenChange={setUploading}
+            kind="residents"
+            communityId={communityId}
+            onDone={() => query.refetch()}
+          />
+        </>
       )}
     </>
   );

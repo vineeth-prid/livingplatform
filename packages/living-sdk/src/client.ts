@@ -4,6 +4,7 @@ import { HttpClient } from './http';
 import { AmcResource } from './resources/amc';
 import { AssetCategoryResource, AssetResource } from './resources/assets';
 import { AuthResource } from './resources/auth';
+import { CatalogResource } from './resources/catalog';
 import { CommunityResource } from './resources/community';
 import {
   AmenitiesResource, AnnouncementsResource, BookingsResource, DocumentsResource, VisitorsResource,
@@ -57,6 +58,7 @@ export class LivingClient {
   readonly amenities: AmenitiesResource;
   readonly documents: DocumentsResource;
   readonly platform: PlatformResource;
+  readonly catalog: CatalogResource;
 
   constructor(config: LivingClientConfig) {
     this.tokenStore = config.tokenStore ?? createLocalStorageTokenStore();
@@ -82,6 +84,7 @@ export class LivingClient {
     this.amenities = new AmenitiesResource(this.http);
     this.documents = new DocumentsResource(this.http);
     this.platform = new PlatformResource(this.http);
+    this.catalog = new CatalogResource(this.http);
   }
 
   /** Decoded access-token payload (roles/permissions/expiry) or null. */

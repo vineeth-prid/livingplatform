@@ -17,15 +17,12 @@ export type ThemePreference = 'LIGHT' | 'DARK' | 'SYSTEM';
 
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER' | 'UNDISCLOSED';
 export type ResidentStatus = 'ACTIVE' | 'INACTIVE' | 'MOVED_OUT';
-export type ResidentRole = 'PRIMARY' | 'SECONDARY';
+export type ResidentRole = 'PRIMARY' | 'SECONDARY' | 'OWNER' | 'TENANT';
 export type PersonStatus = 'ACTIVE' | 'INACTIVE';
-export type VendorCategory =
-  | 'ELECTRICAL' | 'PLUMBING' | 'CIVIL' | 'HOUSEKEEPING' | 'SECURITY'
-  | 'GARDENING' | 'PEST_CONTROL' | 'LIFT' | 'DG' | 'STP' | 'HVAC'
-  | 'PAINTING' | 'GENERAL';
-export type StaffRole =
-  | 'FACILITY_MANAGER' | 'SUPERVISOR' | 'SECURITY' | 'HOUSEKEEPING'
-  | 'ELECTRICIAN' | 'PLUMBER' | 'TECHNICIAN' | 'ADMIN';
+// Staff role & vendor category are tenant-managed free strings (CatalogOption),
+// no longer fixed enums.
+export type VendorCategory = string;
+export type StaffRole = string;
 
 export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type TicketStatus =
@@ -38,9 +35,11 @@ export type ServiceRequestStatus =
   | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';
 
 export type WorkOrderStatus =
+  | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
   | 'DRAFT' | 'ASSIGNED' | 'ACCEPTED' | 'IN_PROGRESS' | 'ON_HOLD'
   | 'COMPLETED' | 'VERIFIED' | 'CLOSED' | 'CANCELLED';
-export type WorkOrderOriginType = 'MANUAL' | 'TICKET' | 'SERVICE_REQUEST';
+export type WorkOrderOriginType =
+  | 'MANUAL' | 'TICKET' | 'SERVICE_REQUEST' | 'PREVENTIVE_MAINTENANCE' | 'AMC';
 
 // ── Asset Foundation ──
 export type AssetStatus =

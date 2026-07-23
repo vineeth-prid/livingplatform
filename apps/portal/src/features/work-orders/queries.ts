@@ -37,6 +37,14 @@ export function useWorkOrderMutations(id: string) {
     mutationFn: (remarks?: string) => living.workOrder.verify(id, remarks),
     onSuccess: invalidate,
   });
+  const approve = useMutation({
+    mutationFn: (remarks?: string) => living.workOrder.approve(id, remarks),
+    onSuccess: invalidate,
+  });
+  const reject = useMutation({
+    mutationFn: (reason: string) => living.workOrder.reject(id, reason),
+    onSuccess: invalidate,
+  });
   const addUpdate = useMutation({
     mutationFn: (input: { comment: string; progressPercent?: number; isInternal?: boolean }) =>
       living.workOrder.addUpdate(id, input),
@@ -57,5 +65,5 @@ export function useWorkOrderMutations(id: string) {
     onSuccess: invalidate,
   });
 
-  return { changeStatus, assign, verify, addUpdate, addAttachment };
+  return { changeStatus, assign, verify, approve, reject, addUpdate, addAttachment };
 }

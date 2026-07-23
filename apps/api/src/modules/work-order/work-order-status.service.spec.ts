@@ -7,6 +7,17 @@ import { formatWorkOrderNumber } from './work-order.service';
 describe('WorkOrderStatusService (transitions)', () => {
   const svc = new WorkOrderStatusService();
 
+  it('routes the approval lane (recommend → approve → execution)', () => {
+    expect(svc.canTransition(W.PENDING_APPROVAL, W.APPROVED)).toBe(true);
+    expect(svc.canTransition(W.PENDING_APPROVAL, W.REJECTED)).toBe(true);
+    expect(svc.canTransition(W.APPROVED, W.ASSIGNED)).toBe(true);
+    // A recommendation cannot jump straight into execution.
+    expect(svc.canTransition(W.PENDING_APPROVAL, W.ASSIGNED)).toBe(false);
+    expect(svc.canTransition(W.APPROVED, W.IN_PROGRESS)).toBe(false);
+    // REJECTED is terminal.
+    expect(svc.isTerminal(W.REJECTED)).toBe(true);
+  });
+
   it('allows the happy-path lifecycle', () => {
     expect(svc.canTransition(W.DRAFT, W.ASSIGNED)).toBe(true);
     expect(svc.canTransition(W.ASSIGNED, W.ACCEPTED)).toBe(true);

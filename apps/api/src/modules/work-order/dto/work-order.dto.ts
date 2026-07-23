@@ -38,6 +38,12 @@ export class CreateWorkOrderDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
   estimatedHours?: number;
 
+  @ApiPropertyOptional({ example: 4000, description: 'Estimated labour cost' })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) estimatedLabourCost?: number;
+
+  @ApiPropertyOptional({ example: 12000, description: 'Estimated material cost' })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) estimatedMaterialCost?: number;
+
   @ApiPropertyOptional({ type: String, format: 'date-time' })
   @IsOptional() @Type(() => Date) dueDate?: Date;
 
@@ -54,6 +60,12 @@ export class UpdateWorkOrderDto {
 
   @ApiPropertyOptional({ example: 2.5 })
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) estimatedHours?: number;
+
+  @ApiPropertyOptional({ example: 4000 })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) estimatedLabourCost?: number;
+
+  @ApiPropertyOptional({ example: 12000 })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) estimatedMaterialCost?: number;
 
   @ApiPropertyOptional({ example: 3 })
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) actualHours?: number;
@@ -86,6 +98,16 @@ export class AssignWorkOrderDto {
 export class VerifyWorkOrderDto {
   @ApiPropertyOptional({ example: 'Checked on site — fittings working, area clean.' })
   @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
+}
+
+export class ApproveWorkOrderDto {
+  @ApiPropertyOptional({ example: 'Budget available — proceed with the contractor.' })
+  @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
+}
+
+export class RejectWorkOrderDto {
+  @ApiProperty({ example: 'Out of budget this quarter — defer to next cycle.' })
+  @IsString() @MinLength(3) @MaxLength(2000) reason!: string;
 }
 
 export class QueryWorkOrderDto extends ListQueryDto {

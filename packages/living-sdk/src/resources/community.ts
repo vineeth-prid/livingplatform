@@ -90,6 +90,12 @@ export class CommunityResource {
   createUnit(communityId: string, input: Body): Promise<Unit> {
     return this.http.post(`/communities/${communityId}/units`, input);
   }
+  bulkCreateUnits(
+    communityId: string,
+    rows: Body[],
+  ): Promise<{ created: number; failed: number; errors: { row: number; unitNumber: string; error: string }[] }> {
+    return this.http.post(`/communities/${communityId}/units/bulk`, { rows });
+  }
   getUnit(id: string): Promise<Unit> {
     return this.http.get(`/units/${id}`);
   }

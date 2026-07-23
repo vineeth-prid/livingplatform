@@ -69,6 +69,9 @@ function UploadDrawer({ communityId, open, onClose, onSaved }: { communityId: st
       if (!file || !title.trim()) throw new Error('Choose a file and title');
       const contentType = file.type || 'application/octet-stream';
       const signed = await living.documents.uploadUrl(communityId, { fileName: file.name, contentType });
+      // PUT the bytes to the presigned URL so the document is actually viewable.
+      const put = await fetch(signed.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
+      if (!put.ok) throw new Error('Upload failed — could not store the file');
       return living.documents.create(communityId, { title: title.trim(), category, status: 'PUBLISHED', storageKey: signed.key, fileName: file.name, mimeType: contentType, fileSize: file.size });
     },
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['documents'] }); toast.success('Document uploaded'); setFile(null); setTitle(''); onClose(); onSaved(); },
@@ -83,7 +86,6 @@ function UploadDrawer({ communityId, open, onClose, onSaved }: { communityId: st
           <Button variant="secondary" onClick={() => inputRef.current?.click()}><Upload className="h-4 w-4" /> {file ? file.name : 'Choose file'}</Button>
           <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Society bye-laws 2026" />
           <SelectField label="Category" value={category} onChange={setCategory} options={CATEGORY.map((c) => ({ value: c, label: humanize(c) }))} />
-          <p className="text-xs text-subtle">Storage is a metadata stub this phase — the record registers; byte upload wires in with a real provider.</p>
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="secondary" onClick={onClose}>Cancel</Button>
             <Button onClick={() => save.mutate()} loading={save.isPending} disabled={!file || !title.trim()}>Upload</Button>

@@ -10,6 +10,9 @@ import type { TimelineEvent } from '@living/types';
 // Covers ticket, service-request and work-order event types.
 const ICON: Record<string, ReactNode> = {
   CREATED: <CircleDot className="h-3 w-3" />,
+  RECOMMENDED: <CircleDot className="h-3 w-3" />,
+  APPROVED: <CheckCircle2 className="h-3 w-3" />,
+  REJECTED: <XCircle className="h-3 w-3" />,
   UPDATED: <RefreshCw className="h-3 w-3" />,
   ASSIGNED: <UserPlus className="h-3 w-3" />,
   REASSIGNED: <UserPlus className="h-3 w-3" />,

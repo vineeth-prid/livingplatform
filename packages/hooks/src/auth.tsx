@@ -20,6 +20,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (input: LoginInput) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-fetch /auth/me (e.g. after a forced password change). */
+  refreshSession: () => Promise<void>;
   hasPermission: (perm: Permission) => boolean;
   hasAnyPermission: (perms: Permission[]) => boolean;
   hasAllPermissions: (perms: Permission[]) => boolean;
@@ -64,6 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [living, queryClient],
   );
 
+  const refreshSession = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: qk.session });
+  }, [queryClient]);
+
   const logout = useCallback(async () => {
     await living.auth.logout();
     setTokenPresent(false);
@@ -102,11 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: status === 'authenticated',
       login,
       logout,
+      refreshSession,
       hasPermission,
       hasAnyPermission,
       hasAllPermissions,
     }),
-    [session, status, login, logout, hasPermission, hasAnyPermission, hasAllPermissions],
+    [session, status, login, logout, refreshSession, hasPermission, hasAnyPermission, hasAllPermissions],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

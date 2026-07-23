@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { LivingApiError } from '@living/living-sdk';
 import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 
-export type FieldType = 'text' | 'email' | 'tel' | 'number' | 'date' | 'textarea' | 'select';
+export type FieldType = 'text' | 'email' | 'tel' | 'number' | 'date' | 'textarea' | 'select' | 'custom';
 
 export interface FieldDef {
   name: string;
@@ -13,6 +13,10 @@ export interface FieldDef {
   options?: { value: string; label: string }[];
   /** Two-column layout on wider screens. */
   half?: boolean;
+  /** Read-only display (still submitted). */
+  readOnly?: boolean;
+  /** For type: 'custom' — render your own control bound to this field's value. */
+  render?: (value: string, setValue: (v: string) => void, error?: string) => ReactNode;
 }
 
 type Values = Record<string, string>;
@@ -74,7 +78,9 @@ export function FormDrawer({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {fields.map((f) => (
               <div key={f.name} className={f.half ? '' : 'sm:col-span-2'}>
-                {f.type === 'select' ? (
+                {f.type === 'custom' && f.render ? (
+                  f.render(values[f.name] ?? '', (v) => set(f.name, v), errors[f.name])
+                ) : f.type === 'select' ? (
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-strong">{f.label}</span>
                     <select
@@ -109,6 +115,8 @@ export function FormDrawer({
                     onChange={(e) => set(f.name, e.target.value)}
                     placeholder={f.placeholder}
                     error={errors[f.name]}
+                    readOnly={f.readOnly}
+                    disabled={f.readOnly}
                   />
                 )}
               </div>

@@ -18,6 +18,15 @@ export class WorkOrderResource {
   create(communityId: string, input: Body): Promise<WorkOrder> {
     return this.http.post(`/communities/${communityId}/work-orders`, input);
   }
+  recommend(communityId: string, input: Body): Promise<WorkOrder> {
+    return this.http.post(`/communities/${communityId}/work-orders/recommend`, input);
+  }
+  approve(id: string, remarks?: string): Promise<WorkOrder> {
+    return this.http.post(`/work-orders/${id}/approve`, { remarks });
+  }
+  reject(id: string, reason: string): Promise<WorkOrder> {
+    return this.http.post(`/work-orders/${id}/reject`, { reason });
+  }
   get(id: string): Promise<WorkOrder> {
     return this.http.get(`/work-orders/${id}`);
   }

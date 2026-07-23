@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { qk } from '@living/hooks';
+import { qk, Can } from '@living/hooks';
+import { Button } from '@living/ui';
+import { Upload } from 'lucide-react';
 import type { Unit } from '@living/types';
 
 import { useCommunity } from '../community/community-context';
 import { living } from '../../lib/living';
 import { ListScaffold, StatusBadge, useListQuery, type ListColumn } from '../master-data';
 import { opt, OWNERSHIP, UNIT_STATUS } from '../master-data/options';
+import { BulkUploadDrawer } from '../shared/bulk-upload';
 import { UnitForm } from './unit-form';
 
 const ownershipLabel = (o: string) => o.charAt(0) + o.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -16,6 +19,7 @@ export function UnitsListPage() {
   const { communityId } = useCommunity();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Resolve block ids → names once, so the list can show block without N+1 fetches.
   const { data: blocks } = useQuery({
@@ -67,9 +71,19 @@ export function UnitsListPage() {
         createPermission="unit:create"
         createLabel="Add unit"
         onCreate={() => setCreating(true)}
+        headerActions={
+          <Can perm="unit:create">
+            <Button variant="secondary" onClick={() => setUploading(true)}>
+              <Upload className="h-4 w-4" /> Bulk upload
+            </Button>
+          </Can>
+        }
       />
       {communityId && (
-        <UnitForm open={creating} onOpenChange={setCreating} communityId={communityId} onSaved={() => query.refetch()} />
+        <>
+          <UnitForm open={creating} onOpenChange={setCreating} communityId={communityId} onSaved={() => query.refetch()} />
+          <BulkUploadDrawer open={uploading} onOpenChange={setUploading} kind="units" communityId={communityId} onDone={() => query.refetch()} />
+        </>
       )}
     </>
   );

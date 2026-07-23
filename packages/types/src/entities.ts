@@ -59,6 +59,7 @@ export interface Unit extends AuditFields {
   unitNumber: string; type?: string | null; bedrooms?: number | null; bathrooms?: number | null;
   builtUpArea?: number | null; areaUnit: string; parkingSlots: number;
   status: UnitStatus; ownership: OwnershipType;
+  ownerName?: string | null; ownerPhone?: string | null;
 }
 export interface Amenity extends AuditFields {
   id: ID; communityId: ID; name: string; code?: string | null; category?: string | null;
@@ -167,6 +168,10 @@ export interface WorkOrder extends AuditFields {
   title: string; description: string; priority: TicketPriority; status: WorkOrderStatus;
   assignedStaffId?: ID | null; assignedVendorId?: ID | null; reassignedCount: number;
   originType: WorkOrderOriginType; originId?: ID | null;
+  requestedById?: ID | null; requestedDate?: ISODate | null;
+  recommendedById?: ID | null; approvedById?: ID | null; approvedDate?: ISODate | null;
+  rejectionReason?: string | null;
+  estimatedLabourCost?: string | null; estimatedMaterialCost?: string | null; estimatedTotalCost?: string | null;
   estimatedHours?: number | null; actualHours?: number | null;
   dueDate?: ISODate | null; startedDate?: ISODate | null; completedDate?: ISODate | null;
   verifiedDate?: ISODate | null; verificationRemarks?: string | null;
