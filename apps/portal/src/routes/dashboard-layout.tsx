@@ -68,21 +68,15 @@ export function DashboardLayout() {
   const commandPalette = useCommandPalette();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // Platform Admins run the control plane only — provisioning/config. The
-  // operational sections (assets, AMC, tickets, community ops…) belong to the
-  // association that runs each community, so a Platform Admin never sees them.
+  // Platform Admins run the control plane (provisioning) AND build out the
+  // communities they provision. They get the admin section plus every
+  // operational section, and pick which community to work in via the switcher
+  // below (their community list spans all tenants).
   const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const visibleSections = useMemo(
-    () => (isPlatform ? [adminSection] : sections),
+    () => (isPlatform ? [adminSection, ...sections] : sections),
     [isPlatform],
   );
-
-  // A Platform Admin has no operational dashboard — land them on the control plane.
-  useEffect(() => {
-    if (isPlatform && pathname === '/') {
-      navigate({ to: '/admin/communities', replace: true });
-    }
-  }, [isPlatform, pathname, navigate]);
 
   // Register global command-palette actions for navigation.
   useEffect(() => {
@@ -113,12 +107,13 @@ export function DashboardLayout() {
           </Link>
         )}
         sidebarHeader={
-          isPlatform ? (
-            <div className="flex items-center gap-2 px-1 py-1.5">
-              <ShieldCheck className="h-5 w-5 text-brand" />
-              <span className="text-sm font-semibold text-strong">Platform admin</span>
-            </div>
-          ) : (
+          <div className="flex flex-col gap-2">
+            {isPlatform && (
+              <div className="flex items-center gap-2 px-1 pt-0.5">
+                <ShieldCheck className="h-4 w-4 text-brand" />
+                <span className="text-2xs font-semibold uppercase tracking-wider text-subtle">Platform admin</span>
+              </div>
+            )}
             <WorkspaceSwitcher
               workspaces={communities.map((c) => ({
                 id: c.id,
@@ -128,7 +123,7 @@ export function DashboardLayout() {
               activeId={communityId ?? undefined}
               onSelect={setCommunityId}
             />
-          )
+          </div>
         }
         headerRight={
           <div className="flex items-center gap-2">

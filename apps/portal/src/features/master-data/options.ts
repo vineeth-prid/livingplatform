@@ -9,6 +9,10 @@ export const RESIDENT_STATUS = ['ACTIVE', 'INACTIVE', 'MOVED_OUT'] as const;
 export const PERSON_STATUS = ['ACTIVE', 'INACTIVE'] as const;
 export const GENDER = ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'] as const;
 export const UNIT_STATUS = ['VACANT', 'OCCUPIED', 'RESERVED', 'UNDER_MAINTENANCE'] as const;
+export const HIERARCHY_STATUS = ['ACTIVE', 'INACTIVE', 'ARCHIVED'] as const;
+export const BLOCK_TYPE = [
+  'TOWER', 'VILLA_CLUSTER', 'COMMERCIAL_BLOCK', 'PLOT', 'PODIUM', 'OTHER',
+] as const;
 export const OWNERSHIP = ['OWNER_OCCUPIED', 'TENANTED', 'VACANT', 'UNKNOWN'] as const;
 export const VENDOR_CATEGORY = [
   'ELECTRICAL', 'PLUMBING', 'CIVIL', 'HOUSEKEEPING', 'SECURITY', 'GARDENING',
