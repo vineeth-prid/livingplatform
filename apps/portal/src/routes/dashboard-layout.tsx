@@ -11,6 +11,7 @@ import {
 } from '@living/ui';
 
 import { useCommunity } from '../features/community/community-context';
+import { exitImpersonation, getImpersonation } from '../features/admin/impersonation';
 import { RequireAuth } from './guards';
 
 // Foundation nav — feature sprints extend these sections. Hrefs are illustrative;
@@ -68,15 +69,21 @@ export function DashboardLayout() {
   const commandPalette = useCommandPalette();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // Platform Admins run the control plane (provisioning) AND build out the
-  // communities they provision. They get the admin section plus every
-  // operational section, and pick which community to work in via the switcher
-  // below (their community list spans all tenants).
+  // Platform Admins run the control plane only — provisioning/config. The
+  // operational sections (assets, AMC, tickets, community ops…) belong to the
+  // association that runs each community, so a Platform Admin never sees them.
   const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const visibleSections = useMemo(
-    () => (isPlatform ? [adminSection, ...sections] : sections),
+    () => (isPlatform ? [adminSection] : sections),
     [isPlatform],
   );
+
+  // A Platform Admin has no operational dashboard — land them on the control plane.
+  useEffect(() => {
+    if (isPlatform && pathname === '/') {
+      navigate({ to: '/admin/communities', replace: true });
+    }
+  }, [isPlatform, pathname, navigate]);
 
   // Register global command-palette actions for navigation.
   useEffect(() => {
@@ -93,6 +100,8 @@ export function DashboardLayout() {
 
   const user = session?.user;
   const fullName = user ? `${user.firstName} ${user.lastName}` : 'Living';
+  // Non-reactive (only changes across a full reload) — read once per render.
+  const impersonating = getImpersonation();
 
   return (
     <RequireAuth>
@@ -107,13 +116,12 @@ export function DashboardLayout() {
           </Link>
         )}
         sidebarHeader={
-          <div className="flex flex-col gap-2">
-            {isPlatform && (
-              <div className="flex items-center gap-2 px-1 pt-0.5">
-                <ShieldCheck className="h-4 w-4 text-brand" />
-                <span className="text-2xs font-semibold uppercase tracking-wider text-subtle">Platform admin</span>
-              </div>
-            )}
+          isPlatform ? (
+            <div className="flex items-center gap-2 px-1 py-1.5">
+              <ShieldCheck className="h-5 w-5 text-brand" />
+              <span className="text-sm font-semibold text-strong">Platform admin</span>
+            </div>
+          ) : (
             <WorkspaceSwitcher
               workspaces={communities.map((c) => ({
                 id: c.id,
@@ -123,7 +131,7 @@ export function DashboardLayout() {
               activeId={communityId ?? undefined}
               onSelect={setCommunityId}
             />
-          </div>
+          )
         }
         headerRight={
           <div className="flex items-center gap-2">
@@ -138,6 +146,20 @@ export function DashboardLayout() {
           </div>
         }
       >
+        {impersonating && (
+          <div className="flex items-center justify-between gap-3 bg-brand px-4 py-2 text-inverse">
+            <span className="text-sm font-medium">
+              Viewing <strong>{impersonating}</strong> as its admin — changes apply to this community.
+            </span>
+            <button
+              type="button"
+              onClick={exitImpersonation}
+              className="rounded-control border border-white/30 px-3 py-1 text-sm font-medium transition-colors hover:bg-white/15"
+            >
+              Exit to platform admin
+            </button>
+          </div>
+        )}
         <Suspense fallback={<LoadingState className="h-[60vh]" />}>
           <Outlet />
         </Suspense>

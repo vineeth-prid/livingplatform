@@ -1,4 +1,4 @@
-import type { ListParams, Paginated } from '@living/types';
+import type { AuthResult, ListParams, Paginated } from '@living/types';
 
 import type { HttpClient } from '../http';
 
@@ -31,6 +31,17 @@ export class PlatformResource {
   /** Provision a community + its Association Admin in one call (Platform Admin only). */
   provisionCommunity<C = unknown>(input: ProvisionCommunityInput): Promise<ProvisionCommunityResult<C>> {
     return this.http.post('/admin/communities', input);
+  }
+
+  /**
+   * "Log in as" a community's Association Admin (Platform Admin only). Swaps the
+   * client's tokens to the community admin's session — the caller is responsible
+   * for stashing the platform tokens first if it wants to return.
+   */
+  async loginAsCommunity(communityId: string): Promise<AuthResult> {
+    const result = await this.http.post<AuthResult>(`/admin/communities/${communityId}/login-as`);
+    this.http.setTokens({ accessToken: result.accessToken, refreshToken: result.refreshToken });
+    return result;
   }
 
   // RBAC

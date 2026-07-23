@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '@living/hooks';
-import type { ProvisionCommunityResult } from '@living/living-sdk';
+import { LivingApiError, type ProvisionCommunityResult } from '@living/living-sdk';
 import {
   Badge, Button, Card, EmptyState, LoadingState, PageContainer, PageHeader,
   PageTransition, toast,
 } from '@living/ui';
-import { Building2, Copy, KeyRound, Plus } from 'lucide-react';
+import { Building2, Copy, KeyRound, LogIn, Plus } from 'lucide-react';
 
 import { living } from '../../lib/living';
+import { beginImpersonation, cancelImpersonation } from './impersonation';
 import { ProvisionCommunityForm } from './provision-community-form';
 import { StatusBadge } from '../master-data';
 
@@ -22,6 +23,7 @@ const typeLabel = (t: string) => t.charAt(0) + t.slice(1).toLowerCase();
 export function AdminCommunitiesPage() {
   const [provisioning, setProvisioning] = useState(false);
   const [credentials, setCredentials] = useState<ProvisionCommunityResult['admin'] | null>(null);
+  const [loggingInId, setLoggingInId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: qk.communities({ limit: 100 }),
@@ -32,6 +34,21 @@ export function AdminCommunitiesPage() {
 
   const copy = (text: string) => {
     void navigator.clipboard.writeText(text).then(() => toast.success('Copied'));
+  };
+
+  // Swap into the community admin's session; a full reload re-bootstraps the app
+  // as that admin. The banner (dashboard shell) offers the return trip.
+  const loginAs = async (id: string, name: string) => {
+    setLoggingInId(id);
+    beginImpersonation(name);
+    try {
+      await living.platform.loginAsCommunity(id);
+      window.location.assign('/');
+    } catch (err) {
+      cancelImpersonation();
+      setLoggingInId(null);
+      toast.error(err instanceof LivingApiError ? err.message : 'Could not sign in as this community');
+    }
   };
 
   return (
@@ -92,6 +109,14 @@ export function AdminCommunitiesPage() {
                     </span>
                     <Badge tone="neutral" size="sm">{typeLabel(c.type)}</Badge>
                     <StatusBadge status={c.status} />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={loggingInId === c.id}
+                      onClick={() => loginAs(c.id, c.name)}
+                    >
+                      <LogIn className="h-4 w-4" /> Log in as admin
+                    </Button>
                   </span>
                 </li>
               ))}
