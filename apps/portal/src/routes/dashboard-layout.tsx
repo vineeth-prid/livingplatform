@@ -65,6 +65,7 @@ const adminSection: NavSection = {
     { label: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
     { label: 'Audit & monitoring', icon: Activity, href: '/admin/audit' },
     { label: 'System', icon: Server, href: '/admin/system' },
+    { label: 'Notifications', icon: Megaphone, href: '/admin/notifications' },
     { label: 'Community management', icon: ShieldCheck, href: '/admin/communities' },
   ],
 };

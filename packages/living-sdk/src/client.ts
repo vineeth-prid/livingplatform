@@ -10,6 +10,7 @@ import {
   AmenitiesResource, AnnouncementsResource, BookingsResource, DocumentsResource, VisitorsResource,
 } from './resources/community-ops';
 import { MaintenanceResource } from './resources/maintenance';
+import { NotificationsResource } from './resources/notifications';
 import { PeopleResource } from './resources/people';
 import { PlatformResource } from './resources/platform';
 import { ServiceRequestResource } from './resources/service-requests';
@@ -59,6 +60,7 @@ export class LivingClient {
   readonly documents: DocumentsResource;
   readonly platform: PlatformResource;
   readonly catalog: CatalogResource;
+  readonly notifications: NotificationsResource;
 
   constructor(config: LivingClientConfig) {
     this.tokenStore = config.tokenStore ?? createLocalStorageTokenStore();
@@ -85,6 +87,7 @@ export class LivingClient {
     this.documents = new DocumentsResource(this.http);
     this.platform = new PlatformResource(this.http);
     this.catalog = new CatalogResource(this.http);
+    this.notifications = new NotificationsResource(this.http);
   }
 
   /** Decoded access-token payload (roles/permissions/expiry) or null. */

@@ -45,6 +45,7 @@ const AdminCommunitiesPage = lazy(() => import('./features/admin/admin-communiti
 const PlatformDashboardPage = lazy(() => import('./features/platform-admin/platform-dashboard').then((m) => ({ default: m.PlatformDashboardPage })));
 const PlatformAuditPage = lazy(() => import('./features/platform-admin/platform-audit').then((m) => ({ default: m.PlatformAuditPage })));
 const PlatformSystemPage = lazy(() => import('./features/platform-admin/platform-system').then((m) => ({ default: m.PlatformSystemPage })));
+const PlatformNotificationsPage = lazy(() => import('./features/platform-admin/platform-notifications').then((m) => ({ default: m.PlatformNotificationsPage })));
 
 // Community Operations (Frontend Sprint 9).
 const VisitorsPage = lazy(() => import('./features/visitors/visitors-list').then((m) => ({ default: m.VisitorsPage })));
@@ -95,6 +96,7 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/dashboard', component: PlatformDashboardPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/audit', component: PlatformAuditPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/system', component: PlatformSystemPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/notifications', component: PlatformNotificationsPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/communities', component: AdminCommunitiesPage }),
 
     // Community & People Management (this sprint)

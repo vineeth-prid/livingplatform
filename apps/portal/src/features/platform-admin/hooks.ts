@@ -136,3 +136,29 @@ export function useAuditSummary() {
     refetchInterval: REFRESH,
   });
 }
+
+// ── Notification Engine · Email ───────────────────────────────────────────────
+
+export function useEmailProvider() {
+  return useQuery({
+    queryKey: ['platform', 'email', 'provider'],
+    queryFn: () => living.notifications.email.provider(),
+    refetchInterval: REFRESH,
+  });
+}
+
+export function useEmailHealth() {
+  return useQuery({
+    queryKey: ['platform', 'email', 'health'],
+    queryFn: () => living.notifications.email.health(),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useEmailStatistics() {
+  return useQuery({
+    queryKey: ['platform', 'email', 'statistics'],
+    queryFn: () => living.notifications.email.statistics(24),
+    refetchInterval: REFRESH,
+  });
+}

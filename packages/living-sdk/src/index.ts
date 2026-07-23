@@ -26,3 +26,8 @@ export {
   type ProvisionCommunityResult,
 } from './resources/platform';
 export { CatalogResource, type CatalogKind, type CatalogOption } from './resources/catalog';
+export {
+  NotificationsResource, EmailAdminResource,
+  type EmailProviderName, type EmailProviderInfo, type EmailHealth,
+  type EmailTestResult, type EmailStatistics,
+} from './resources/notifications';
