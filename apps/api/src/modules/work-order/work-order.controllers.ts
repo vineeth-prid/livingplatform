@@ -21,10 +21,12 @@ import {
 } from './dto/attachment.dto';
 import { CreateWorkOrderUpdateDto } from './dto/update.dto';
 import {
+  ApproveWorkOrderDto,
   AssignWorkOrderDto,
   ChangeWorkOrderStatusDto,
   CreateWorkOrderDto,
   QueryWorkOrderDto,
+  RejectWorkOrderDto,
   UpdateWorkOrderDto,
   VerifyWorkOrderDto,
 } from './dto/work-order.dto';
@@ -47,6 +49,17 @@ export class WorkOrderController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.workOrders.create(communityId, dto, user);
+  }
+
+  @Post('communities/:communityId/work-orders/recommend')
+  @RequirePermissions(PERMISSIONS.WORKORDER_RECOMMEND)
+  @ApiOperation({ summary: 'Recommend a work order for approval (starts PENDING_APPROVAL)' })
+  recommend(
+    @Param('communityId') communityId: string,
+    @Body() dto: CreateWorkOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.workOrders.recommend(communityId, dto, user);
   }
 
   @Get('communities/:communityId/work-orders')
@@ -94,6 +107,28 @@ export class WorkOrderController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.workOrders.assign(id, dto, user);
+  }
+
+  @Post('work-orders/:id/approve')
+  @RequirePermissions(PERMISSIONS.WORKORDER_APPROVE)
+  @ApiOperation({ summary: 'Approve a recommended work order → APPROVED' })
+  approve(
+    @Param('id') id: string,
+    @Body() dto: ApproveWorkOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.workOrders.approve(id, dto, user);
+  }
+
+  @Post('work-orders/:id/reject')
+  @RequirePermissions(PERMISSIONS.WORKORDER_APPROVE)
+  @ApiOperation({ summary: 'Reject a recommended work order → REJECTED (reason required)' })
+  reject(
+    @Param('id') id: string,
+    @Body() dto: RejectWorkOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.workOrders.reject(id, dto, user);
   }
 
   @Post('work-orders/:id/verify')

@@ -6,13 +6,28 @@ import { createWorkflow } from '../operations';
 type Tone = NonNullable<BadgeProps['tone']>;
 
 export const WO_TONES: Record<string, Tone> = {
+  PENDING_APPROVAL: 'warning', APPROVED: 'info', REJECTED: 'danger',
   DRAFT: 'neutral', ASSIGNED: 'brand', ACCEPTED: 'brand', IN_PROGRESS: 'warning',
   ON_HOLD: 'neutral', COMPLETED: 'info', VERIFIED: 'success', CLOSED: 'neutral', CANCELLED: 'danger',
 };
 
 export const WO_STATUSES = [
+  'PENDING_APPROVAL', 'APPROVED', 'REJECTED',
   'DRAFT', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'VERIFIED', 'CLOSED', 'CANCELLED',
 ] as const;
+
+/** Origins a Work Order can come from — every WO carries one prominently. */
+export const WO_ORIGINS = ['MANUAL', 'TICKET', 'SERVICE_REQUEST', 'PREVENTIVE_MAINTENANCE', 'AMC'] as const;
+
+export const WO_ORIGIN_LABEL: Record<string, string> = {
+  MANUAL: 'Manual', TICKET: 'Ticket', SERVICE_REQUEST: 'Service request',
+  PREVENTIVE_MAINTENANCE: 'Maintenance plan', AMC: 'AMC',
+};
+
+export const WO_ORIGIN_TONES: Record<string, Tone> = {
+  MANUAL: 'danger', TICKET: 'brand', SERVICE_REQUEST: 'info',
+  PREVENTIVE_MAINTENANCE: 'success', AMC: 'warning',
+};
 
 export const WO_KANBAN = [
   { status: 'DRAFT', label: 'Draft' },
@@ -27,6 +42,7 @@ const permissionFor = (to: WorkOrderStatus): Permission =>
     : to === 'COMPLETED' ? 'workorder:complete'
     : to === 'CLOSED' ? 'workorder:close'
     : to === 'VERIFIED' ? 'workorder:verify'
+    : to === 'APPROVED' || to === 'REJECTED' ? 'workorder:approve'
     : 'workorder:update';
 
 /**
@@ -36,6 +52,9 @@ const permissionFor = (to: WorkOrderStatus): Permission =>
  */
 export const woWorkflow = createWorkflow<WorkOrderStatus>({
   transitions: {
+    PENDING_APPROVAL: ['APPROVED', 'REJECTED', 'CANCELLED'],
+    APPROVED: ['ASSIGNED', 'CANCELLED'],
+    REJECTED: [],
     DRAFT: ['ASSIGNED', 'CANCELLED'],
     ASSIGNED: ['ACCEPTED', 'IN_PROGRESS', 'CANCELLED'],
     ACCEPTED: ['IN_PROGRESS', 'ON_HOLD', 'CANCELLED'],
@@ -47,10 +66,14 @@ export const woWorkflow = createWorkflow<WorkOrderStatus>({
     CANCELLED: [],
   },
   permissionFor,
-  excludeFromMenu: ['VERIFIED'],
+  // VERIFIED via the verify action; APPROVED/REJECTED via the approve/reject actions.
+  excludeFromMenu: ['VERIFIED', 'APPROVED', 'REJECTED'],
   label: (from, to) => {
     if (to === 'IN_PROGRESS' && (from === 'COMPLETED' || from === 'VERIFIED')) return 'Reopen';
     switch (to) {
+      case 'PENDING_APPROVAL': return 'Submit for approval';
+      case 'APPROVED': return 'Approve';
+      case 'REJECTED': return 'Reject';
       case 'DRAFT': return 'Move to draft';
       case 'ASSIGNED': return 'Mark assigned';
       case 'ACCEPTED': return 'Accept';

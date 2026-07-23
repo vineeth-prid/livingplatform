@@ -43,6 +43,7 @@ export interface PublicUser {
   tenantId: string | null;
   status: UserStatus;
   emailVerified: boolean;
+  mustChangePassword: boolean;
   roles: string[];
 }
 
@@ -125,8 +126,18 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, meta: RequestMeta): Promise<AuthResult> {
+    // Identifier is an email or a mobile number (people accounts log in with
+    // their phone as username — digits only, matching normalizePhone at signup).
+    const identifier = dto.email.trim();
+    const username = identifier.replace(/\D/g, '');
     const user = await this.prisma.user.findFirst({
-      where: { email: dto.email.toLowerCase(), deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { email: identifier.toLowerCase() },
+          ...(username.length >= 7 ? [{ username }] : []),
+        ],
+      },
     });
 
     // Constant-ish work whether or not the user exists to blunt enumeration:
@@ -230,6 +241,23 @@ export class AuthService {
     return this.toPublicUser(user, principal);
   }
 
+  /** Signed-in password change — used by the forced first-login flow. */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const ok = await argon2.verify(user.passwordHash, currentPassword).catch(() => false);
+    if (!ok) throw new BadRequestException('Current password is incorrect');
+    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
+    return { message: 'Your password has been changed.' };
+  }
+
   // ── verification token helpers (selector.verifier, same as refresh) ─────────
 
   private async createVerificationToken(
@@ -291,6 +319,7 @@ export class AuthService {
       tenantId: string | null;
       status: UserStatus;
       emailVerifiedAt: Date | null;
+      mustChangePassword?: boolean;
     },
     principal: AuthenticatedUser,
   ): PublicUser {
@@ -302,6 +331,7 @@ export class AuthService {
       tenantId: user.tenantId,
       status: user.status,
       emailVerified: user.emailVerifiedAt !== null,
+      mustChangePassword: user.mustChangePassword ?? false,
       roles: principal.roles.map((r) => r.key),
     };
   }

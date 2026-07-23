@@ -46,7 +46,9 @@ export function UnitForm({
     { name: 'parkingSlots', label: 'Parking slots', type: 'number', half: true },
     { name: 'builtUpArea', label: 'Built-up area (sqft)', type: 'number', half: true },
     { name: 'status', label: 'Status', type: 'select', options: opt(UNIT_STATUS), half: true },
-    { name: 'ownership', label: 'Ownership', type: 'select', options: opt(OWNERSHIP), half: true },
+    { name: 'ownership', label: 'Occupied By', type: 'select', options: opt(OWNERSHIP), half: true },
+    { name: 'ownerName', label: 'Owner name', half: true },
+    { name: 'ownerPhone', label: 'Owner phone', type: 'tel', half: true },
   ];
 
   return (
@@ -66,6 +68,7 @@ export function UnitForm({
               parkingSlots: String(unit.parkingSlots ?? 0),
               builtUpArea: unit.builtUpArea != null ? String(unit.builtUpArea) : '',
               status: unit.status, ownership: unit.ownership,
+              ownerName: unit.ownerName ?? '', ownerPhone: unit.ownerPhone ?? '',
             }
           : {}
       }

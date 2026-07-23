@@ -60,10 +60,10 @@ export function LoginPage() {
           </div>
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <Input
-              label="Email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@community.com"
+              label="Email or mobile"
+              type="text"
+              autoComplete="username"
+              placeholder="you@community.com or 9876543210"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

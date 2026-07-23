@@ -43,8 +43,9 @@ export class RegisterDto extends PasswordField {
 }
 
 export class LoginDto {
-  @ApiProperty({ example: 'admin@living.local' })
-  @IsEmail()
+  @ApiProperty({ example: 'admin@living.local', description: 'Email or mobile number' })
+  @IsString()
+  @MinLength(1)
   email!: string;
 
   @ApiProperty({ example: 'Living!2024' })
@@ -56,6 +57,13 @@ export class LoginDto {
   @IsOptional()
   @IsBoolean()
   rememberMe?: boolean;
+}
+
+export class ChangePasswordDto extends PasswordField {
+  @ApiProperty({ description: 'Current password' })
+  @IsString()
+  @MinLength(1)
+  currentPassword!: string;
 }
 
 export class RefreshTokenDto {

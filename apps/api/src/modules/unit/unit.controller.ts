@@ -14,7 +14,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PERMISSIONS } from '../rbac/rbac.constants';
-import { CreateUnitDto, QueryUnitDto, UpdateUnitDto } from './dto/unit.dto';
+import {
+  BulkUnitUploadDto,
+  CreateUnitDto,
+  QueryUnitDto,
+  UpdateUnitDto,
+} from './dto/unit.dto';
 import { UnitService } from './unit.service';
 
 @ApiTags('Units')
@@ -39,6 +44,17 @@ export class UnitController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.units.create(communityId, dto, user);
+  }
+
+  @Post('communities/:communityId/units/bulk')
+  @RequirePermissions(PERMISSIONS.UNIT_CREATE)
+  @ApiOperation({ summary: 'Bulk upload units (resolves/creates blocks & floors by name)' })
+  bulkCreate(
+    @Param('communityId') communityId: string,
+    @Body() dto: BulkUnitUploadDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.units.bulkCreate(communityId, dto, user);
   }
 
   @Get('units/:id')

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button, Card, Input } from '@living/ui';
 import { cn } from '@living/utils';
 
+import { EntitySelect } from '../shared/entity-select';
 import { ASSET_CONDITION, ASSET_CRITICALITY, ASSET_STATUS } from './config';
 
 export interface AssetValues {
@@ -82,6 +83,8 @@ interface AssetFormProps {
   submitting?: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
   onCancel: () => void;
+  /** Create a new category inline; return its id to auto-select. */
+  onCreateCategory?: (name: string) => Promise<string>;
 }
 
 const DRAFT_KEY = 'living.asset-draft';
@@ -92,7 +95,7 @@ const DRAFT_KEY = 'living.asset-draft';
  * (persisted to localStorage so navigating away never loses work). Photos and
  * documents are managed on the asset's page once it exists.
  */
-export function AssetForm({ mode, options, initial, submitting, onSubmit, onCancel }: AssetFormProps) {
+export function AssetForm({ mode, options, initial, submitting, onSubmit, onCancel, onCreateCategory }: AssetFormProps) {
   const [values, setValues] = useState<AssetValues>(() => {
     if (mode === 'create' && typeof window !== 'undefined') {
       const draft = window.localStorage.getItem(DRAFT_KEY);
@@ -124,8 +127,11 @@ export function AssetForm({ mode, options, initial, submitting, onSubmit, onCanc
     <div className="flex flex-col gap-5">
       <Section title="General" description="Identity and make of the asset.">
         <Grid>
-          <SelectField label="Category" required value={values.categoryId} onChange={(v) => set('categoryId', v)}
-            options={options.categories} placeholder="Select a category" error={err('categoryId')} />
+          <EntitySelect label="Category" required value={values.categoryId} onChange={(v) => set('categoryId', v)}
+            options={options.categories} placeholder="Select a category" error={err('categoryId')}
+            onCreate={onCreateCategory} />
+          </Grid>
+        <Grid>
           <Input label="Asset code" value={values.assetCode} onChange={(e) => set('assetCode', e.target.value)}
             placeholder="DG-001" error={err('assetCode')} />
           <div className="sm:col-span-2">

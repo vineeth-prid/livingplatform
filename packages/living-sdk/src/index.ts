@@ -25,3 +25,4 @@ export {
   type ProvisionCommunityInput,
   type ProvisionCommunityResult,
 } from './resources/platform';
+export { CatalogResource, type CatalogKind, type CatalogOption } from './resources/catalog';

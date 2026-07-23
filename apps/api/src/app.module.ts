@@ -21,6 +21,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { AuditInterceptor } from './modules/audit/audit.interceptor';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 import { CommunityModule } from './modules/community/community.module';
 import { DocumentModule } from './modules/document/document.module';
 import { EventsModule } from './modules/events/events.module';
@@ -100,6 +101,7 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     UnitModule,
     AmenityModule,
     SettingsModule,
+    CatalogModule,
     DocumentModule,
     ProfileModule,
     SearchModule,

@@ -10,12 +10,14 @@ import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
+import { AccountProvisioningService } from '../people/account-provisioning.service';
 import { UserLinkService } from '../people/user-link.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
   AssignUnitDto,
+  BulkResidentUploadDto,
   CreateResidentDto,
   QueryResidentDto,
   UpdateResidentDto,
@@ -40,6 +42,7 @@ export class ResidentService {
     private readonly access: CommunityAccessService,
     private readonly storage: StorageService,
     private readonly userLink: UserLinkService,
+    private readonly accounts: AccountProvisioningService,
     private readonly events: DomainEventsService,
   ) {}
 
@@ -49,11 +52,26 @@ export class ResidentService {
       await this.userLink.assertLinkable(dto.userId, community.tenantId);
     }
 
+    // Login account: username = mobile, common one-time password. Owners with
+    // multiple flats reuse their existing account (userId comes back null).
+    const userId = dto.userId ?? (await this.accounts.provisionLogin({
+      kind: 'resident',
+      tenantId: community.tenantId,
+      communityId,
+      phone: dto.mobile,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      email: dto.email,
+      actorId: actor.id,
+    }));
+
+    const residentCode = dto.residentCode ?? (await this.nextResidentCode(communityId));
+
     const resident = await this.prisma.resident.create({
       data: {
         communityId,
-        userId: dto.userId,
-        residentCode: dto.residentCode,
+        userId,
+        residentCode,
         firstName: dto.firstName,
         lastName: dto.lastName,
         mobile: dto.mobile,
@@ -73,13 +91,54 @@ export class ResidentService {
         updatedById: actor.id,
       },
     });
+
+    // Optional unit mapping on create — "Occupied By" becomes the assignment role.
+    if (dto.unitId) {
+      await this.assignUnit(resident.id, { unitId: dto.unitId, role: dto.occupiedBy }, actor);
+    }
+
     this.events.publish({
       name: DomainEventName.ResidentCreated,
       ...this.events.from(actor, communityId),
       entityId: resident.id,
       data: { residentCode: resident.residentCode },
     });
-    return this.present(resident);
+    return this.findOne(resident.id);
+  }
+
+  /** Bulk upload residents; unit mapped by unit number. Row-isolated. */
+  async bulkCreate(communityId: string, dto: BulkResidentUploadDto, actor: AuthenticatedUser) {
+    await this.access.assert(communityId);
+    let created = 0;
+    const errors: { row: number; mobile: string; error: string }[] = [];
+    for (let i = 0; i < dto.rows.length; i++) {
+      const row = dto.rows[i]!;
+      try {
+        let unitId: string | undefined;
+        if (row.unit) {
+          const unit = await this.prisma.unit.findFirst({
+            where: { communityId, unitNumber: { equals: row.unit.trim(), mode: 'insensitive' }, deletedAt: null },
+            select: { id: true },
+          });
+          if (!unit) throw new Error(`Unit "${row.unit}" not found`);
+          unitId = unit.id;
+        }
+        await this.create(communityId, {
+          firstName: row.firstName, lastName: row.lastName, mobile: row.mobile,
+          email: row.email, occupiedBy: row.occupiedBy, unitId,
+        }, actor);
+        created++;
+      } catch (err) {
+        errors.push({ row: i + 1, mobile: row.mobile, error: err instanceof Error ? err.message : 'Failed' });
+      }
+    }
+    return { created, failed: errors.length, errors };
+  }
+
+  /** Sequential per-community code: R-000001, R-000002, … (gaps are fine). */
+  private async nextResidentCode(communityId: string): Promise<string> {
+    const count = await this.prisma.resident.count({ where: { communityId } });
+    return `R-${String(count + 1).padStart(6, '0')}`;
   }
 
   async findMany(communityId: string, query: QueryResidentDto): Promise<Paginated<unknown>> {
@@ -88,9 +147,10 @@ export class ResidentService {
       communityId,
       deletedAt: null,
       ...(query.status ? { status: query.status } : {}),
-      ...(query.unitId || query.blockId || query.floorId
+      ...(query.unitId || query.blockId || query.floorId || query.role
         ? {
             unitAssignment: {
+              ...(query.role ? { role: query.role } : {}),
               ...(query.unitId ? { unitId: query.unitId } : {}),
               ...(query.blockId || query.floorId
                 ? {

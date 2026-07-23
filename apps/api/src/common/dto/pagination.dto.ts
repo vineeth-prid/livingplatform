@@ -11,12 +11,14 @@ export class PaginationQueryDto {
   @Min(1)
   page = 1;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
+  // 500 cap: dropdown/option queries legitimately fetch whole sets (units,
+  // floors, residents) — a 100 cap silently 400'd every option list above it.
+  @ApiPropertyOptional({ minimum: 1, maximum: 500, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(500)
   limit = 20;
 
   get skip(): number {

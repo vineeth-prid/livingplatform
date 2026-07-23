@@ -9,6 +9,7 @@ import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 import type { Ticket } from '@living/types';
 
 import { living } from '../../lib/living';
+import { EntitySelect, toKey } from '../shared/entity-select';
 import { useTicketCategories } from './queries';
 
 const schema = z.object({
@@ -38,13 +39,19 @@ export function TicketForm({
   const editing = !!ticket;
   const categories = useTicketCategories();
 
+  const createCategory = async (name: string) => {
+    const created = await living.ticket.createCategory({ key: toKey(name), name });
+    await qc.invalidateQueries({ queryKey: ['ticket-categories'] });
+    return (created as { id: string }).id;
+  };
+
   const units = useQuery({
     queryKey: [...qk.units(communityId, 'ticket-form')],
     queryFn: () => living.community.listUnits(communityId, { limit: 200, sortBy: 'unitNumber', sortDir: 'asc' }),
     enabled: open && !editing,
   });
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { priority: 'MEDIUM' },
   });
@@ -102,9 +109,10 @@ export function TicketForm({
           </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select label="Category" error={errors.categoryId?.message} {...register('categoryId')}
+            <EntitySelect label="Category" required error={errors.categoryId?.message}
+              value={watch('categoryId') ?? ''} onChange={(v) => setValue('categoryId', v, { shouldValidate: true })}
               options={(categories.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
-              placeholder={categories.isLoading ? 'Loading…' : 'Choose a category'} />
+              loading={categories.isLoading} placeholder="Choose a category" onCreate={createCategory} />
             <Select label="Priority" {...register('priority')}
               options={[
                 { value: 'LOW', label: 'Low' }, { value: 'MEDIUM', label: 'Medium' },

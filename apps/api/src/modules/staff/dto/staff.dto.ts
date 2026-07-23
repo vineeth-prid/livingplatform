@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { PersonStatus, StaffRole } from '@prisma/client';
+import { PersonStatus } from '@prisma/client';
 import {
   IsEmail,
   IsEnum,
@@ -12,9 +12,9 @@ import {
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
 export class CreateStaffDto {
-  @ApiProperty({ example: 'EMP-1007' })
-  @IsString() @MinLength(1) @MaxLength(40)
-  employeeId!: string;
+  @ApiPropertyOptional({ example: 'EMP-1007', description: 'Auto-generated when omitted' })
+  @IsOptional() @IsString() @MaxLength(40)
+  employeeId?: string;
 
   @ApiProperty({ example: 'Suresh' })
   @IsString() @MinLength(1) @MaxLength(80)
@@ -24,9 +24,9 @@ export class CreateStaffDto {
   @IsString() @MinLength(1) @MaxLength(80)
   lastName!: string;
 
-  @ApiProperty({ enum: StaffRole })
-  @IsEnum(StaffRole)
-  role!: StaffRole;
+  @ApiProperty({ example: 'FACILITY_MANAGER', description: 'Free string — managed via catalog options' })
+  @IsString() @MinLength(1) @MaxLength(60)
+  role!: string;
 
   @ApiPropertyOptional({ example: 'Maintenance' })
   @IsOptional() @IsString() @MaxLength(80) department?: string;
@@ -51,8 +51,7 @@ export class CreateStaffDto {
 export class UpdateStaffDto extends PartialType(CreateStaffDto) {}
 
 export class QueryStaffDto extends ListQueryDto {
-  @ApiPropertyOptional({ enum: StaffRole })
-  @IsOptional() @IsEnum(StaffRole) role?: StaffRole;
+  @ApiPropertyOptional() @IsOptional() @IsString() role?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() department?: string;
 

@@ -5,17 +5,27 @@ import { WorkOrderStatus } from '@prisma/client';
  * Authority on Work Order status transitions (same pattern as the Ticket/Service
  * status services — never hardcode transitions in controllers).
  *
- *   DRAFT → ASSIGNED → ACCEPTED → IN_PROGRESS → COMPLETED → VERIFIED → CLOSED
+ *   PENDING_APPROVAL → APPROVED → ASSIGNED → ACCEPTED → IN_PROGRESS →
+ *     COMPLETED → VERIFIED → CLOSED
  *        (+ ON_HOLD detours, CANCELLED exits, redo/reopen back to IN_PROGRESS)
  *
- * Business rule: CLOSED is reachable ONLY from VERIFIED — completed work must be
- * verified before it can be closed.
+ * Business rule: a Work Order is APPROVED work. Recommendations start
+ * PENDING_APPROVAL and reach the execution lane only via APPROVED (or REJECTED,
+ * terminal). Manual/emergency work orders skip approval and start at DRAFT.
+ * CLOSED is reachable ONLY from VERIFIED — completed work must be verified first.
  */
 @Injectable()
 export class WorkOrderStatusService {
   private readonly transitions: Readonly<
     Record<WorkOrderStatus, WorkOrderStatus[]>
   > = {
+    [WorkOrderStatus.PENDING_APPROVAL]: [
+      WorkOrderStatus.APPROVED,
+      WorkOrderStatus.REJECTED,
+      WorkOrderStatus.CANCELLED,
+    ],
+    [WorkOrderStatus.APPROVED]: [WorkOrderStatus.ASSIGNED, WorkOrderStatus.CANCELLED],
+    [WorkOrderStatus.REJECTED]: [], // terminal
     [WorkOrderStatus.DRAFT]: [WorkOrderStatus.ASSIGNED, WorkOrderStatus.CANCELLED],
     [WorkOrderStatus.ASSIGNED]: [
       WorkOrderStatus.ACCEPTED,

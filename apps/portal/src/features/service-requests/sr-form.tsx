@@ -10,6 +10,8 @@ import type { ServiceRequest } from '@living/types';
 
 import { living } from '../../lib/living';
 import { OpsSelect } from '../operations/ops-select';
+import { EntitySelect, toKey } from '../shared/entity-select';
+import { TimeSlotPicker } from './time-slot-picker';
 import { useServices } from './queries';
 
 const schema = z.object({
@@ -37,14 +39,20 @@ export function ServiceRequestForm({
   const services = useServices();
   const units = useQuery({
     queryKey: [...qk.units(communityId, 'sr-form')],
-    queryFn: () => living.community.listUnits(communityId, { limit: 200, sortBy: 'unitNumber', sortDir: 'asc' }),
+    queryFn: () => living.community.listUnits(communityId, { limit: 500, sortBy: 'unitNumber', sortDir: 'asc' }),
     enabled: open && !editing,
   });
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { priority: 'MEDIUM' },
   });
+
+  const createService = async (name: string) => {
+    const created = await living.serviceRequest.createService({ key: toKey(name), name });
+    await qc.invalidateQueries({ queryKey: ['services'] });
+    return (created as { id: string }).id;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -86,9 +94,11 @@ export function ServiceRequestForm({
             {errors.description && <span className="text-sm text-danger-fg">{errors.description.message}</span>}
           </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <OpsSelect label="Service" error={errors.serviceId?.message} {...register('serviceId')}
-              placeholder={services.isLoading ? 'Loading…' : 'Choose a service'}
-              options={(services.data ?? []).map((s) => ({ value: s.id, label: s.name }))} />
+            <EntitySelect label="Service" required error={errors.serviceId?.message}
+              value={watch('serviceId') ?? ''} onChange={(v) => setValue('serviceId', v, { shouldValidate: true })}
+              loading={services.isLoading} placeholder="Choose a service"
+              options={(services.data ?? []).map((s) => ({ value: s.id, label: s.name }))}
+              onCreate={createService} />
             <OpsSelect label="Priority" {...register('priority')}
               options={[{ value: 'LOW', label: 'Low' }, { value: 'MEDIUM', label: 'Medium' }, { value: 'HIGH', label: 'High' }, { value: 'CRITICAL', label: 'Critical' }]} />
           </div>
@@ -97,7 +107,7 @@ export function ServiceRequestForm({
               placeholder={units.isLoading ? 'Loading units…' : 'Choose a unit'}
               options={(units.data?.items ?? []).map((u) => ({ value: u.id, label: u.unitNumber }))} />
           )}
-          <Input label="Preferred time slot" placeholder="Morning (9–12)" {...register('preferredTimeSlot')} />
+          <TimeSlotPicker value={watch('preferredTimeSlot') ?? ''} onChange={(v) => setValue('preferredTimeSlot', v)} />
           <div className="mt-2 flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" loading={isSubmitting}>{editing ? 'Save changes' : 'Raise request'}</Button>

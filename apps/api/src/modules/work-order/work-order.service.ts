@@ -17,10 +17,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
+  ApproveWorkOrderDto,
   AssignWorkOrderDto,
   ChangeWorkOrderStatusDto,
   CreateWorkOrderDto,
   QueryWorkOrderDto,
+  RejectWorkOrderDto,
   UpdateWorkOrderDto,
   VerifyWorkOrderDto,
 } from './dto/work-order.dto';
@@ -45,7 +47,29 @@ export class WorkOrderService {
     private readonly events: DomainEventsService,
   ) {}
 
+  /**
+   * Manual / EMERGENCY work order — skips approval and starts at DRAFT (fire
+   * system failure, burst pipe, …). Gated to managers via WORKORDER_CREATE.
+   */
   async create(communityId: string, dto: CreateWorkOrderDto, actor: AuthenticatedUser) {
+    return this.persistNew(communityId, dto, actor, { recommended: false });
+  }
+
+  /**
+   * Recommend a work order for approval — the normal path. A Work Order is
+   * APPROVED work, so recommendations start PENDING_APPROVAL and only reach the
+   * execution lane once a manager approves.
+   */
+  async recommend(communityId: string, dto: CreateWorkOrderDto, actor: AuthenticatedUser) {
+    return this.persistNew(communityId, dto, actor, { recommended: true });
+  }
+
+  private async persistNew(
+    communityId: string,
+    dto: CreateWorkOrderDto,
+    actor: AuthenticatedUser,
+    opts: { recommended: boolean },
+  ) {
     await this.access.assert(communityId);
     if (dto.unitId) await this.assertUnitInCommunity(dto.unitId, communityId);
 
@@ -57,10 +81,14 @@ export class WorkOrderService {
           title: dto.title,
           description: dto.description,
           priority: dto.priority ?? 'MEDIUM',
-          status: W.DRAFT,
+          status: opts.recommended ? W.PENDING_APPROVAL : W.DRAFT,
           originType: dto.originType ?? 'MANUAL',
           originId: dto.originId,
+          requestedById: actor.id,
+          requestedDate: new Date(),
+          recommendedById: opts.recommended ? actor.id : undefined,
           estimatedHours: dto.estimatedHours,
+          ...this.costFields(dto),
           dueDate: dto.dueDate,
           notes: dto.notes,
           metadata: dto.metadata as Prisma.InputJsonValue | undefined,
@@ -70,7 +98,7 @@ export class WorkOrderService {
       });
       await this.timeline.record({
         workOrderId: created.id,
-        type: WorkOrderEventType.CREATED,
+        type: opts.recommended ? WorkOrderEventType.RECOMMENDED : WorkOrderEventType.CREATED,
         actorId: actor.id,
         tx,
       });
@@ -79,6 +107,51 @@ export class WorkOrderService {
 
     this.publish(DomainEventName.WorkOrderCreated, workOrder, actor);
     return this.present(workOrder);
+  }
+
+  /** Approve a recommended work order → APPROVED (enters the execution lane). */
+  async approve(id: string, dto: ApproveWorkOrderDto, actor: AuthenticatedUser) {
+    const workOrder = await this.loadOrThrow(id);
+    this.statusFlow.assertTransition(workOrder.status, W.APPROVED);
+    const updated = await this.prisma.workOrder.update({
+      where: { id },
+      data: { status: W.APPROVED, approvedById: actor.id, approvedDate: new Date(), updatedById: actor.id },
+    });
+    await this.timeline.record({
+      workOrderId: id,
+      type: WorkOrderEventType.APPROVED,
+      actorId: actor.id,
+      metadata: dto.remarks ? { remarks: dto.remarks } : undefined,
+    });
+    return this.present(updated);
+  }
+
+  /** Reject a recommended work order → REJECTED (terminal), with a reason. */
+  async reject(id: string, dto: RejectWorkOrderDto, actor: AuthenticatedUser) {
+    const workOrder = await this.loadOrThrow(id);
+    this.statusFlow.assertTransition(workOrder.status, W.REJECTED);
+    const updated = await this.prisma.workOrder.update({
+      where: { id },
+      data: { status: W.REJECTED, rejectionReason: dto.reason, updatedById: actor.id },
+    });
+    await this.timeline.record({
+      workOrderId: id,
+      type: WorkOrderEventType.REJECTED,
+      actorId: actor.id,
+      metadata: { reason: dto.reason },
+    });
+    return this.present(updated);
+  }
+
+  /** Estimated total is stored (labour + material) whenever either is provided. */
+  private costFields(dto: { estimatedLabourCost?: number; estimatedMaterialCost?: number }) {
+    const { estimatedLabourCost: labour, estimatedMaterialCost: material } = dto;
+    return {
+      estimatedLabourCost: labour,
+      estimatedMaterialCost: material,
+      estimatedTotalCost:
+        labour != null || material != null ? (labour ?? 0) + (material ?? 0) : undefined,
+    };
   }
 
   async findMany(communityId: string, query: QueryWorkOrderDto): Promise<Paginated<unknown>> {
@@ -159,6 +232,7 @@ export class WorkOrderService {
         unitId: dto.unitId,
         priority: dto.priority,
         estimatedHours: dto.estimatedHours,
+        ...this.costFields(dto),
         actualHours: dto.actualHours,
         dueDate: dto.dueDate,
         notes: dto.notes,
@@ -175,6 +249,9 @@ export class WorkOrderService {
     const to = dto.status;
     if (to === W.VERIFIED) {
       throw new BadRequestException('Use the verify endpoint to verify a work order');
+    }
+    if (to === W.APPROVED || to === W.REJECTED) {
+      throw new BadRequestException('Use the approve / reject endpoint for approval decisions');
     }
     this.statusFlow.assertTransition(from, to);
     this.assertStatusPermission(to, actor);
@@ -239,7 +316,10 @@ export class WorkOrderService {
     if (dto.vendorId) await this.assertVendorCovers(dto.vendorId, community.tenantId, workOrder.communityId);
 
     const wasAssigned = !!(workOrder.assignedStaffId || workOrder.assignedVendorId);
-    const nextStatus = workOrder.status === W.DRAFT ? W.ASSIGNED : workOrder.status;
+    const nextStatus =
+      workOrder.status === W.DRAFT || workOrder.status === W.APPROVED
+        ? W.ASSIGNED
+        : workOrder.status;
 
     const updated = await this.prisma.workOrder.update({
       where: { id },
