@@ -40,8 +40,11 @@ const AmcContractsPage = lazy(() => import('./features/amc/contracts-list').then
 const ContractCreatePage = lazy(() => import('./features/amc/contract-create-page').then((m) => ({ default: m.ContractCreatePage })));
 const ContractDetailPage = lazy(() => import('./features/amc/contract-detail').then((m) => ({ default: m.ContractDetailPage })));
 
-// Platform-Admin control plane — community provisioning.
+// Platform-Admin control plane — community provisioning + executive portal.
 const AdminCommunitiesPage = lazy(() => import('./features/admin/admin-communities').then((m) => ({ default: m.AdminCommunitiesPage })));
+const PlatformDashboardPage = lazy(() => import('./features/platform-admin/platform-dashboard').then((m) => ({ default: m.PlatformDashboardPage })));
+const PlatformAuditPage = lazy(() => import('./features/platform-admin/platform-audit').then((m) => ({ default: m.PlatformAuditPage })));
+const PlatformSystemPage = lazy(() => import('./features/platform-admin/platform-system').then((m) => ({ default: m.PlatformSystemPage })));
 
 // Community Operations (Frontend Sprint 9).
 const VisitorsPage = lazy(() => import('./features/visitors/visitors-list').then((m) => ({ default: m.VisitorsPage })));
@@ -89,6 +92,9 @@ const routeTree = rootRoute.addChildren([
     page('/design-system', DesignSystemPage),
 
     // Platform-Admin control plane
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/dashboard', component: PlatformDashboardPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/audit', component: PlatformAuditPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/system', component: PlatformSystemPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/communities', component: AdminCommunitiesPage }),
 
     // Community & People Management (this sprint)

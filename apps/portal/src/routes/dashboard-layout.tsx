@@ -1,8 +1,8 @@
 import { Suspense, useEffect, useMemo } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
-  Boxes, Building2, CalendarCheck, CalendarClock, DoorOpen, FileSignature, FileText,
-  Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, ShieldCheck, Sparkles, Store, UserRound, Users, Wrench,
+  Activity, Boxes, Building2, CalendarCheck, CalendarClock, DoorOpen, FileSignature, FileText,
+  Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, Server, ShieldCheck, Sparkles, Store, UserRound, Users, Wrench,
 } from 'lucide-react';
 import { useAuth } from '@living/hooks';
 import {
@@ -56,10 +56,17 @@ const sections: NavSection[] = [
   },
 ];
 
-// Platform-Admin-only section — provisioning customers (communities + admins).
+// Platform-Admin-only portal — the executive command centre for Living itself.
+// Deliberately excludes operational modules (tickets, residents, work orders …)
+// which belong to the Community Admin, not the platform operator.
 const adminSection: NavSection = {
-  title: 'Administration',
-  items: [{ label: 'Communities', icon: ShieldCheck, href: '/admin/communities' }],
+  title: 'Platform admin',
+  items: [
+    { label: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
+    { label: 'Audit & monitoring', icon: Activity, href: '/admin/audit' },
+    { label: 'System', icon: Server, href: '/admin/system' },
+    { label: 'Community management', icon: ShieldCheck, href: '/admin/communities' },
+  ],
 };
 
 /** The authenticated dashboard shell wrapping every protected route. */
@@ -79,10 +86,10 @@ export function DashboardLayout() {
     [isPlatform],
   );
 
-  // A Platform Admin has no operational dashboard — land them on the control plane.
+  // A Platform Admin has no operational dashboard — land them on the executive one.
   useEffect(() => {
     if (isPlatform && pathname === '/') {
-      navigate({ to: '/admin/communities', replace: true });
+      navigate({ to: '/admin/dashboard', replace: true });
     }
   }, [isPlatform, pathname, navigate]);
 

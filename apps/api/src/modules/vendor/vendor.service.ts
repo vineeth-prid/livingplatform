@@ -58,11 +58,13 @@ export class VendorService {
       actorId: actor.id,
     }));
 
+    const code = dto.code ?? (await this.nextVendorCode(tenantId));
+
     const vendor = await this.prisma.vendor.create({
       data: {
         tenantId,
         userId,
-        code: dto.code,
+        code,
         name: dto.name,
         companyName: dto.companyName,
         category: dto.category,
@@ -165,6 +167,12 @@ export class VendorService {
       data: { deletedAt: new Date(), updatedById: actor.id },
     });
     return { id, deleted: true };
+  }
+
+  /** Sequential per-tenant code: V-000001, V-000002, … */
+  private async nextVendorCode(tenantId: string): Promise<string> {
+    const count = await this.prisma.vendor.count({ where: { tenantId } });
+    return `V-${String(count + 1).padStart(6, '0')}`;
   }
 
   private tenantWhere(): Prisma.VendorWhereInput {
