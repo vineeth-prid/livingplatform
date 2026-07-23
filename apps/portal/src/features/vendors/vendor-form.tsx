@@ -29,7 +29,6 @@ const fields: FieldDef[] = [
   { name: 'phone', label: 'Phone (login username)', type: 'tel', required: true, half: true },
   { name: 'email', label: 'Email', type: 'email', half: true },
   { name: 'city', label: 'City', half: true },
-  { name: 'code', label: 'Code', half: true, placeholder: 'V-ELE-001' },
   { name: 'addressLine', label: 'Address' },
   { name: 'remarks', label: 'Remarks', type: 'textarea' },
 ];
@@ -59,7 +58,7 @@ export function VendorForm({
               name: vendor.name, companyName: vendor.companyName ?? '', category: vendor.category,
               serviceCategories: (vendor.serviceCategories ?? []).join(','),
               status: vendor.status, phone: vendor.phone, email: vendor.email ?? '',
-              city: vendor.city ?? '', code: vendor.code ?? '',
+              city: vendor.city ?? '',
               addressLine: (vendor as { addressLine?: string }).addressLine ?? '',
               remarks: vendor.remarks ?? '',
             }
