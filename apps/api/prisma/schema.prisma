@@ -2041,43 +2041,48 @@ model Announcement {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notification Engine — Email delivery tracking
+// Notification Engine — channel-agnostic delivery tracking
 //
-// One row per email the Email Service handles: its lifecycle (queued →
-// processing → sent/failed → dead-letter), retry count, provider response,
-// duration and timestamps. The Email Service writes these; Platform Admin reads
-// statistics from them. No business logic — purely an audit of what was sent.
+// One row per notification the engine handles, across ANY channel (email,
+// whatsapp, …): its lifecycle (queued → processing → sent → delivered/read →
+// failed → dead-letter), retry count, provider response, duration and
+// timestamps. Channels write these via DeliveryTracker; Platform Admin reads
+// statistics/history from them. No business logic — a pure delivery audit.
+// (Generalized from the former EmailDelivery; existing email rows migrate as
+// channel = 'email'.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum EmailStatus {
+enum NotificationStatus {
   QUEUED
   PROCESSING
   SENT
   DELIVERED
+  READ
   FAILED
   RETRYING
   DEAD_LETTER
 }
 
-model EmailDelivery {
+model NotificationDelivery {
   id String @id @default(cuid())
 
-  // Optional context — set when an email is tied to a tenant/community.
+  // Optional context — set when tied to a tenant/community.
   tenantId    String?
   communityId String?
 
-  provider   String // 'ses' | 'smtp' — the provider that handled it
-  recipients String[] // all "to" addresses
+  channel    String // 'email' | 'whatsapp' | … — the notification channel
+  provider   String // 'ses' | 'smtp' | 'meta' — the provider that handled it
+  recipients String[] // all primary recipient addresses (emails / phone numbers)
   cc         String[]
   bcc        String[]
   subject    String
-  template   String? // template name when sent via sendTemplate
+  template   String? // template name when sent via a template
   locale     String?
   priority   String? // 'high' | 'normal' | 'low'
 
-  status      EmailStatus @default(QUEUED)
-  retryCount  Int         @default(0)
-  maxAttempts Int         @default(5)
+  status      NotificationStatus @default(QUEUED)
+  retryCount  Int                @default(0)
+  maxAttempts Int                @default(5)
 
   providerMessageId String?
   providerResponse  Json?
@@ -2088,6 +2093,8 @@ model EmailDelivery {
   queuedAt     DateTime  @default(now())
   processingAt DateTime?
   sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
   failedAt     DateTime?
 
   metadata Json?
@@ -2096,9 +2103,11 @@ model EmailDelivery {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([channel])
   @@index([provider])
   @@index([tenantId])
   @@index([createdAt])
   @@index([queueJobId])
-  @@map("email_deliveries")
+  @@index([providerMessageId])
+  @@map("notification_deliveries")
 }

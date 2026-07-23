@@ -25,7 +25,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { CommunityModule } from './modules/community/community.module';
 import { PlatformStatsModule } from './modules/platform-stats/platform-stats.module';
 import { DocumentModule } from './modules/document/document.module';
-import { EmailModule } from './modules/email/email.module';
+import { NotificationModule } from './modules/notifications/notification.module';
 import { EventsModule } from './modules/events/events.module';
 import { HealthModule } from './modules/health/health.module';
 import { HierarchyModule } from './modules/hierarchy/hierarchy.module';
@@ -84,7 +84,7 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     // Global infrastructure
     PrismaModule,
     RedisModule,
-    EmailModule,
+    NotificationModule,
     MailModule,
     StorageModule,
     EventsModule,

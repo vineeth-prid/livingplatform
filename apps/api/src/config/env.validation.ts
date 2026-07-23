@@ -180,6 +180,44 @@ export class EnvironmentVariables {
   @IsOptional()
   EMAIL_RETRY_BACKOFF_MS = '60000,300000,900000,3600000';
 
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  NOTIFICATION_QUEUE_CONCURRENCY = 5;
+
+  // ── WhatsApp channel (Meta Cloud API) ──
+  @IsString()
+  @IsOptional()
+  WHATSAPP_PROVIDER = 'meta';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_API_VERSION = 'v21.0';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_GRAPH_BASE_URL = 'https://graph.facebook.com';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_PHONE_NUMBER_ID = '';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_ACCESS_TOKEN = '';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_BUSINESS_ACCOUNT_ID = '';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_VERIFY_TOKEN = '';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_APP_SECRET = '';
+
   // ── Rate limiting ──
   @Type(() => Number)
   @IsInt()

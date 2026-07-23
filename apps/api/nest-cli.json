@@ -6,8 +6,8 @@
     "deleteOutDir": true,
     "tsConfigPath": "tsconfig.build.json",
     "assets": [
-      { "include": "modules/email/templates/**/*.hbs", "watchAssets": true },
-      { "include": "modules/email/templates/**/*.json", "watchAssets": true }
+      { "include": "modules/notifications/core/templates/**/*.hbs", "watchAssets": true },
+      { "include": "modules/notifications/core/templates/**/*.json", "watchAssets": true }
     ]
   }
 }

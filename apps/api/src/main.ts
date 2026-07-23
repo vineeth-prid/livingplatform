@@ -4,6 +4,7 @@ import { VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { text } from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
@@ -22,6 +23,10 @@ async function bootstrap(): Promise<void> {
 
   // Security headers.
   app.use(helmet());
+
+  // WhatsApp webhook: capture the RAW body so the Meta HMAC signature can be
+  // verified over the exact bytes (runs before the global JSON body parser).
+  app.use('/api/v1/notifications/webhooks/whatsapp', text({ type: '*/*', limit: '512kb' }));
 
   // CORS — explicit allow-list from config; credentials on for cookie support.
   app.enableCors({

@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import type { AppConfig } from '../../../config/configuration';
+import type { AppConfig } from '../../../../config/configuration';
 import type { EmailProvider } from './email-provider.interface';
 import { SesEmailProvider } from './ses-email.provider';
 import { SmtpEmailProvider } from './smtp-email.provider';

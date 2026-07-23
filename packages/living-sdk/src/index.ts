@@ -27,7 +27,8 @@ export {
 } from './resources/platform';
 export { CatalogResource, type CatalogKind, type CatalogOption } from './resources/catalog';
 export {
-  NotificationsResource, EmailAdminResource,
-  type EmailProviderName, type EmailProviderInfo, type EmailHealth,
-  type EmailTestResult, type EmailStatistics,
+  NotificationsResource, EmailAdminResource, WhatsAppAdminResource,
+  type EmailProviderName, type NotificationChannelName, type EmailProviderInfo,
+  type ChannelHealth, type ChannelInfo, type TestResult,
+  type NotificationStatistics, type NotificationDeliveryRow,
 } from './resources/notifications';

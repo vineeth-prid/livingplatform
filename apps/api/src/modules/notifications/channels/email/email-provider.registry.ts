@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import type { AppConfig } from '../../config/configuration';
-import { EmailProviderFactory } from './providers/email-provider.factory';
-import type { EmailProvider } from './providers/email-provider.interface';
+import type { AppConfig } from '../../../../config/configuration';
+import { EmailProviderFactory } from './email-provider.factory';
+import type { EmailProvider } from './email-provider.interface';
 
 const SUPPORTED = new Set(['ses', 'smtp']);
 

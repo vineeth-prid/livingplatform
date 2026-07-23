@@ -60,13 +60,27 @@ export function configuration() {
         replyTo: env.SMTP_REPLY_TO ?? '',
       },
       queue: {
-        concurrency: Number(env.EMAIL_QUEUE_CONCURRENCY ?? 5),
+        concurrency: Number(env.NOTIFICATION_QUEUE_CONCURRENCY ?? env.EMAIL_QUEUE_CONCURRENCY ?? 5),
         attempts: Number(env.EMAIL_MAX_ATTEMPTS ?? 5),
         // Per-attempt delays (ms): 1m, 5m, 15m, 1h. Exhausting them → DLQ.
         backoffMs: (env.EMAIL_RETRY_BACKOFF_MS ?? '60000,300000,900000,3600000')
           .split(',')
           .map((n) => Number(n.trim()))
           .filter((n) => Number.isFinite(n) && n >= 0),
+      },
+    },
+    whatsapp: {
+      // Active provider — currently the official Meta Cloud API.
+      provider: (env.WHATSAPP_PROVIDER ?? 'meta').toLowerCase(),
+      meta: {
+        apiVersion: env.WHATSAPP_API_VERSION ?? 'v21.0',
+        graphBaseUrl: env.WHATSAPP_GRAPH_BASE_URL ?? 'https://graph.facebook.com',
+        phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID ?? '',
+        accessToken: env.WHATSAPP_ACCESS_TOKEN ?? '',
+        businessAccountId: env.WHATSAPP_BUSINESS_ACCOUNT_ID ?? '',
+        // Webhook verification + signature.
+        verifyToken: env.WHATSAPP_VERIFY_TOKEN ?? '',
+        appSecret: env.WHATSAPP_APP_SECRET ?? '',
       },
     },
     throttle: {

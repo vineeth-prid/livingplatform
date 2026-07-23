@@ -162,3 +162,35 @@ export function useEmailStatistics() {
     refetchInterval: REFRESH,
   });
 }
+
+export function useNotificationChannels() {
+  return useQuery({
+    queryKey: ['platform', 'notifications', 'channels'],
+    queryFn: () => living.notifications.channels(),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useNotificationStatistics(channel?: string) {
+  return useQuery({
+    queryKey: ['platform', 'notifications', 'statistics', channel ?? 'all'],
+    queryFn: () => living.notifications.statistics(24, channel),
+    refetchInterval: REFRESH,
+  });
+}
+
+export function useWhatsAppHealth() {
+  return useQuery({
+    queryKey: ['platform', 'whatsapp', 'health'],
+    queryFn: () => living.notifications.whatsapp.health(),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useNotificationDeliveries(params: { channel?: string; status?: string; search?: string; page?: number }) {
+  return useQuery({
+    queryKey: ['platform', 'notifications', 'deliveries', params],
+    queryFn: () => living.notifications.deliveries({ limit: 25, ...params }),
+    refetchInterval: REFRESH,
+  });
+}
