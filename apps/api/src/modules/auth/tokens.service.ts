@@ -9,6 +9,7 @@ import type { AppConfig } from '../../config/configuration';
 import type {
   AccessTokenPayload,
   AuthenticatedUser,
+  Impersonator,
 } from '../../common/types/authenticated-user';
 import { expiryFrom } from '../../common/utils/duration';
 import { PrismaService } from '../prisma/prisma.service';
@@ -50,14 +51,17 @@ export class TokensService {
     this.authCfg = config.get('auth', { infer: true });
   }
 
-  /** Issue a fresh access + refresh pair, starting a new refresh family. */
+  /** Issue a fresh access + refresh pair, starting a new refresh family. Pass
+   *  `impersonatedBy` for a Platform-Admin "log in as" session so the marker is
+   *  carried in the token and persisted for rotation. */
   async issuePair(
     principal: AuthenticatedUser,
     rememberMe: boolean,
     meta: RequestMeta,
+    impersonatedBy?: Impersonator | null,
   ): Promise<TokenPair> {
     const familyId = randomUUID();
-    return this.mint(principal, familyId, rememberMe, meta);
+    return this.mint(principal, familyId, rememberMe, meta, undefined, impersonatedBy);
   }
 
   /**
@@ -76,6 +80,7 @@ export class TokensService {
       where: { id },
       include: { user: { select: { id: true, email: true, tenantId: true, status: true, deletedAt: true } } },
     });
+    // (impersonatorId/Email selected implicitly by findUnique — used below.)
 
     if (!row) throw new UnauthorizedException('Invalid refresh token');
 
@@ -106,8 +111,15 @@ export class TokensService {
       tenantId: row.user.tenantId,
     });
 
+    // Preserve the impersonation marker across rotation so a refreshed session
+    // never sheds its attribution to the real operator.
+    const impersonatedBy: Impersonator | null =
+      row.impersonatorId && row.impersonatorEmail
+        ? { id: row.impersonatorId, email: row.impersonatorEmail }
+        : null;
+
     // Mint the replacement in the same family, then mark this row rotated.
-    const pair = await this.mint(principal, row.familyId, rememberMe, meta, row.id);
+    const pair = await this.mint(principal, row.familyId, rememberMe, meta, row.id, impersonatedBy);
     return { pair, principal };
   }
 
@@ -136,6 +148,7 @@ export class TokensService {
     rememberMe: boolean,
     meta: RequestMeta,
     replacesId?: string,
+    impersonatedBy?: Impersonator | null,
   ): Promise<TokenPair> {
     const payload: AccessTokenPayload = {
       sub: principal.id,
@@ -144,6 +157,7 @@ export class TokensService {
       roles: principal.roles,
       permissions: principal.permissions,
       type: 'access',
+      ...(impersonatedBy ? { impersonatedBy } : {}),
     };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.authCfg.accessSecret,
@@ -164,6 +178,8 @@ export class TokensService {
         expiresAt: expiryFrom(ttl),
         userAgent: meta.userAgent,
         ipAddress: meta.ipAddress,
+        impersonatorId: impersonatedBy?.id ?? null,
+        impersonatorEmail: impersonatedBy?.email ?? null,
       },
       select: { id: true },
     });

@@ -177,7 +177,9 @@ export class ProvisioningService {
     const principal = await this.rbac.buildPrincipal({
       id: admin.id, email: admin.email, tenantId: admin.tenantId,
     });
-    const pair = await this.tokens.issuePair(principal, false, meta);
+    // Stamp the real operator on the session so every action taken while
+    // impersonating stays attributable to them (carried across token refresh).
+    const pair = await this.tokens.issuePair(principal, false, meta, { id: actor.id, email: actor.email });
 
     return {
       ...pair,

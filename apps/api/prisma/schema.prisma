@@ -642,6 +642,12 @@ model RefreshToken {
   userAgent String?
   ipAddress String?
 
+  // Set when this session is a Platform-Admin impersonation ("log in as"). Carried
+  // across rotation so every refreshed access token stays attributable to the
+  // real operator, not just the community admin being impersonated.
+  impersonatorId    String?
+  impersonatorEmail String?
+
   createdAt DateTime @default(now())
 
   @@index([userId])

@@ -43,9 +43,10 @@ export class NotificationMetrics {
     @InjectQueue(NOTIFICATION_QUEUE) private readonly queue: Queue,
   ) {}
 
-  async statistics(windowHours = 24, channel?: string): Promise<NotificationStatistics> {
+  async statistics(windowHours = 24, channel?: string, communityId?: string): Promise<NotificationStatistics> {
     const since = new Date(Date.now() - windowHours * 3_600_000);
-    const where = { createdAt: { gte: since }, ...(channel ? { channel } : {}) };
+    // communityId scopes stats to one tenant; platform-admin omits it (see all).
+    const where = { createdAt: { gte: since }, ...(channel ? { channel } : {}), ...(communityId ? { communityId } : {}) };
 
     const [byStatus, sentAgg, retryAgg, byChannelRows, byProviderRows, queueCounts] = await Promise.all([
       this.prisma.notificationDelivery.groupBy({ by: ['status'], where, _count: { _all: true } }),

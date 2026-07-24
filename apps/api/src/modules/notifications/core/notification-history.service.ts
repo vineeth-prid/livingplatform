@@ -11,6 +11,9 @@ export interface HistoryQuery {
   channel?: string;
   status?: NotificationStatus;
   search?: string;
+  /** Tenant scope. Platform-admin views omit it (see all); community views MUST
+   *  pass it so a community only ever sees its own notification history. */
+  communityId?: string;
 }
 
 /**
@@ -27,6 +30,7 @@ export class NotificationHistory {
     const where: Prisma.NotificationDeliveryWhereInput = {
       ...(query.channel ? { channel: query.channel } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.communityId ? { communityId: query.communityId } : {}),
       ...(query.search
         ? {
             OR: [

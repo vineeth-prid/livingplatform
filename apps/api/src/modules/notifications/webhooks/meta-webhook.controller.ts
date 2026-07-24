@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, HttpCode, Post, Query, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
 import { Public } from '../../../common/decorators/public.decorator';
@@ -13,6 +14,9 @@ import { MetaWebhookService } from './meta-webhook.service';
  * interceptor. The POST body arrives as a raw string (see the text() middleware
  * in main.ts) so the signature can be verified over the exact bytes.
  */
+// Meta delivers status callbacks in bursts and is already HMAC-authenticated;
+// the global per-IP rate limit would drop legitimate receipts, so skip it here.
+@SkipThrottle()
 @ApiExcludeController()
 @Controller('notifications/webhooks')
 export class MetaWebhookController {

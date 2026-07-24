@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../rbac/rbac.constants';
@@ -87,6 +88,9 @@ export class NotificationController {
 
   @Post('email/test')
   @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
+  // Sends from the platform's verified identity to an arbitrary address — cap it
+  // hard so a compromised/rogue admin can't use it as a spam/harassment relay.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a test email' })
   async emailTest(@Body() dto: SendTestEmailDto) {
@@ -111,6 +115,7 @@ export class NotificationController {
 
   @Post('whatsapp/test')
   @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a test WhatsApp message' })
   async whatsappTest(@Body() dto: SendTestWhatsAppDto) {

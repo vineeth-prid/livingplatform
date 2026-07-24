@@ -9,6 +9,7 @@ import type { AppConfig } from '../../../config/configuration';
 import { NOTIFICATION_JOB, NOTIFICATION_QUEUE, type NotificationTemplateName } from '../notification.constants';
 import { ChannelRouter } from './channel-router';
 import { DeliveryTracker } from './delivery-tracker';
+import { SenderResolver } from './sender-resolver';
 import { EmailTemplateEngine } from './templates/template.engine';
 import type {
   ChannelHealth, DeliveryResult, NotificationAttachment, NotificationChannelName, NotificationMessage,
@@ -47,6 +48,7 @@ export class NotificationDispatcher {
     @InjectQueue(NOTIFICATION_QUEUE) private readonly queue: Queue<NotificationJobData>,
     private readonly tracking: DeliveryTracker,
     private readonly templates: EmailTemplateEngine,
+    private readonly senders: SenderResolver,
     private readonly config: ConfigService<AppConfig, true>,
   ) {
     const email = this.config.get('email', { infer: true });
@@ -57,6 +59,7 @@ export class NotificationDispatcher {
   /** Enqueue a message for asynchronous delivery on its channel. */
   async dispatch(message: NotificationMessage, ctx: DispatchContext = {}): Promise<{ deliveryId: string; jobId: string }> {
     this.assertMessage(message);
+    await this.applyCommunitySender(message, ctx);
     const channel = this.router.get(message.channel);
     const serialized = serializeMessage(message);
     const deliveryId = await this.tracking.createQueued(message, {
@@ -83,6 +86,7 @@ export class NotificationDispatcher {
   /** Send immediately, bypassing the queue (still tracked). Supports streams. */
   async dispatchNow(message: NotificationMessage, ctx: DispatchContext = {}): Promise<DeliveryResult> {
     this.assertMessage(message);
+    await this.applyCommunitySender(message, ctx);
     const channel = this.router.get(message.channel);
     const deliveryId = await this.tracking.createQueued(message, {
       channel: message.channel,
@@ -166,6 +170,16 @@ export class NotificationDispatcher {
 
   health(channel: NotificationChannelName): Promise<ChannelHealth> {
     return this.router.get(channel).health();
+  }
+
+  /** Stamp the community's own sender identity on email when a community context
+   *  is present and the caller didn't set an explicit From. No community → no-op
+   *  (platform default sender), so platform-level mail is unchanged. */
+  private async applyCommunitySender(message: NotificationMessage, ctx: DispatchContext): Promise<void> {
+    if (message.channel !== 'email' || message.from || !ctx.communityId) return;
+    const sender = await this.senders.emailFor(ctx.communityId);
+    if (sender.from) message.from = sender.from;
+    if (sender.replyTo && !message.replyTo) message.replyTo = sender.replyTo;
   }
 
   private assertMessage(message: NotificationMessage): void {

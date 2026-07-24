@@ -43,6 +43,21 @@ export class EnvironmentVariables {
   @IsOptional()
   CORS_ORIGINS = 'http://localhost:5173';
 
+  /** Force-enable Swagger in production ('true'); disabled there by default. */
+  @IsString()
+  @IsOptional()
+  SWAGGER_ENABLED = 'false';
+
+  /** When set, /metrics requires `Authorization: Bearer <token>`. */
+  @IsString()
+  @IsOptional()
+  METRICS_TOKEN = '';
+
+  /** 'true' enables Postgres RLS tenant-GUC propagation (see prisma/rls/ACTIVATE.sql). */
+  @IsString()
+  @IsOptional()
+  DB_RLS_ENABLED = 'false';
+
   // ── Database / cache ──
   @IsString()
   @MinLength(1)

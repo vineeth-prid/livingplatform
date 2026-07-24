@@ -46,6 +46,11 @@ export class AuditInterceptor implements NestInterceptor {
           statusCode: res.statusCode,
           ipAddress: req.ip,
           userAgent: req.headers['user-agent'],
+          // On an impersonation session, record the real operator behind the
+          // acting community admin so the timeline stays honest.
+          metadata: user?.impersonatedBy
+            ? { impersonatedBy: { id: user.impersonatedBy.id, email: user.impersonatedBy.email } }
+            : undefined,
         });
       }),
     );

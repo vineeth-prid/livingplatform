@@ -23,6 +23,15 @@ export interface AuthenticatedUser {
   tenantId: string | null;
   roles: AssignedRole[];
   permissions: string[];
+  /** Set when this is a Platform-Admin impersonation session; identifies the
+   *  real operator so their actions stay attributable in the audit trail. */
+  impersonatedBy?: Impersonator | null;
+}
+
+/** The real operator behind an impersonation ("log in as") session. */
+export interface Impersonator {
+  id: string;
+  email: string;
 }
 
 /** JWT access-token payload shape. */
@@ -33,6 +42,8 @@ export interface AccessTokenPayload {
   roles: AssignedRole[];
   permissions: string[];
   type: 'access';
+  /** Present only on impersonation sessions (see AuthenticatedUser). */
+  impersonatedBy?: Impersonator | null;
 }
 
 /** JWT refresh-token payload shape (kept minimal — authority is the DB row). */

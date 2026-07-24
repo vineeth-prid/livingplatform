@@ -26,9 +26,16 @@ async function bootstrap(): Promise<void> {
 
   // WhatsApp webhook: capture the RAW body so the Meta HMAC signature can be
   // verified over the exact bytes (runs before the global JSON body parser).
-  app.use('/api/v1/notifications/webhooks/whatsapp', text({ type: '*/*', limit: '512kb' }));
+  // Path is derived from the API prefix so a prefix change can't silently
+  // disable signature verification (the body must stay raw for this route).
+  app.use(`/${apiPrefix}/v1/notifications/webhooks/whatsapp`, text({ type: '*/*', limit: '512kb' }));
 
   // CORS — explicit allow-list from config; credentials on for cookie support.
+  // Reflecting any origin WITH credentials is unsafe, so fail closed in
+  // production when no allow-list is configured rather than opening up.
+  if (env === 'production' && corsOrigins.length === 0) {
+    throw new Error('CORS_ORIGINS must be set in production (refusing to reflect any origin with credentials)');
+  }
   app.enableCors({
     origin: corsOrigins.length > 0 ? corsOrigins : true,
     credentials: true,
@@ -40,23 +47,27 @@ async function bootstrap(): Promise<void> {
 
   app.enableShutdownHooks();
 
-  // OpenAPI / Swagger at /<prefix>/docs.
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Living Platform API')
-    .setDescription('Multi-tenant PropTech platform foundation. Life Happens Here.')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup(`${apiPrefix}/docs`, app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // OpenAPI / Swagger at /<prefix>/docs. Disabled in production — publishing the
+  // full API schema there is an attack aid; set SWAGGER_ENABLED=true to override.
+  const swaggerEnabled = env !== 'production' || process.env.SWAGGER_ENABLED === 'true';
+  if (swaggerEnabled) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Living Platform API')
+      .setDescription('Multi-tenant PropTech platform foundation. Life Happens Here.')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup(`${apiPrefix}/docs`, app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   await app.listen(port, '0.0.0.0');
 
   const logger = app.get(Logger);
   logger.log(`Living API [${env}] listening on http://localhost:${port}/${apiPrefix}`);
-  logger.log(`Swagger docs at http://localhost:${port}/${apiPrefix}/docs`);
+  if (swaggerEnabled) logger.log(`Swagger docs at http://localhost:${port}/${apiPrefix}/docs`);
 }
 
 void bootstrap();

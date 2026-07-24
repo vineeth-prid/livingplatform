@@ -37,6 +37,7 @@ export class MetaWebhookService {
   private readonly logger = new Logger(MetaWebhookService.name);
   private readonly verifyToken: string;
   private readonly appSecret: string;
+  private readonly isProduction: boolean;
 
   constructor(
     private readonly tracking: DeliveryTracker,
@@ -45,20 +46,29 @@ export class MetaWebhookService {
     const meta = config.get('whatsapp', { infer: true }).meta;
     this.verifyToken = meta.verifyToken;
     this.appSecret = meta.appSecret;
+    this.isProduction = config.get('env', { infer: true }) === 'production';
   }
 
-  /** GET hub-verification: echo the challenge when the verify token matches. */
+  /** GET hub-verification: echo the challenge when the verify token matches.
+   *  Fails closed if no verify token is configured, and compares in constant time. */
   verifyChallenge(mode?: string, token?: string, challenge?: string): string | null {
-    if (mode === 'subscribe' && token && token === this.verifyToken) return challenge ?? '';
-    this.logger.warn('WhatsApp webhook verification failed (bad mode/token)');
-    return null;
+    if (mode !== 'subscribe' || !token || !this.verifyToken || !safeStrEqual(token, this.verifyToken)) {
+      this.logger.warn('WhatsApp webhook verification failed (bad mode/token or verify token unset)');
+      return null;
+    }
+    return challenge ?? '';
   }
 
-  /** Validate the X-Hub-Signature-256 HMAC over the raw request body. */
+  /** Validate the X-Hub-Signature-256 HMAC over the raw request body.
+   *  Fails CLOSED in production when WHATSAPP_APP_SECRET is unset — an unsigned
+   *  webhook is the only unauthenticated write path into notification state. */
   verifySignature(rawBody: string, signatureHeader?: string): boolean {
     if (!this.appSecret) {
-      // No secret configured — accept but warn (dev). Set WHATSAPP_APP_SECRET in prod.
-      this.logger.warn('WHATSAPP_APP_SECRET not set — webhook signature not verified');
+      if (this.isProduction) {
+        this.logger.error('WHATSAPP_APP_SECRET not set in production — rejecting unsigned webhook');
+        return false;
+      }
+      this.logger.warn('WHATSAPP_APP_SECRET not set — webhook signature not verified (dev only)');
       return true;
     }
     if (!signatureHeader?.startsWith('sha256=')) return false;
@@ -80,7 +90,8 @@ export class MetaWebhookService {
           statuses++;
         }
         for (const m of change.value?.messages ?? []) {
-          this.logger.log({ event: 'whatsapp-inbound', from: m.from, id: m.id, type: m.type, text: m.text?.body });
+          // Do NOT log message bodies — they are recipient PII. Metadata only.
+          this.logger.log({ event: 'whatsapp-inbound', from: m.from, id: m.id, type: m.type });
           messages++;
         }
       }
@@ -102,4 +113,11 @@ export class MetaWebhookService {
       // 'sent' is already reflected when we transmitted.
     }
   }
+}
+
+/** Constant-time string equality (avoids timing side-channels on the verify token). */
+function safeStrEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
 }

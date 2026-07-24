@@ -15,6 +15,7 @@ import { NotificationHistory } from './core/notification-history.service';
 import { NotificationMetrics } from './core/notification-metrics.service';
 import { NotificationProcessor } from './core/notification.processor';
 import { RecipientResolver } from './core/recipient-resolver';
+import { SenderResolver } from './core/sender-resolver';
 import { EmailTemplateEngine } from './core/templates/template.engine';
 import { NOTIFICATION_CHANNEL_LIST } from './factories/notification-channel.factory';
 import { MetaWebhookController } from './webhooks/meta-webhook.controller';
@@ -69,6 +70,7 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
     NotificationMetrics,
     NotificationHistory,
     RecipientResolver,
+    SenderResolver,
     NotificationDispatcher,
     NotificationProcessor,
     // Inbound

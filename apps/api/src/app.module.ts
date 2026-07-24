@@ -9,6 +9,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { configuration, type AppConfig } from './config/configuration';
 import { validateEnv } from './config/env.validation';
@@ -148,6 +149,8 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
 
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
 
+    // Tenant context first, so it is set before any DB work in the chain.
+    { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
 

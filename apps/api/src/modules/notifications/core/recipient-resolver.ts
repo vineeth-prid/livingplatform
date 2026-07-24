@@ -13,6 +13,10 @@ export interface RecipientRef {
   staffId?: string;
   vendorId?: string;
   userId?: string;
+  /** REQUIRED to resolve a community-scoped person (resident/staff/vendor) —
+   *  prevents addressing another community's people by id. Users are platform-
+   *  level and resolve without it. */
+  communityId?: string;
 }
 
 /**
@@ -56,17 +60,25 @@ export class RecipientResolver {
 
   private async hydrate(ref: RecipientRef): Promise<RecipientRef> {
     if (ref.email || ref.phone) return ref;
+    // Community-scoped people (resident/staff/vendor) MUST be resolved within a
+    // known community, or one community could address another's people by id.
+    const scopedPersonRequested = ref.residentId || ref.staffId || ref.vendorId;
+    if (scopedPersonRequested && !ref.communityId) {
+      this.logger.warn('Refusing to resolve a community-scoped recipient without a communityId');
+      return ref;
+    }
     try {
       if (ref.residentId) {
-        const r = await this.prisma.resident.findUnique({ where: { id: ref.residentId }, select: { email: true, mobile: true, firstName: true } });
+        const r = await this.prisma.resident.findFirst({ where: { id: ref.residentId, communityId: ref.communityId }, select: { email: true, mobile: true, firstName: true } });
         if (r) return { ...ref, email: r.email, phone: r.mobile, name: r.firstName };
       }
       if (ref.staffId) {
-        const s = await this.prisma.staff.findUnique({ where: { id: ref.staffId }, select: { email: true, phone: true, firstName: true } });
+        const s = await this.prisma.staff.findFirst({ where: { id: ref.staffId, communityId: ref.communityId }, select: { email: true, phone: true, firstName: true } });
         if (s) return { ...ref, email: s.email, phone: s.phone, name: s.firstName };
       }
       if (ref.vendorId) {
-        const v = await this.prisma.vendor.findUnique({ where: { id: ref.vendorId }, select: { email: true, phone: true, name: true } });
+        // Vendors span communities via communityIds[]; scope to the caller's community.
+        const v = await this.prisma.vendor.findFirst({ where: { id: ref.vendorId, communityIds: { has: ref.communityId! } }, select: { email: true, phone: true, name: true } });
         if (v) return { ...ref, email: v.email, phone: v.phone, name: v.name };
       }
       if (ref.userId) {

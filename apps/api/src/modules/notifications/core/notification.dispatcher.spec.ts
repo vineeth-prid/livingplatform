@@ -5,6 +5,7 @@ import { BadRequestException } from '@nestjs/common';
 import { NotificationDispatcher } from './notification.dispatcher';
 import type { ChannelRouter } from './channel-router';
 import type { DeliveryTracker } from './delivery-tracker';
+import type { SenderResolver } from './sender-resolver';
 import type { EmailTemplateEngine } from './templates/template.engine';
 import type { INotificationChannel } from './notification-channel.interface';
 
@@ -28,9 +29,10 @@ function makeDispatcher() {
     markAttemptFailed: jest.fn().mockResolvedValue(null),
   } as unknown as DeliveryTracker;
   const templates = { render: jest.fn().mockReturnValue({ subject: 'S', html: '<p>B</p>', text: 'B' }) } as unknown as EmailTemplateEngine;
+  const senders = { emailFor: jest.fn().mockResolvedValue({}) } as unknown as SenderResolver;
   const config = { get: () => ({ queue: { attempts: 5 }, defaultLocale: 'en' }) };
 
-  const dispatcher = new NotificationDispatcher(router, queue as never, tracking, templates, config as never);
+  const dispatcher = new NotificationDispatcher(router, queue as never, tracking, templates, senders, config as never);
   return { dispatcher, router, channel, queue, tracking, templates };
 }
 
