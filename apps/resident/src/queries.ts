@@ -5,7 +5,7 @@ import type { ServiceRequest, Ticket } from '@living/types';
 import { useResidentCommunity } from './community';
 import { living } from './lib/living';
 
-export type RequestKind = 'ticket' | 'service';
+export type RequestKind = 'ticket' | 'service' | 'visitor';
 
 export interface MyRequest {
   kind: RequestKind;

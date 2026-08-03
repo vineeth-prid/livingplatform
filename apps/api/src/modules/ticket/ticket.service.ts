@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, TicketEventType, TicketStatus } from '@prisma/client';
@@ -15,6 +16,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
   AssignTicketDto,
   ChangeTicketStatusDto,
@@ -34,6 +36,8 @@ export function formatTicketNumber(n: number): string {
 
 @Injectable()
 export class TicketService {
+  private readonly logger = new Logger(TicketService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CommunityAccessService,
@@ -42,6 +46,7 @@ export class TicketService {
     private readonly timeline: TicketTimelineService,
     private readonly storage: StorageService,
     private readonly events: DomainEventsService,
+    private readonly autoAssign: VendorAutoAssignService,
   ) {}
 
   async create(communityId: string, dto: CreateTicketDto, actor: AuthenticatedUser) {
@@ -85,7 +90,66 @@ export class TicketService {
       entityId: ticket.id,
       data: { ticketNumber: formatTicketNumber(ticket.number) },
     });
-    return this.present(ticket);
+
+    // Try to route it to a vendor straight away. Best-effort by design: the
+    // ticket already exists and is valid, so a failure here must never surface
+    // to the reporter — it just stays unassigned for a manager to pick up.
+    const assigned = await this.tryAutoAssign(ticket, community.tenantId, actor);
+    return this.present(assigned ?? ticket);
+  }
+
+  /**
+   * Auto-assign a freshly created ticket to the least-loaded matching vendor.
+   * Returns the updated row, or null when nothing matched or anything went
+   * wrong. Never throws.
+   */
+  private async tryAutoAssign(
+    ticket: { id: string; communityId: string; categoryId: string; status: TicketStatus },
+    tenantId: string,
+    actor: AuthenticatedUser,
+  ) {
+    try {
+      const category = await this.prisma.ticketCategory.findUnique({
+        where: { id: ticket.categoryId },
+        select: { key: true, name: true },
+      });
+      if (!category) return null;
+
+      const picked = await this.autoAssign.pick({
+        tenantId,
+        communityId: ticket.communityId,
+        categories: [category.key, category.name],
+      });
+      this.autoAssign.logOutcome('ticket', ticket.id, picked);
+      if (!picked) return null;
+
+      const updated = await this.prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          assignedVendorId: picked.vendorId,
+          assignedAt: new Date(),
+          autoAssigned: true,
+          // assignedById stays null: no person made this call.
+          status: ticket.status === TicketStatus.OPEN ? TicketStatus.ASSIGNED : ticket.status,
+        },
+      });
+      await this.timeline.record({
+        ticketId: ticket.id,
+        type: TicketEventType.ASSIGNED,
+        actorId: actor.id,
+        metadata: { vendorId: picked.vendorId, auto: true, workload: picked.openWorkload },
+      });
+      this.events.publish({
+        name: DomainEventName.TicketAssigned,
+        ...this.events.from(actor, ticket.communityId),
+        entityId: ticket.id,
+        data: { ticketNumber: formatTicketNumber(updated.number), assigneeType: 'vendor', auto: true },
+      });
+      return updated;
+    } catch (err) {
+      this.logger.warn(`Auto-assignment failed for ticket ${ticket.id}: ${(err as Error).message}`);
+      return null;
+    }
   }
 
   async findMany(communityId: string, query: QueryTicketDto): Promise<Paginated<unknown>> {

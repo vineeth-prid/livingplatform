@@ -14,6 +14,7 @@ import { Hero } from './sections/hero';
 import { QuickActions } from './sections/quick-actions';
 import { TodaysOperations } from './sections/todays-operations';
 import { AttentionRequired } from './sections/attention-required';
+import { BusinessIntelligenceSection } from './sections/business-intelligence';
 import { RecentActivity } from './sections/recent-activity';
 import { CommunityHealth } from './sections/community-health';
 import { MyWork } from './sections/my-work';
@@ -81,6 +82,7 @@ export function DashboardPage() {
         <motion.div variants={listContainer} initial="initial" animate="animate">
           <QuickActions />
           <TodaysOperations kpis={derived.kpis} loading={loading} />
+          <BusinessIntelligenceSection />
           <AttentionRequired groups={derived.attention} loading={loading} />
 
           <div className="grid gap-6 lg:grid-cols-2">

@@ -27,7 +27,9 @@ auditing, observability, and the design-system integration path.
 | **Sprint 8** — Preventive Maintenance Engine | ✅ | Automation layer: recurring maintenance plans, checklists, immutable runs; a per-minute scheduler auto-generates Work Orders through the existing engine |
 | **Sprint 9** — AMC Management Engine | ✅ | Contractual layer: maintenance contracts, asset coverage, SLA rules, renewal/expiry, immutable history; a daily sweep expires & flags renewals |
 | **Sprint 10** — Community Operations | ✅ | Resident-facing layer: visitor management, amenity bookings, announcements (reusing the Sprint 2 amenity & document registers) |
-| Prisma schema + migrations + seed | ✅ | 49 tables; 9 incremental migrations through `sprint10_community_operations` |
+| **Sprint 11** — Payments, Billing, Auth & OpenWA | ✅ | Two community Razorpay rails (encrypted), configurable maintenance charges by property type, invoice generation + collection dashboards + resident pay/receipts, mobile-number auth with OTP reset & password history, OpenWA as a WhatsApp provider inside the existing Notification Engine, installable Resident PWA |
+| **Sprint 12** — Configuration, Packages & Intelligence | ✅ | Per-community module toggles (maintenance billing, packages), service enable/disable instead of deletion, redesigned resident home with a rotating hero, automatic least-loaded vendor assignment, Service Packages over the existing catalog, and community + platform business dashboards |
+| Prisma schema + migrations + seed | ✅ | 60 tables; 11 incremental migrations through `modules_packages_autoassign` |
 | Docker Compose (Postgres, Redis, Mailpit) | ✅ | Local infra |
 | **Frontend FS0** — Product Experience Foundation | ✅ | Monorepo (portal + resident + workforce), Living SDK, component library, motion, app shell, auth + permission framework, theme system |
 | **Frontend FS1** — Operations Dashboard | ✅ | Command-center dashboard (KPIs, attention, activity, health, my work) |
@@ -52,7 +54,17 @@ components, brand). It is wired into the frontend in the next pass.
 [`docs/architecture-sprint7.md`](docs/architecture-sprint7.md) (Asset Foundation),
 [`docs/architecture-sprint8.md`](docs/architecture-sprint8.md) (Preventive Maintenance Engine),
 [`docs/architecture-sprint9.md`](docs/architecture-sprint9.md) (AMC Management Engine),
-and [`docs/architecture-sprint10.md`](docs/architecture-sprint10.md) (Community Operations).
+[`docs/architecture-sprint10.md`](docs/architecture-sprint10.md) (Community Operations),
+[`docs/architecture-sprint11.md`](docs/architecture-sprint11.md) (Payments, Billing, Auth, OpenWA),
+and [`docs/architecture-sprint12.md`](docs/architecture-sprint12.md) (Module toggles, Packages, Dashboards).
+
+**Feature guides:** [`docs/payments.md`](docs/payments.md) (Razorpay rails, maintenance charges, billing),
+[`docs/authentication.md`](docs/authentication.md) (mobile login, OTP reset, password history),
+[`docs/whatsapp.md`](docs/whatsapp.md) (OpenWA setup, sessions, notification preferences),
+[`docs/pwa-installation.md`](docs/pwa-installation.md) (installing the Resident app),
+[`docs/community-settings.md`](docs/community-settings.md) (module toggles, resident home banners),
+[`docs/service-packages.md`](docs/service-packages.md) (packages, service availability),
+[`docs/dashboards.md`](docs/dashboards.md) (business intelligence, auto vendor assignment).
 
 **Frontend:** [`docs/frontend-architecture.md`](docs/frontend-architecture.md)
 (Product Experience Foundation),

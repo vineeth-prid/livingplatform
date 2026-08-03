@@ -86,6 +86,18 @@ export const DomainEventName = {
   BookingCancelled: 'booking.cancelled',
   AnnouncementPublished: 'announcement.published',
   AnnouncementExpired: 'announcement.expired',
+  // Sprint 11 — Payments & Maintenance Billing
+  PaymentConfigUpdated: 'payment.config_updated',
+  MaintenanceChargeUpdated: 'billing.charge_updated',
+  InvoiceGenerated: 'billing.invoice_generated',
+  InvoiceCancelled: 'billing.invoice_cancelled',
+  PaymentInitiated: 'payment.initiated',
+  PaymentSucceeded: 'payment.succeeded',
+  PaymentFailed: 'payment.failed',
+  PaymentRefunded: 'payment.refunded',
+  // Sprint 11 — WhatsApp gateway sessions
+  WhatsAppSessionConnected: 'whatsapp.session_connected',
+  WhatsAppSessionDisconnected: 'whatsapp.session_disconnected',
 } as const;
 
 export type DomainEventName =
@@ -176,6 +188,8 @@ export type TicketEvent = DomainEventEnvelope<
     assigneeType?: 'staff' | 'vendor';
     assigneeId?: string;
     commentId?: string;
+    /** True when the vendor was chosen by the auto-assignment rule. */
+    auto?: boolean;
   }
 >;
 
@@ -286,6 +300,36 @@ export type AnnouncementEvent = DomainEventEnvelope<
   { title: string; priority?: string }
 >;
 
+export type BillingEvent = DomainEventEnvelope<
+  | typeof DomainEventName.PaymentConfigUpdated
+  | typeof DomainEventName.MaintenanceChargeUpdated
+  | typeof DomainEventName.InvoiceGenerated
+  | typeof DomainEventName.InvoiceCancelled,
+  { purpose?: string; propertyType?: string; invoiceNumber?: string; count?: number; amount?: number }
+>;
+
+export type PaymentEvent = DomainEventEnvelope<
+  | typeof DomainEventName.PaymentInitiated
+  | typeof DomainEventName.PaymentSucceeded
+  | typeof DomainEventName.PaymentFailed
+  | typeof DomainEventName.PaymentRefunded,
+  {
+    purpose: string;
+    amount: number;
+    invoiceId?: string | null;
+    serviceRequestId?: string | null;
+    gatewayOrderId?: string | null;
+    gatewayPaymentId?: string | null;
+    reason?: string;
+  }
+>;
+
+export type WhatsAppSessionEvent = DomainEventEnvelope<
+  | typeof DomainEventName.WhatsAppSessionConnected
+  | typeof DomainEventName.WhatsAppSessionDisconnected,
+  { session: string; phoneNumber?: string | null; reason?: string }
+>;
+
 export type DomainEvent =
   | CommunityEvent
   | HierarchyEvent
@@ -305,4 +349,7 @@ export type DomainEvent =
   | AMCEvent
   | VisitorEvent
   | BookingEvent
-  | AnnouncementEvent;
+  | AnnouncementEvent
+  | BillingEvent
+  | PaymentEvent
+  | WhatsAppSessionEvent;

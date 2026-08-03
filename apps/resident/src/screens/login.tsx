@@ -4,13 +4,17 @@ import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import { Button, Input, toast } from '@living/ui';
 
-/** Consumer sign-in — warm, minimal, big touch targets. */
+import { ForgotPasswordDialog } from './forgot-password';
+
+/** Consumer sign-in — warm, minimal, big touch targets. Residents sign in with
+ *  their mobile number; the field still accepts an email for staff/admins. */
 export function LoginScreen() {
   const { login, status } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
 
   if (status === 'authenticated') return <Navigate to="/" />;
 
@@ -38,13 +42,20 @@ export function LoginScreen() {
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <Input label="Email" type="email" inputMode="email" autoComplete="email"
-          placeholder="you@home.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <Input label="Mobile number" inputMode="tel" autoComplete="username"
+          placeholder="9876543210" value={email} onChange={(e) => setEmail(e.target.value)} required
+          hint="Your registered mobile number is your username." />
         <Input label="Password" type="password" autoComplete="current-password"
           placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Button type="submit" size="lg" block loading={busy} className="mt-2">Sign in</Button>
+        <button type="button" onClick={() => setForgot(true)}
+          className="text-center text-sm text-brand underline-offset-2 hover:underline">
+          Forgot password?
+        </button>
         <p className="text-center text-xs text-subtle">Life Happens Here.</p>
       </form>
+
+      <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} />
     </div>
   );
 }

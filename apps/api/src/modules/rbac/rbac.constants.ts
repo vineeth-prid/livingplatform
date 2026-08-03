@@ -170,6 +170,49 @@ export const PERMISSIONS = {
   ANNOUNCEMENT_CREATE: 'announcement:create',
   ANNOUNCEMENT_UPDATE: 'announcement:update',
   ANNOUNCEMENT_PUBLISH: 'announcement:publish',
+
+  // ── Sprint 11 — Payments & Maintenance Billing ──
+  // Community gateway configuration. `payment:config:read` returns STATUS only;
+  // secrets are never in a response body regardless of permission.
+  PAYMENT_CONFIG_READ: 'payment:config:read',
+  PAYMENT_CONFIG_UPDATE: 'payment:config:update',
+
+  // Maintenance rate cards (charge configuration by property type).
+  BILLING_CHARGE_READ: 'billing:charge:read',
+  BILLING_CHARGE_MANAGE: 'billing:charge:manage',
+
+  // Invoices & collection.
+  BILLING_INVOICE_READ: 'billing:invoice:read',
+  BILLING_INVOICE_GENERATE: 'billing:invoice:generate',
+  BILLING_INVOICE_UPDATE: 'billing:invoice:update',
+  BILLING_DASHBOARD_READ: 'billing:dashboard:read',
+
+  // Payments (transaction history + initiating a checkout).
+  PAYMENT_READ: 'payment:read',
+  PAYMENT_CREATE: 'payment:create',
+  PAYMENT_REFUND: 'payment:refund',
+
+  // Notification routing & templates, per community.
+  NOTIFICATION_PREFERENCE_READ: 'notification:preference:read',
+  NOTIFICATION_PREFERENCE_UPDATE: 'notification:preference:update',
+  NOTIFICATION_TEMPLATE_READ: 'notification:template:read',
+  NOTIFICATION_TEMPLATE_MANAGE: 'notification:template:manage',
+
+  // Platform-level WhatsApp gateway administration (Platform Admin only).
+  WHATSAPP_ADMIN: 'whatsapp:admin',
+
+  // ── Sprint 12 — Service catalog, Packages & Insights ──
+  // The catalog itself (enable/disable a service for the community).
+  SERVICE_CATALOG_READ: 'service:catalog:read',
+  SERVICE_CATALOG_MANAGE: 'service:catalog:manage',
+
+  // Service Packages — bundles built on the catalog.
+  PACKAGE_READ: 'package:read',
+  PACKAGE_MANAGE: 'package:manage',
+  PACKAGE_PURCHASE: 'package:purchase',
+
+  // Business intelligence for a community (adoption, revenue, top vendors).
+  INSIGHTS_READ: 'insights:read',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -181,12 +224,15 @@ export const PERMISSION_CATALOG: ReadonlyArray<{
   action: string;
   description: string;
 }> = Object.values(PERMISSIONS).map((key) => {
-  const [resource, action] = key.split(':');
+  // `resource:action` for most keys; namespaced keys ("billing:invoice:read")
+  // keep the first segment as the resource and the remainder as the action.
+  const [resource, ...rest] = key.split(':');
+  const action = rest.join(':');
   return {
     key,
     resource: resource!,
-    action: action!,
-    description: `${action} ${resource}`,
+    action,
+    description: `${action.replace(/:/g, ' ')} ${resource}`,
   };
 });
 
@@ -342,6 +388,29 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.ANNOUNCEMENT_CREATE,
       P.ANNOUNCEMENT_UPDATE,
       P.ANNOUNCEMENT_PUBLISH,
+      // Payments & Billing — the association owns the money rails end to end.
+      P.PAYMENT_CONFIG_READ,
+      P.PAYMENT_CONFIG_UPDATE,
+      P.BILLING_CHARGE_READ,
+      P.BILLING_CHARGE_MANAGE,
+      P.BILLING_INVOICE_READ,
+      P.BILLING_INVOICE_GENERATE,
+      P.BILLING_INVOICE_UPDATE,
+      P.BILLING_DASHBOARD_READ,
+      P.PAYMENT_READ,
+      P.PAYMENT_CREATE,
+      P.PAYMENT_REFUND,
+      // Notification routing & message templates for its communities.
+      P.NOTIFICATION_PREFERENCE_READ,
+      P.NOTIFICATION_PREFERENCE_UPDATE,
+      P.NOTIFICATION_TEMPLATE_READ,
+      P.NOTIFICATION_TEMPLATE_MANAGE,
+      // Service catalog, packages and business intelligence.
+      P.SERVICE_CATALOG_READ,
+      P.SERVICE_CATALOG_MANAGE,
+      P.PACKAGE_READ,
+      P.PACKAGE_MANAGE,
+      P.INSIGHTS_READ,
     ],
   },
   {
@@ -431,6 +500,22 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.ANNOUNCEMENT_CREATE,
       P.ANNOUNCEMENT_UPDATE,
       P.ANNOUNCEMENT_PUBLISH,
+      // Billing — the FM runs collection day to day but never touches gateway
+      // credentials (that stays with the Association Admin).
+      P.BILLING_CHARGE_READ,
+      P.BILLING_INVOICE_READ,
+      P.BILLING_INVOICE_GENERATE,
+      P.BILLING_INVOICE_UPDATE,
+      P.BILLING_DASHBOARD_READ,
+      P.PAYMENT_READ,
+      P.NOTIFICATION_PREFERENCE_READ,
+      P.NOTIFICATION_TEMPLATE_READ,
+      // The FM curates what residents can book, and reads the numbers.
+      P.SERVICE_CATALOG_READ,
+      P.SERVICE_CATALOG_MANAGE,
+      P.PACKAGE_READ,
+      P.PACKAGE_MANAGE,
+      P.INSIGHTS_READ,
     ],
   },
   {
@@ -459,6 +544,15 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.BOOKING_CREATE,
       P.BOOKING_CANCEL,
       P.ANNOUNCEMENT_READ,
+      // Maintenance billing — a resident sees and pays only their own dues
+      // (scoped in BillingService/PaymentService, not by the permission alone).
+      P.BILLING_INVOICE_READ,
+      P.PAYMENT_READ,
+      P.PAYMENT_CREATE,
+      // Residents browse packages and buy them; they never manage the catalog.
+      P.SERVICE_CATALOG_READ,
+      P.PACKAGE_READ,
+      P.PACKAGE_PURCHASE,
     ],
   },
   {

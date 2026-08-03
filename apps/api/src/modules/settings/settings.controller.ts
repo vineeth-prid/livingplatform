@@ -21,6 +21,19 @@ export class SettingsController {
     return this.settings.get(communityId);
   }
 
+  /**
+   * The module toggles only. Deliberately gated on COMMUNITY_READ rather than
+   * SETTINGS_READ: every resident needs this to know whether to render the
+   * maintenance and packages surfaces, and they must not see the rest of the
+   * settings document to find out.
+   */
+  @Get('features')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_READ)
+  @ApiOperation({ summary: 'Which optional modules are enabled for this community' })
+  features(@Param('communityId') communityId: string) {
+    return this.settings.features(communityId);
+  }
+
   @Put()
   @RequirePermissions(PERMISSIONS.SETTINGS_UPDATE)
   @ApiOperation({ summary: 'Update (upsert) community settings' })

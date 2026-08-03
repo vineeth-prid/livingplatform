@@ -60,6 +60,26 @@ export class EmailTemplateEngine {
     return { subject, html, text: htmlToText(inner) };
   }
 
+  /**
+   * Render a template supplied at runtime rather than from disk — this is how a
+   * community's own message body (CommunityNotificationTemplate) is rendered.
+   * Same helpers, partials, layout and locale table as a built-in template, so
+   * an override behaves identically to the default it replaces.
+   */
+  renderRaw(
+    body: string,
+    variables: Record<string, unknown> = {},
+    opts: { subject?: string; locale?: string; layout?: boolean } = {},
+  ): RenderedTemplate {
+    const ctx = { ...variables, __locale: opts.locale ?? 'en' };
+    const inner = this.hbs.compile(body)(ctx);
+    const subject = opts.subject ? this.hbs.compile(opts.subject)(ctx).trim() : '';
+    const html = opts.layout === false
+      ? inner
+      : this.layout({ ...ctx, body: new Handlebars.SafeString(inner) });
+    return { subject, html, text: htmlToText(inner) };
+  }
+
   private compile(name: string): Compiled {
     const cached = this.cache.get(name);
     if (cached) return cached;

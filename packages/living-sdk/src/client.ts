@@ -11,6 +11,10 @@ import {
 } from './resources/community-ops';
 import { MaintenanceResource } from './resources/maintenance';
 import { NotificationsResource } from './resources/notifications';
+import {
+  BillingResource, PaymentConfigResource, PaymentsResource,
+} from './resources/payments';
+import { InsightsResource, PackagesResource } from './resources/packages';
 import { PeopleResource } from './resources/people';
 import { PlatformResource } from './resources/platform';
 import { ServiceRequestResource } from './resources/service-requests';
@@ -61,6 +65,13 @@ export class LivingClient {
   readonly platform: PlatformResource;
   readonly catalog: CatalogResource;
   readonly notifications: NotificationsResource;
+  // Payments & Maintenance Billing — the platform's only payment surface.
+  readonly paymentConfig: PaymentConfigResource;
+  readonly payments: PaymentsResource;
+  readonly billing: BillingResource;
+  // Service Packages + business intelligence (Sprint 12).
+  readonly packages: PackagesResource;
+  readonly insights: InsightsResource;
 
   constructor(config: LivingClientConfig) {
     this.tokenStore = config.tokenStore ?? createLocalStorageTokenStore();
@@ -88,6 +99,11 @@ export class LivingClient {
     this.platform = new PlatformResource(this.http);
     this.catalog = new CatalogResource(this.http);
     this.notifications = new NotificationsResource(this.http);
+    this.paymentConfig = new PaymentConfigResource(this.http);
+    this.payments = new PaymentsResource(this.http);
+    this.billing = new BillingResource(this.http);
+    this.packages = new PackagesResource(this.http);
+    this.insights = new InsightsResource(this.http);
   }
 
   /** Decoded access-token payload (roles/permissions/expiry) or null. */

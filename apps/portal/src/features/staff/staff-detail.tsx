@@ -11,6 +11,7 @@ import { living } from '../../lib/living';
 import {
   DetailHeader, DetailSection, DetailShell, Field, FieldGrid, PlaceholderSection, StatusBadge,
 } from '../master-data';
+import { ResetPasswordButton } from '../shared/reset-password-button';
 import { StaffForm } from './staff-form';
 
 const roleLabel = (r: string) => r.charAt(0) + r.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -56,6 +57,7 @@ export function StaffDetailPage() {
                 {hasPermission('staff:update') && (
                   <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Edit</Button>
                 )}
+                <ResetPasswordButton userId={s.userId} personName={`${s.firstName} ${s.lastName}`} />
                 {hasPermission('staff:delete') && (
                   <Button variant="ghost" onClick={onArchive} aria-label="Archive"><Archive className="h-4 w-4" /></Button>
                 )}

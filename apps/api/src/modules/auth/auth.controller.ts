@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Req,
 } from '@nestjs/common';
@@ -15,7 +16,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AuthService } from './auth.service';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../rbac/rbac.constants';
 import {
+  AdminResetPasswordDto,
   ChangePasswordDto,
   ForgotPasswordDto,
   LoginDto,
@@ -23,6 +27,7 @@ import {
   RegisterDto,
   ResendVerificationDto,
   ResetPasswordDto,
+  ResetPasswordWithOtpDto,
   VerifyEmailDto,
 } from './dto/auth.dto';
 
@@ -100,7 +105,9 @@ export class AuthController {
   @Post('forgot-password')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request a password reset email' })
+  @ApiOperation({
+    summary: 'Start a password reset by email or mobile number (OTP for mobile)',
+  })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto);
   }
@@ -112,6 +119,32 @@ export class AuthController {
   @ApiOperation({ summary: 'Set a new password using a reset token' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
+  }
+
+  @Public()
+  @Post('reset-password-otp')
+  // Tighter than the link flow: a 6-digit code is guessable if you let someone
+  // try often enough (the OTP itself also burns after 5 wrong attempts).
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set a new password using the mobile OTP' })
+  resetPasswordWithOtp(@Body() dto: ResetPasswordWithOtpDto) {
+    return this.auth.resetPasswordWithOtp(dto);
+  }
+
+  @Post('users/:userId/reset-password')
+  @ApiBearerAuth()
+  @RequirePermissions(PERMISSIONS.USER_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Admin reset — sets a temporary password and forces a change at next sign-in',
+  })
+  adminResetPassword(
+    @Param('userId') userId: string,
+    @Body() dto: AdminResetPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.auth.adminResetPassword(userId, user, dto.password);
   }
 
   @Post('change-password')

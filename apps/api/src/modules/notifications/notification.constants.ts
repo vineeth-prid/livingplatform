@@ -22,6 +22,17 @@ export const NOTIFICATION_TEMPLATES = {
   WORK_ORDER_CREATED: 'work-order-created',
   WORK_ORDER_COMPLETED: 'work-order-completed',
   OTP_REQUESTED: 'otp-requested',
+  // Sprint 11 — billing, payments and the community-life event set.
+  TICKET_CREATED: 'ticket-created',
+  SERVICE_ASSIGNED: 'service-assigned',
+  WORK_ORDER_ASSIGNED: 'work-order-assigned',
+  MAINTENANCE_DUE: 'maintenance-due',
+  PAYMENT_SUCCESS: 'payment-success',
+  VISITOR_PASS: 'visitor-pass',
+  VISITOR_APPROVED: 'visitor-approved',
+  BOOKING_CONFIRMED: 'booking-confirmed',
+  ANNOUNCEMENT: 'announcement',
+  WELCOME: 'welcome',
 } as const;
 
 export type NotificationTemplateName =

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { VendorModule } from '../vendor/vendor.module';
+
 import {
   TicketAttachmentController,
   TicketCategoryController,
@@ -21,6 +23,7 @@ import { TicketTimelineService } from './ticket-timeline.service';
  * future notification modules to consume.
  */
 @Module({
+  imports: [VendorModule],
   controllers: [
     TicketController,
     TicketCommentController,

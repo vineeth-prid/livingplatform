@@ -12,6 +12,7 @@ import { living } from '../../lib/living';
 import {
   DetailHeader, DetailSection, DetailShell, Field, FieldGrid, PlaceholderSection, StatusBadge,
 } from '../master-data';
+import { ResetPasswordButton } from '../shared/reset-password-button';
 import { ResidentForm } from './resident-form';
 
 export function ResidentDetailPage() {
@@ -69,6 +70,7 @@ export function ResidentDetailPage() {
                     <Pencil className="h-4 w-4" /> Edit
                   </Button>
                 )}
+                <ResetPasswordButton userId={r.userId} personName={`${r.firstName} ${r.lastName}`} />
                 {hasPermission('resident:delete') && (
                   <Button variant="ghost" onClick={onArchive} aria-label="Archive">
                     <Archive className="h-4 w-4" />

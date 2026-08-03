@@ -79,9 +79,42 @@ export class RefreshTokenDto {
 }
 
 export class ForgotPasswordDto {
-  @ApiProperty({ example: 'admin@living.local' })
-  @IsEmail()
-  email!: string;
+  @ApiProperty({
+    example: '9876543210',
+    description: 'Email address OR mobile number — mobile is the primary login',
+  })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  identifier!: string;
+}
+
+/** Complete a mobile reset: the number, the OTP, and the new password. */
+export class ResetPasswordWithOtpDto extends PasswordField {
+  @ApiProperty({ example: '9876543210' })
+  @IsString()
+  @MinLength(7)
+  @MaxLength(20)
+  mobile!: string;
+
+  @ApiProperty({ example: '482913', description: 'The one-time code sent to the mobile' })
+  @IsString()
+  @MinLength(4)
+  @MaxLength(8)
+  code!: string;
+}
+
+/** Admin-initiated reset. Omit the password to fall back to the platform default. */
+export class AdminResetPasswordDto {
+  @ApiPropertyOptional({
+    description: 'Temporary password to set. Defaults to AUTH_DEFAULT_PASSWORD.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(PASSWORD_MIN)
+  @MaxLength(128)
+  @Matches(PASSWORD_RULE, { message: PASSWORD_MESSAGE })
+  password?: string;
 }
 
 export class ResetPasswordDto extends PasswordField {

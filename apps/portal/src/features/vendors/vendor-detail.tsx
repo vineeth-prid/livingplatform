@@ -10,6 +10,7 @@ import { living } from '../../lib/living';
 import {
   DetailHeader, DetailSection, DetailShell, Field, FieldGrid, PlaceholderSection, StatusBadge,
 } from '../master-data';
+import { ResetPasswordButton } from '../shared/reset-password-button';
 import { VendorForm } from './vendor-form';
 
 const catLabel = (c: string) => c.charAt(0) + c.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -54,6 +55,7 @@ export function VendorDetailPage() {
                 {hasPermission('vendor:update') && (
                   <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Edit</Button>
                 )}
+                <ResetPasswordButton userId={v.userId} personName={v.name} />
                 {hasPermission('vendor:delete') && (
                   <Button variant="ghost" onClick={onArchive} aria-label="Archive"><Archive className="h-4 w-4" /></Button>
                 )}

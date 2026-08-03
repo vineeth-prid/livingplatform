@@ -28,10 +28,11 @@ function systemTheme(): ResolvedTheme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function readStored(): ThemeMode {
-  if (typeof window === 'undefined') return 'system';
+/** The user's stored preference, or the app's default when they have none. */
+function readStored(fallback: ThemeMode = 'system'): ThemeMode {
+  if (typeof window === 'undefined') return fallback;
   const v = window.localStorage.getItem(STORAGE_KEY);
-  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+  return v === 'light' || v === 'dark' || v === 'system' ? v : fallback;
 }
 
 /**
@@ -46,9 +47,9 @@ export function ThemeProvider({
   children: ReactNode;
   defaultMode?: ThemeMode;
 }) {
-  const [mode, setModeState] = useState<ThemeMode>(() =>
-    typeof window === 'undefined' ? defaultMode : readStored(),
-  );
+  // `defaultMode` now applies on the client too — it is what a user sees before
+  // they have ever chosen a theme (the resident app opens in Light).
+  const [mode, setModeState] = useState<ThemeMode>(() => readStored(defaultMode));
   const [systemPref, setSystemPref] = useState<ResolvedTheme>(systemTheme);
 
   const theme: ResolvedTheme = mode === 'system' ? systemPref : mode;

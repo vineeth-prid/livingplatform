@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ServiceRequestStatus } from '@prisma/client';
@@ -15,6 +16,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import { TicketService } from '../ticket/ticket.service';
+import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
   AssignServiceRequestDto,
   ChangeServiceRequestStatusDto,
@@ -37,6 +39,8 @@ export function formatServiceRequestNumber(n: number): string {
 
 @Injectable()
 export class ServiceRequestService {
+  private readonly logger = new Logger(ServiceRequestService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CommunityAccessService,
@@ -44,9 +48,20 @@ export class ServiceRequestService {
     private readonly statusFlow: ServiceRequestStatusService,
     private readonly tickets: TicketService,
     private readonly events: DomainEventsService,
+    private readonly autoAssign: VendorAutoAssignService,
   ) {}
 
-  async create(communityId: string, dto: CreateServiceRequestDto, actor: AuthenticatedUser) {
+  /**
+   * `internal` carries fields that must NOT be settable over HTTP — currently
+   * the package-purchase link. It is deliberately a separate parameter rather
+   * than a DTO field so a resident cannot forge a redemption by posting one.
+   */
+  async create(
+    communityId: string,
+    dto: CreateServiceRequestDto,
+    actor: AuthenticatedUser,
+    internal?: { packagePurchaseId?: string },
+  ) {
     const community = await this.access.assert(communityId);
     await this.assertUnitInCommunity(dto.unitId, communityId);
     await this.catalog.assertUsable(dto.serviceId, community.tenantId);
@@ -58,6 +73,7 @@ export class ServiceRequestService {
         unitId: dto.unitId,
         serviceId: dto.serviceId,
         residentId: dto.residentId,
+        packagePurchaseId: internal?.packagePurchaseId ?? null,
         title: dto.title,
         description: dto.description,
         priority: dto.priority ?? 'MEDIUM',
@@ -72,7 +88,57 @@ export class ServiceRequestService {
       },
     });
     this.publish(DomainEventName.ServiceRequestCreated, request, actor);
-    return this.present(request);
+
+    // Route it to a vendor immediately where one matches. Best-effort: the
+    // request is already valid and saved, so a failure here leaves it
+    // unassigned for a manager rather than failing the resident's booking.
+    const assigned = await this.tryAutoAssign(request, community.tenantId, actor);
+    return this.present(assigned ?? request);
+  }
+
+  /**
+   * Auto-assign a new request to the least-loaded vendor covering this
+   * community and offering this service. Returns null (never throws) when
+   * nothing matches or anything goes wrong.
+   */
+  private async tryAutoAssign(
+    request: { id: string; communityId: string; serviceId: string; status: ServiceRequestStatus },
+    tenantId: string,
+    actor: AuthenticatedUser,
+  ) {
+    try {
+      const service = await this.prisma.service.findUnique({
+        where: { id: request.serviceId },
+        select: { key: true, name: true },
+      });
+      if (!service) return null;
+
+      const picked = await this.autoAssign.pick({
+        tenantId,
+        communityId: request.communityId,
+        categories: [service.key, service.name],
+      });
+      this.autoAssign.logOutcome('service-request', request.id, picked);
+      if (!picked) return null;
+
+      const updated = await this.prisma.serviceRequest.update({
+        where: { id: request.id },
+        data: {
+          assignedVendorId: picked.vendorId,
+          assignedAt: new Date(),
+          autoAssigned: true,
+          // assignedById stays null: no person made this call.
+          status: request.status === S.REQUESTED ? S.ASSIGNED : request.status,
+        },
+      });
+      this.publish(DomainEventName.ServiceAssigned, updated, actor);
+      return updated;
+    } catch (err) {
+      this.logger.warn(
+        `Auto-assignment failed for service request ${request.id}: ${(err as Error).message}`,
+      );
+      return null;
+    }
   }
 
   async findMany(communityId: string, query: QueryServiceRequestDto): Promise<Paginated<unknown>> {

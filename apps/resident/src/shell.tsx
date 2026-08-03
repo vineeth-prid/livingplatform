@@ -6,6 +6,8 @@ import { useAuth } from '@living/hooks';
 import { LoadingState } from '@living/ui';
 import { cn } from '@living/utils';
 
+import { InstallBanner } from './pwa/install';
+
 const TABS = [
   { to: '/', label: 'Home', icon: Home, match: (p: string) => p === '/' },
   { to: '/services', label: 'Services', icon: LayoutGrid, match: (p: string) => p.startsWith('/services') },
@@ -30,6 +32,8 @@ export function MobileShell() {
           <Outlet />
         </PageFade>
       </main>
+      {/* Sits above the tab bar; renders nothing unless the app is installable. */}
+      <InstallBanner />
       <BottomNav pathname={pathname} />
     </div>
   );

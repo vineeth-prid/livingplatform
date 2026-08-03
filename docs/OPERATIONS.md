@@ -34,9 +34,55 @@ audit trail (every mutation → `audit_logs` table), and domain-event emissions
 | Preventive-maintenance WO generation | every minute | `PM_SCHEDULER_ENABLED` |
 | AMC expiry / renewal sweep | daily 01:00 | `AMC_EXPIRY_ENABLED` |
 | Announcement publish / expire | hourly | `ANNOUNCEMENT_SWEEP_ENABLED` |
+| Billing overdue + late fees, maintenance-due reminders | daily 02:00 | `BILLING_SWEEP_ENABLED` |
+| WhatsApp connection watchdog | every minute (throttled to `OPENWA_HEALTH_INTERVAL_SEC`) | `OPENWA_HEALTH_INTERVAL_SEC=0` |
 
 All are **idempotent** (compare-and-swap). With multiple API replicas, run the
 sweeps on exactly one (disable on the others) — see [`ENVIRONMENT.md`](ENVIRONMENT.md).
+
+## Payments
+
+| Situation | What to do |
+| --- | --- |
+| A resident paid but the invoice still shows a balance | Check Razorpay → Webhooks for delivery failures. Settlement is idempotent, so **redelivering the webhook is safe** and will credit the invoice. |
+| "This community has not configured a … payment account yet" | Portal → Billing → Payment settings: the rail is disabled or missing a key id/secret. |
+| Webhook returning 403 | Signature mismatch — the webhook secret in Razorpay and in the portal differ, or a proxy is re-serializing the body (the signature is over the **raw bytes**). |
+| Credentials rotated at Razorpay | Re-enter Key ID + Key Secret in the portal, then **Test connection**. In-flight orders created with the old key still verify against the new secret only if Razorpay kept it live — prefer rotating during a quiet window. |
+| Refund | Portal → Billing → Collection → Transactions (needs `payment:refund`). |
+| `APP_ENCRYPTION_KEY` lost | Stored secrets cannot be recovered. Re-enter every community's Razorpay credentials and WhatsApp session keys. Payments and invoices themselves are unaffected. |
+
+Monthly billing is **not** automatic — an admin runs the billing cycle from
+Portal → Billing → Collection → *Generate invoices*. Re-running a period is safe
+(unique on unit + cycle + period). Preview first; it reports which property types
+have no rate in force.
+
+## Community modules
+
+| Situation | What to do |
+| --- | --- |
+| "Maintenance billing is not enabled for this community" (404) | Expected — that community has the module off. Portal → Community → Settings to check. See [`community-settings.md`](community-settings.md). |
+| Billing nav missing for an admin | Same cause. The nav follows `GET /communities/:id/settings/features`; the hook caches for 5 minutes, so a just-flipped toggle can take that long to appear. |
+| A community turned billing off mid-month | New checkouts are refused; payments already in flight still settle, and existing invoices/history are kept. The nightly sweep skips them, so no late fees or reminders. |
+| Residents cannot see a service | Check Portal → Catalog → Services — it is probably Inactive. Reactivating restores it immediately; nothing was deleted. |
+| A package vanished from the resident app | Either the package is INACTIVE, the `servicePackages` module is off, or **every** service in it has been deactivated. |
+
+## Vendor auto-assignment
+
+| Situation | What to do |
+| --- | --- |
+| Tickets arriving unassigned | No ACTIVE vendor covers that community with a matching category. Check the vendor's `communityIds` and `category`/`serviceCategories` against the ticket category key. |
+| Work going to the wrong vendor | Selection is least-open-workload, ties broken by name. Reassign manually — that overwrites `autoAssigned`. |
+| Auto-assignment appears to have stopped | It is best-effort and never blocks creation; look for `Auto-assignment failed for …` warnings in the API log. Tickets are still created correctly. |
+
+## WhatsApp (OpenWA)
+
+| Situation | What to do |
+| --- | --- |
+| Channel unhealthy | Portal → Platform admin → WhatsApp. Status `qr pending` ⇒ scan again; `failed` ⇒ check `lastError` and the gateway container. |
+| Session dropped overnight | The watchdog auto-restarts it when `OPENWA_AUTO_RECONNECT=true`. A drop after a phone logout needs a **new QR scan**. |
+| Messages queued but not sending | `GET /api/v1/notifications/queue` — check `waiting` / `retrying` / `deadLettered`. The queue is shared with email, so a WhatsApp outage does not stall email. |
+| Gateway webhook rejected | `OPENWA_WEBHOOK_SECRET` unset or mismatched. **With no secret the endpoint rejects everything by design.** |
+| Reverting to the Meta Cloud API | Set `WHATSAPP_PROVIDER=meta` and restart. No data migration — deliveries and preferences are channel-level, not provider-level. |
 
 ## Common tasks
 

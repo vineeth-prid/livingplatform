@@ -9,3 +9,7 @@ export {
   useIsTablet,
   useIsDesktop,
 } from './use-media-query';
+export {
+  useCommunityFeatures,
+  type CommunityFeatureState,
+} from './community-features';

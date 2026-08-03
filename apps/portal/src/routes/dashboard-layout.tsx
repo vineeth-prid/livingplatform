@@ -1,10 +1,12 @@
 import { Suspense, useEffect, useMemo } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
-  Activity, Boxes, Building2, CalendarCheck, CalendarClock, DoorOpen, FileSignature, FileText,
-  Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, Server, ShieldCheck, Sparkles, Store, UserRound, Users, Wrench,
+  Activity, BellRing, Boxes, Building2, CalendarCheck, CalendarClock, CreditCard, DoorOpen,
+  FileSignature, FileText, Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, MessageCircle,
+  Package, Receipt, Server, Settings, ShieldCheck, Sparkles, Store, TrendingUp, UserRound, Users,
+  Wallet, Wrench,
 } from 'lucide-react';
-import { useAuth } from '@living/hooks';
+import { useAuth, useCommunityFeatures } from '@living/hooks';
 import {
   AppShell, LoadingState, ProfileMenu, ThemeSwitch, WorkspaceSwitcher,
   useCommandPalette, type NavSection,
@@ -42,6 +44,23 @@ const sections: NavSection[] = [
       { label: 'Residents', icon: Users, href: '/residents' },
       { label: 'Staff', icon: HardHat, href: '/staff' },
       { label: 'Vendors', icon: Store, href: '/vendors' },
+      { label: 'Settings', icon: Settings, href: '/settings' },
+    ],
+  },
+  {
+    title: 'Billing',
+    items: [
+      { label: 'Collection', icon: Wallet, href: '/billing' },
+      { label: 'Maintenance charges', icon: Receipt, href: '/billing/charges' },
+      { label: 'Payment settings', icon: CreditCard, href: '/billing/payment-settings' },
+      { label: 'Notifications', icon: BellRing, href: '/billing/notifications' },
+    ],
+  },
+  {
+    title: 'Catalog',
+    items: [
+      { label: 'Services', icon: Wrench, href: '/services' },
+      { label: 'Packages', icon: Package, href: '/packages' },
     ],
   },
   {
@@ -66,9 +85,36 @@ const adminSection: NavSection = {
     { label: 'Audit & monitoring', icon: Activity, href: '/admin/audit' },
     { label: 'System', icon: Server, href: '/admin/system' },
     { label: 'Notifications', icon: Megaphone, href: '/admin/notifications' },
+    { label: 'WhatsApp', icon: MessageCircle, href: '/admin/whatsapp' },
+    { label: 'Payments', icon: CreditCard, href: '/admin/payments' },
+    { label: 'Business', icon: TrendingUp, href: '/admin/business' },
     { label: 'Community management', icon: ShieldCheck, href: '/admin/communities' },
   ],
 };
+
+/**
+ * Drop nav items whose community module is switched off.
+ *
+ * The API already 404s those routes, so this is not the security boundary — it
+ * is what stops the portal advertising a module the community does not run.
+ */
+function applyModuleToggles(
+  navSections: NavSection[],
+  features: { maintenanceBilling: boolean; servicePackages: boolean },
+): NavSection[] {
+  const hidden = new Set<string>();
+  if (!features.maintenanceBilling) {
+    hidden.add('/billing');
+    hidden.add('/billing/charges');
+    hidden.add('/billing/payment-settings');
+  }
+  if (!features.servicePackages) hidden.add('/packages');
+  if (hidden.size === 0) return navSections;
+
+  return navSections
+    .map((section) => ({ ...section, items: section.items.filter((i) => !hidden.has(i.href)) }))
+    .filter((section) => section.items.length > 0);
+}
 
 /** The authenticated dashboard shell wrapping every protected route. */
 export function DashboardLayout() {
@@ -82,9 +128,10 @@ export function DashboardLayout() {
   // operational sections (assets, AMC, tickets, community ops…) belong to the
   // association that runs each community, so a Platform Admin never sees them.
   const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
+  const features = useCommunityFeatures(isPlatform ? null : communityId);
   const visibleSections = useMemo(
-    () => (isPlatform ? [adminSection] : sections),
-    [isPlatform],
+    () => (isPlatform ? [adminSection] : applyModuleToggles(sections, features)),
+    [isPlatform, features],
   );
 
   // A Platform Admin has no operational dashboard — land them on the executive one.

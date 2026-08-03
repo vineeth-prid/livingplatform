@@ -27,6 +27,22 @@ cp deploy/.env.production.example .env.production
 # and VITE_API_BASE_URL (e.g. https://api.living.example/api/v1).
 ```
 
+**Also required from v1.1 (Sprint 11):**
+
+```bash
+openssl rand -base64 48   # → APP_ENCRYPTION_KEY   (REQUIRED in production)
+```
+
+| Variable | Why |
+| --- | --- |
+| `APP_ENCRYPTION_KEY` | AES-256-GCM key for Razorpay key secrets, webhook secrets and WhatsApp API keys. **Boot fails in production without it.** Rotating it makes every stored secret undecryptable — they must be re-entered. Back it up with the same care as the DB password. |
+| `AUTH_DEFAULT_PASSWORD` | The one-time password handed to every provisioned resident/staff/vendor. **Change it from `Living@123`.** |
+| `WHATSAPP_PROVIDER` + `OPENWA_*` | Only if using the self-hosted gateway — see [`whatsapp.md`](whatsapp.md). |
+| `BILLING_SWEEP_ENABLED` | Leave `true` on exactly one API replica. |
+
+Per-community Razorpay credentials are **not** env vars — they are entered in
+the portal and stored encrypted. See [`payments.md`](payments.md).
+
 Set your real domains in `deploy/nginx/edge.conf` (replace `*.living.example`).
 
 ## 3. Build & start
@@ -69,6 +85,28 @@ docker compose -f docker-compose.production.yml ps            # all healthy
 
 Open the portal, sign in with the seeded admin (`admin@living.local` /
 `Living!2024` — **change immediately**), confirm a community loads.
+
+### Post-deploy checklist (Sprint 11)
+
+| Step | Where |
+| --- | --- |
+| Enter each community's two Razorpay accounts | Portal → Billing → Payment settings, then **Test connection** |
+| Register the Razorpay webhooks | Razorpay Dashboard → Webhooks → `…/payments/webhooks/razorpay/<communityId>/<PURPOSE>` |
+| Configure maintenance charges per property type | Portal → Billing → Maintenance charges |
+| Run the first billing cycle as a dry run | Portal → Billing → Collection → Generate invoices → **Preview** |
+| Pair WhatsApp (if `WHATSAPP_PROVIDER=openwa`) | Portal → Platform admin → WhatsApp → Connect → scan QR |
+| Set per-community notification routing | Portal → Billing → Notifications |
+| Verify the Resident PWA installs | Open on Android Chrome → Install banner appears |
+
+### Post-deploy checklist (Sprint 12)
+
+| Step | Where |
+| --- | --- |
+| Reseed for the new permissions | `pnpm --filter @living/api db:seed` — `service:catalog:*`, `package:*`, `insights:read` |
+| Confirm the module toggles per community | Portal → Community → Settings. **Both default to ON**, so review any community that does not collect through Living. |
+| Set list prices on services | Portal → Catalog → Services — required before a package can advertise a saving |
+| Check vendor coverage | Auto-assignment needs `communityIds` and a matching `category`/`serviceCategories` on each vendor |
+| Add resident home banners (optional) | Portal → Community → Settings → Home banners |
 
 ## 6. Updating
 

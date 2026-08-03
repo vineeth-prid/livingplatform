@@ -70,4 +70,46 @@ controller → service (CommunityAccessService.assert + Prisma) → TransformInt
 consistent error body.
 
 For deeper per-engine rationale see `docs/architecture-sprint2.md …
-architecture-sprint10.md` and the frontend `docs/frontend-*.md`.
+architecture-sprint11.md` and the frontend `docs/frontend-*.md`.
+
+## Money & messaging (Sprint 11)
+
+```
+modules/billing    rate cards → invoices → collection dashboards → resident dues
+modules/payments   community Razorpay rails → checkout → webhooks → refunds
+                   (depends on billing; never the reverse)
+
+DomainEvent → NotificationRouterService → per-community preference
+                                        → NotificationDispatcher → email | whatsapp
+```
+
+The **only** payment implementation is `modules/payments`; the **only**
+notification engine is `modules/notifications`. WhatsApp via OpenWA is one extra
+provider behind the existing `WhatsAppProvider` interface, not a second
+messaging system. Gateway secrets are AES-256-GCM encrypted by the shared
+`SecretCipher` (`common/crypto`) and never leave the server.
+
+See [`payments.md`](payments.md), [`whatsapp.md`](whatsapp.md),
+[`authentication.md`](authentication.md).
+
+## Configuration & merchandising (Sprint 12)
+
+```
+CommunitySettings ── module toggles ──→ ModuleEnabledGuard (API)
+                                    └─→ useCommunityFeatures (portal + resident)
+
+ServicePackage ──→ Service (existing catalog)
+       │      purchase → Payment (SERVICE rail) ── payment.succeeded ──→ activate
+       └──── redeem ──→ ServiceRequest (existing engine)
+```
+
+Optional modules (maintenance billing, service packages) are **per-community
+configuration**, answered in one place by `SettingsService.features()` and
+enforced by a class-level guard rather than per-call-site checks. Service
+Packages add no engine: they reference catalog services, collect through the
+existing Payment Engine, and deliver through the existing Service Request
+Engine. New tickets and service requests are routed to the least-loaded matching
+vendor, best-effort, never blocking creation.
+
+See [`community-settings.md`](community-settings.md),
+[`service-packages.md`](service-packages.md), [`dashboards.md`](dashboards.md).

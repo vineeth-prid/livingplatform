@@ -30,6 +30,11 @@ async function bootstrap(): Promise<void> {
   // disable signature verification (the body must stay raw for this route).
   app.use(`/${apiPrefix}/v1/notifications/webhooks/whatsapp`, text({ type: '*/*', limit: '512kb' }));
 
+  // Same rule for the Razorpay webhooks (one path per community rail) and the
+  // OpenWA gateway callbacks — both authenticate by HMAC over the raw bytes.
+  app.use(`/${apiPrefix}/v1/payments/webhooks/razorpay`, text({ type: '*/*', limit: '512kb' }));
+  app.use(`/${apiPrefix}/v1/notifications/webhooks/openwa`, text({ type: '*/*', limit: '512kb' }));
+
   // CORS — explicit allow-list from config; credentials on for cookie support.
   // Reflecting any origin WITH credentials is unsafe, so fail closed in
   // production when no allow-list is configured rather than opening up.

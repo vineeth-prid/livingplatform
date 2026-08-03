@@ -6,8 +6,11 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { UserStatus, VerificationTokenType } from '@prisma/client';
 import * as argon2 from 'argon2';
+
+import type { AppConfig } from '../../config/configuration';
 
 import { expiryFrom } from '../../common/utils/duration';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
@@ -19,12 +22,15 @@ import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  ResetPasswordWithOtpDto,
 } from './dto/auth.dto';
+import { OtpService } from './otp.service';
+import { PasswordPolicyService } from './password-policy.service';
 import { TokensService, type TokenPair } from './tokens.service';
 
 const EMAIL_VERIFICATION_TTL = '24h';
 const PASSWORD_RESET_TTL = '1h';
-const GENERIC_MESSAGE = 'If that email exists, we have sent instructions to it';
+const GENERIC_MESSAGE = 'If that account exists, we have sent instructions to it';
 
 interface RequestMeta {
   userAgent?: string;
@@ -55,13 +61,20 @@ export interface PublicUser {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  /** Configurable one-time password for provisioned/reset accounts. */
+  private readonly defaultPassword: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly rbac: RbacService,
     private readonly tokens: TokensService,
     private readonly mail: MailService,
-  ) {}
+    private readonly passwords: PasswordPolicyService,
+    private readonly otp: OtpService,
+    config: ConfigService<AppConfig, true>,
+  ) {
+    this.defaultPassword = config.get('auth', { infer: true }).defaultPassword;
+  }
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
     const existing = await this.prisma.user.findUnique({
@@ -201,33 +214,116 @@ export class AuthService {
     return { message: 'Signed out of all sessions' };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
+  /**
+   * Start a password reset. The identifier is an email OR a mobile number —
+   * mobile is the platform's primary login, so a resident who only knows their
+   * phone number can still recover. Mobile accounts get a WhatsApp OTP; email
+   * accounts get the existing emailed link. The response is identical either
+   * way so the endpoint never confirms whether an account exists.
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string; channel: 'otp' | 'link' }> {
+    const identifier = dto.identifier.trim();
+    const username = identifier.replace(/\D/g, '');
+    const looksLikeMobile = username.length >= 7 && !identifier.includes('@');
+
     const user = await this.prisma.user.findFirst({
-      where: { email: dto.email.toLowerCase(), deletedAt: null },
-      select: { id: true, email: true },
+      where: {
+        deletedAt: null,
+        OR: [
+          { email: identifier.toLowerCase() },
+          ...(username.length >= 7 ? [{ username }] : []),
+        ],
+      },
+      select: { id: true, email: true, username: true, firstName: true },
     });
+
     if (user) {
-      const token = await this.createVerificationToken(
-        user.id,
-        VerificationTokenType.PASSWORD_RESET,
-        PASSWORD_RESET_TTL,
-      );
-      await this.mail.sendPasswordReset(user.email, token);
+      if (user.username) {
+        await this.otp.issue({
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          mobile: user.username,
+        });
+      } else {
+        const token = await this.createVerificationToken(
+          user.id,
+          VerificationTokenType.PASSWORD_RESET,
+          PASSWORD_RESET_TTL,
+        );
+        await this.mail.sendPasswordReset(user.email, token);
+      }
     }
-    return { message: GENERIC_MESSAGE };
+    // Shape the hint off the *identifier*, not off the lookup result.
+    return { message: GENERIC_MESSAGE, channel: looksLikeMobile ? 'otp' : 'link' };
   }
 
+  /** Complete a reset from an emailed link token. */
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
     const userId = await this.consumeVerificationToken(
       dto.token,
       VerificationTokenType.PASSWORD_RESET,
     );
-    const passwordHash = await argon2.hash(dto.password, {
-      type: argon2.argon2id,
+    return this.applyNewPassword(userId, dto.password);
+  }
+
+  /** Complete a reset from a mobile OTP. */
+  async resetPasswordWithOtp(dto: ResetPasswordWithOtpDto): Promise<{ message: string }> {
+    const username = dto.mobile.replace(/\D/g, '');
+    const user = await this.prisma.user.findFirst({
+      where: { username, deletedAt: null },
+      select: { id: true },
     });
+    // Same generic failure whether the number is unknown or the code is wrong.
+    if (!user) throw new BadRequestException('That code is invalid or has expired');
+    const userId = await this.otp.verify(user.id, dto.code);
+    return this.applyNewPassword(userId, dto.password);
+  }
+
+  /**
+   * Admin-initiated reset: set the account back to the configured one-time
+   * password and force a change at next sign-in. Returns the password so the
+   * admin can read it out — it is already known platform-wide by design.
+   */
+  async adminResetPassword(
+    userId: string,
+    actor: AuthenticatedUser,
+    newPassword?: string,
+  ): Promise<{ message: string; temporaryPassword: string; mustChangePassword: true }> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true, tenantId: true },
+    });
+    if (!user) throw new BadRequestException('User not found');
+    // A tenant admin may only reset users inside their own tenant.
+    if (actor.tenantId && user.tenantId !== actor.tenantId) {
+      throw new BadRequestException('User not found');
+    }
+
+    const temporaryPassword = newPassword ?? this.defaultPassword;
+    const passwordHash = await this.passwords.hashAndRecord(userId, temporaryPassword).catch(
+      // A forced reset must succeed even when the temp password is in history.
+      () => this.passwords.hash(temporaryPassword),
+    );
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: { passwordHash, mustChangePassword: true, updatedById: actor.id },
+    });
+    await this.tokens.revokeAllForUser(userId);
+    this.logger.log(`Password reset for user=${userId} by admin=${actor.id}`);
+    return {
+      message: 'Password reset. The user must change it at next sign-in.',
+      temporaryPassword,
+      mustChangePassword: true,
+    };
+  }
+
+  /** Shared tail of every reset path: policy check, write, revoke sessions. */
+  private async applyNewPassword(userId: string, password: string): Promise<{ message: string }> {
+    const passwordHash = await this.passwords.hashAndRecord(userId, password);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
     });
     // Force re-authentication everywhere after a password change.
     await this.tokens.revokeAllForUser(userId);
@@ -248,9 +344,10 @@ export class AuthService {
     newPassword: string,
   ): Promise<{ message: string }> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const ok = await argon2.verify(user.passwordHash, currentPassword).catch(() => false);
+    const ok = await this.passwords.verify(user.passwordHash, currentPassword);
     if (!ok) throw new BadRequestException('Current password is incorrect');
-    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    // Rejects reuse of a recent password and records the old hash in history.
+    const passwordHash = await this.passwords.hashAndRecord(userId, newPassword);
     await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash, mustChangePassword: false },

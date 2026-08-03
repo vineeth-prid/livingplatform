@@ -54,7 +54,7 @@ export class ServiceRequestResource {
   }
 
   // Catalog
-  listServices(params?: { activeOnly?: boolean }): Promise<Service[]> {
+  listServices(params?: { activeOnly?: boolean; search?: string }): Promise<Service[]> {
     return this.http.get('/services', params);
   }
   createService(input: Body): Promise<Service> {
@@ -63,6 +63,21 @@ export class ServiceRequestResource {
   updateService(id: string, input: Body): Promise<Service> {
     return this.http.patch(`/services/${id}`, input);
   }
+  /**
+   * Enable / disable a service — the supported way to stop offering one.
+   * Inactive services vanish from the resident app but keep every historical
+   * request intact.
+   */
+  setServiceStatus(id: string, isActive: boolean): Promise<Service> {
+    return this.http.patch(`/services/${id}/status`, { isActive });
+  }
+
+  /** Open requests + packages still referencing a service (shown before disabling). */
+  serviceUsage(id: string): Promise<{ openRequests: number; packages: number }> {
+    return this.http.get(`/services/${id}/usage`);
+  }
+
+  /** @deprecated Prefer `setServiceStatus(id, false)` — services are not deleted. */
   deleteService(id: string): Promise<unknown> {
     return this.http.delete(`/services/${id}`);
   }

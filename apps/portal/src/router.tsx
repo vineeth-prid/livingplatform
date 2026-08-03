@@ -46,6 +46,20 @@ const PlatformDashboardPage = lazy(() => import('./features/platform-admin/platf
 const PlatformAuditPage = lazy(() => import('./features/platform-admin/platform-audit').then((m) => ({ default: m.PlatformAuditPage })));
 const PlatformSystemPage = lazy(() => import('./features/platform-admin/platform-system').then((m) => ({ default: m.PlatformSystemPage })));
 const PlatformNotificationsPage = lazy(() => import('./features/platform-admin/platform-notifications').then((m) => ({ default: m.PlatformNotificationsPage })));
+const PlatformWhatsAppPage = lazy(() => import('./features/platform-admin/platform-whatsapp').then((m) => ({ default: m.PlatformWhatsAppPage })));
+const PlatformPaymentsPage = lazy(() => import('./features/platform-admin/platform-payments').then((m) => ({ default: m.PlatformPaymentsPage })));
+
+// Payments & Maintenance Billing (Sprint 11).
+const PaymentSettingsPage = lazy(() => import('./features/billing/payment-settings').then((m) => ({ default: m.PaymentSettingsPage })));
+const MaintenanceConfigPage = lazy(() => import('./features/billing/maintenance-config').then((m) => ({ default: m.MaintenanceConfigPage })));
+const CollectionDashboardPage = lazy(() => import('./features/billing/collection-dashboard').then((m) => ({ default: m.CollectionDashboardPage })));
+const NotificationPreferencesPage = lazy(() => import('./features/billing/notification-preferences').then((m) => ({ default: m.NotificationPreferencesPage })));
+
+// Community configuration, service catalog and packages (Sprint 12).
+const CommunitySettingsPage = lazy(() => import('./features/settings/community-settings').then((m) => ({ default: m.CommunitySettingsPage })));
+const ServicesPage = lazy(() => import('./features/services/services-page').then((m) => ({ default: m.ServicesPage })));
+const PackagesPage = lazy(() => import('./features/packages/packages-page').then((m) => ({ default: m.PackagesPage })));
+const PlatformBusinessPage = lazy(() => import('./features/platform-admin/platform-business').then((m) => ({ default: m.PlatformBusinessPage })));
 
 // Community Operations (Frontend Sprint 9).
 const VisitorsPage = lazy(() => import('./features/visitors/visitors-list').then((m) => ({ default: m.VisitorsPage })));
@@ -97,6 +111,9 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/audit', component: PlatformAuditPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/system', component: PlatformSystemPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/notifications', component: PlatformNotificationsPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/whatsapp', component: PlatformWhatsAppPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/payments', component: PlatformPaymentsPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/business', component: PlatformBusinessPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/admin/communities', component: AdminCommunitiesPage }),
 
     // Community & People Management (this sprint)
@@ -137,6 +154,17 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => dashboardRoute, path: '/bookings', component: BookingsPage, validateSearch: parseListSearch }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/documents', component: DocumentsPage, validateSearch: parseListSearch }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/announcements', component: AnnouncementsPage, validateSearch: parseListSearch }),
+
+    // Payments & Maintenance Billing (Sprint 11)
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/billing', component: CollectionDashboardPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/billing/charges', component: MaintenanceConfigPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/billing/payment-settings', component: PaymentSettingsPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/billing/notifications', component: NotificationPreferencesPage }),
+
+    // Community configuration, catalog and packages (Sprint 12)
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/settings', component: CommunitySettingsPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/services', component: ServicesPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/packages', component: PackagesPage }),
 
     // Operations execution
     listPage('/tickets', TicketsListPage),

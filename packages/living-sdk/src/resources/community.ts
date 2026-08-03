@@ -8,6 +8,12 @@ import type { HttpClient } from '../http';
 type Query = ListParams & Record<string, unknown>;
 type Body = Record<string, unknown>;
 
+/** Optional modules a community can switch on or off. */
+export interface CommunityFeatures {
+  maintenanceBilling: boolean;
+  servicePackages: boolean;
+}
+
 /** Community Foundation: communities, property hierarchy, units, amenities,
  *  settings, documents and in-community search. */
 export class CommunityResource {
@@ -126,6 +132,15 @@ export class CommunityResource {
   // ── Settings ──
   getSettings<T = unknown>(communityId: string): Promise<T> {
     return this.http.get(`/communities/${communityId}/settings`);
+  }
+
+  /**
+   * Which optional modules this community runs. Cheap, resident-readable, and
+   * the single thing every app gates its maintenance/packages UI on — so a
+   * disabled module never renders a surface whose API would 404.
+   */
+  features(communityId: string): Promise<CommunityFeatures> {
+    return this.http.get(`/communities/${communityId}/settings/features`);
   }
   updateSettings<T = unknown>(communityId: string, input: Body): Promise<T> {
     return this.http.put(`/communities/${communityId}/settings`, input);

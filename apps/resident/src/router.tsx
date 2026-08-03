@@ -13,6 +13,8 @@ import { AnnouncementsScreen } from './screens/announcements';
 import { VisitorsScreen } from './screens/visitors';
 import { BookingsScreen } from './screens/bookings';
 import { AmenitiesScreen } from './screens/amenities';
+import { MaintenanceScreen } from './screens/maintenance';
+import { MyPackagesScreen } from './screens/my-packages';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -36,6 +38,10 @@ const routeTree = rootRoute.addChildren([
     tab('/visitors', VisitorsScreen),
     tab('/bookings', BookingsScreen),
     tab('/amenities', AmenitiesScreen),
+    // Maintenance billing (Sprint 11) — dues, invoices, payments, receipts.
+    tab('/maintenance', MaintenanceScreen),
+    // Service packages (Sprint 12) — prepaid visits and redemption.
+    tab('/packages', MyPackagesScreen),
   ]),
 ]);
 

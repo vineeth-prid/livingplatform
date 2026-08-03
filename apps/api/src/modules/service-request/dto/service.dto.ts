@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
@@ -33,6 +34,12 @@ export class CreateServiceDto {
 
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() isActive?: boolean;
 
+  @ApiPropertyOptional({
+    description: 'List price for one delivery (₹). Used to price packages and show savings.',
+  })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+  basePrice?: number;
+
   @ApiPropertyOptional({ default: 0 })
   @IsOptional() @Type(() => Number) @IsInt() @Min(0)
   sortOrder?: number;
@@ -40,8 +47,19 @@ export class CreateServiceDto {
 
 export class UpdateServiceDto extends PartialType(CreateServiceDto) {}
 
+/** Enable / disable a service. Services are never deleted — see the controller. */
+export class SetServiceStatusDto {
+  @ApiProperty({ description: 'true = bookable by residents, false = hidden from the app' })
+  @IsBoolean()
+  isActive!: boolean;
+}
+
 export class QueryServiceDto {
   @ApiPropertyOptional({ description: 'Only active services', default: false })
   @IsOptional() @Type(() => Boolean) @IsBoolean()
   activeOnly?: boolean;
+
+  @ApiPropertyOptional({ description: 'Free-text search on name/key' })
+  @IsOptional() @IsString() @MaxLength(120)
+  search?: string;
 }

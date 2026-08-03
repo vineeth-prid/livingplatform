@@ -28,6 +28,33 @@ export function configuration() {
       accessTtl: env.JWT_ACCESS_TTL ?? '15m',
       refreshTtl: env.JWT_REFRESH_TTL ?? '7d',
       refreshTtlRemember: env.JWT_REFRESH_TTL_REMEMBER ?? '30d',
+      // One-time password handed to provisioned people accounts. Configurable —
+      // never hardcoded in the provisioning service.
+      defaultPassword: env.AUTH_DEFAULT_PASSWORD ?? 'Living@123',
+      /** How many previous passwords a user may not reuse (0 disables). */
+      passwordHistorySize: Number(env.AUTH_PASSWORD_HISTORY_SIZE ?? 5),
+      /** Minimum password length enforced on change/reset. */
+      passwordMinLength: Number(env.AUTH_PASSWORD_MIN_LENGTH ?? 8),
+      /** OTP lifetime for mobile-number password reset. */
+      otpTtl: env.AUTH_OTP_TTL ?? '10m',
+      otpLength: Number(env.AUTH_OTP_LENGTH ?? 6),
+    },
+    security: {
+      /** Passphrase for AES-256-GCM secret columns (SecretCipher). */
+      encryptionKey: env.APP_ENCRYPTION_KEY ?? '',
+    },
+    payments: {
+      /** Active payment gateway. Community accounts are configured per-community. */
+      gateway: (env.PAYMENT_GATEWAY ?? 'razorpay').toLowerCase(),
+      currency: env.PAYMENT_CURRENCY ?? 'INR',
+      razorpay: {
+        baseUrl: env.RAZORPAY_BASE_URL ?? 'https://api.razorpay.com/v1',
+        timeoutMs: Number(env.RAZORPAY_TIMEOUT_MS ?? 15000),
+      },
+      /** Invoice number prefix, e.g. INV-2026-000123. */
+      invoicePrefix: env.BILLING_INVOICE_PREFIX ?? 'INV',
+      /** Day-of-month invoices fall due when the rate card sets no override. */
+      defaultDueDay: Number(env.BILLING_DEFAULT_DUE_DAY ?? 10),
     },
     mail: {
       host: env.SMTP_HOST,
@@ -82,6 +109,25 @@ export function configuration() {
         verifyToken: env.WHATSAPP_VERIFY_TOKEN ?? '',
         appSecret: env.WHATSAPP_APP_SECRET ?? '',
       },
+      // Self-hosted OpenWA gateway (github.com/rmyndharis/OpenWA).
+      openwa: {
+        baseUrl: (env.OPENWA_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, ''),
+        apiKey: env.OPENWA_API_KEY ?? '',
+        session: env.OPENWA_SESSION ?? 'living',
+        timeoutMs: Number(env.OPENWA_TIMEOUT_MS ?? 20000),
+        /** Shared secret OpenWA signs its webhooks with (x-webhook-signature). */
+        webhookSecret: env.OPENWA_WEBHOOK_SECRET ?? '',
+        /** Callback the gateway posts to, e.g. http://api:4000/api/v1/notifications/webhooks/openwa */
+        webhookUrl: env.OPENWA_WEBHOOK_URL ?? '',
+        /** Seconds between connection-health polls (0 disables the watchdog). */
+        healthIntervalSec: Number(env.OPENWA_HEALTH_INTERVAL_SEC ?? 60),
+        /** Auto-restart a session that reports disconnected. */
+        autoReconnect: String(env.OPENWA_AUTO_RECONNECT ?? 'true') !== 'false',
+        /** Country code prepended to 10-digit local numbers when addressing chats. */
+        defaultCountryCode: env.OPENWA_DEFAULT_COUNTRY_CODE ?? '91',
+      },
+      /** Outbound messages per minute across the WhatsApp channel (0 = unlimited). */
+      rateLimitPerMinute: Number(env.WHATSAPP_RATE_LIMIT_PER_MINUTE ?? 60),
     },
     throttle: {
       ttl: Number(env.THROTTLE_TTL ?? 60),

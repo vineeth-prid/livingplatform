@@ -1,16 +1,22 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../../common/decorators/permissions.decorator';
+import type { AppConfig } from '../../../config/configuration';
 import { PERMISSIONS } from '../../rbac/rbac.constants';
 import { ChannelRouter } from '../core/channel-router';
 import { NotificationDispatcher } from '../core/notification.dispatcher';
 import { NotificationHistory } from '../core/notification-history.service';
 import { NotificationMetrics } from '../core/notification-metrics.service';
+import { EmailTemplateEngine } from '../core/templates/template.engine';
 import { EmailChannel } from '../channels/email/email.channel';
+import { WhatsAppSessionService } from '../channels/whatsapp/whatsapp-session.service';
 import {
-  DeliveriesQueryDto, SendTestEmailDto, SendTestWhatsAppDto, SetProviderDto, StatisticsQueryDto,
+  DeliveriesQueryDto, SendTestEmailDto, SendTestWhatsAppDto, SetProviderDto,
+  SetSessionApiKeyDto, StatisticsQueryDto,
 } from './dto/notification-admin.dto';
 
 /**
@@ -29,6 +35,9 @@ export class NotificationController {
     private readonly metrics: NotificationMetrics,
     private readonly history: NotificationHistory,
     private readonly email: EmailChannel,
+    private readonly sessions: WhatsAppSessionService,
+    private readonly engine: EmailTemplateEngine,
+    private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
   // ── Channels (cross-channel) ──
@@ -128,5 +137,104 @@ export class NotificationController {
   @ApiOperation({ summary: 'WhatsApp delivery statistics' })
   whatsappStatistics(@Query() query: StatisticsQueryDto) {
     return this.metrics.statistics(query.windowHours, 'whatsapp');
+  }
+
+  // ── WhatsApp gateway settings (OpenWA) ──
+  // Platform configuration ONLY — no message can be sent from these routes
+  // except the explicitly diagnostic /whatsapp/test above.
+
+  @Get('whatsapp/settings')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @ApiOperation({ summary: 'Active WhatsApp provider, sender and rate limits' })
+  whatsappSettings() {
+    const wa = this.config.get('whatsapp', { infer: true });
+    return {
+      provider: wa.provider,
+      supported: ['meta', 'openwa'],
+      rateLimitPerMinute: wa.rateLimitPerMinute,
+      defaultSender: wa.provider === 'openwa' ? wa.openwa.session : wa.meta.phoneNumberId,
+      openwa: {
+        // The API key and webhook secret are deliberately absent.
+        baseUrl: wa.openwa.baseUrl,
+        session: wa.openwa.session,
+        autoReconnect: wa.openwa.autoReconnect,
+        healthIntervalSec: wa.openwa.healthIntervalSec,
+        webhookConfigured: Boolean(wa.openwa.webhookSecret),
+        webhookUrl: wa.openwa.webhookUrl || null,
+      },
+    };
+  }
+
+  @Get('whatsapp/sessions')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @ApiOperation({ summary: 'Gateway sessions and their connection status' })
+  whatsappSessions() {
+    return this.sessions.list();
+  }
+
+  @Get('whatsapp/sessions/:name')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @ApiOperation({ summary: 'Live status of one session (polls the gateway)' })
+  whatsappSession(@Param('name') name: string) {
+    return this.sessions.status(name);
+  }
+
+  @Get('whatsapp/sessions/:name/qr')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @ApiOperation({ summary: 'QR payload to pair the session (null once connected)' })
+  whatsappQr(@Param('name') name: string) {
+    return this.sessions.qr(name);
+  }
+
+  @Post('whatsapp/sessions/:name/connect')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create + start the session and begin QR pairing' })
+  whatsappConnect(@Param('name') name: string, @CurrentUser('id') actorId: string) {
+    return this.sessions.connect(name, actorId);
+  }
+
+  @Post('whatsapp/sessions/:name/reconnect')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Restart the session without clearing its pairing' })
+  whatsappReconnect(@Param('name') name: string, @CurrentUser('id') actorId: string) {
+    return this.sessions.reconnect(name, actorId);
+  }
+
+  @Post('whatsapp/sessions/:name/disconnect')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Log the session out (a new QR scan is then required)' })
+  whatsappDisconnect(@Param('name') name: string, @CurrentUser('id') actorId: string) {
+    return this.sessions.disconnect(name, actorId);
+  }
+
+  @Put('whatsapp/sessions/:name/api-key')
+  @RequirePermissions(PERMISSIONS.WHATSAPP_ADMIN)
+  @ApiOperation({ summary: 'Store a session-scoped gateway API key (encrypted at rest)' })
+  whatsappApiKey(
+    @Param('name') name: string,
+    @Body() dto: SetSessionApiKeyDto,
+    @CurrentUser('id') actorId: string,
+  ) {
+    return this.sessions.setApiKey(name, dto.apiKey, actorId);
+  }
+
+  // ── Queue + templates (read-only platform views) ──
+
+  @Get('queue')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
+  @ApiOperation({ summary: 'Shared notification queue depth and failure counts' })
+  async queue() {
+    const stats = await this.metrics.statistics(24);
+    return { ...stats.queue, retrying: stats.retrying, deadLettered: stats.deadLettered };
+  }
+
+  @Get('templates')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
+  @ApiOperation({ summary: 'Platform default templates available to every community' })
+  templates() {
+    return this.engine.list().map((name) => ({ name, source: 'platform' as const }));
   }
 }

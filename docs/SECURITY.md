@@ -14,6 +14,11 @@
 | **SQL injection** | Prisma parameterised queries throughout; no raw string SQL | all services |
 | **Rate limiting** | `@nestjs/throttler` (120 req/60s/IP default) + edge `limit_req` backstop | `app.module.ts`, `edge.conf` |
 | **Secrets** | Env-validated at boot (JWT secrets ≥ 32 chars enforced); never logged; auth headers/cookies redacted in logs | `env.validation.ts`, pino redact |
+| **Secrets at rest** | Razorpay key/webhook secrets and WhatsApp gateway API keys are **AES-256-GCM** encrypted (random nonce, authenticated, versioned `v1:` envelope). Decrypted only to call the gateway; **never** in a response body, domain event or audit payload. `APP_ENCRYPTION_KEY` required in production. | `common/crypto/secret-cipher.ts` |
+| **Payment integrity** | Amounts are always derived server-side from the invoice balance (a client-supplied amount is clamped). Checkout signatures are HMAC-verified with the **community's own** key secret; webhooks with theirs, over the **raw bytes**. Settlement is idempotent, so a checkout callback and a webhook racing cannot double-credit. | `payments` module |
+| **Webhook authentication** | Razorpay and OpenWA callbacks are public routes whose HMAC signature **is** the authentication, compared in constant time. An unconfigured webhook secret makes the endpoint reject everything rather than trust the caller. | `payments.controllers.ts`, `openwa-webhook.controller.ts` |
+| **Password policy** | Argon2id everywhere; every write path funnels through `PasswordPolicyService.hashAndRecord`, so reuse checking (last N, configurable) cannot be bypassed by a new flow. Any password change revokes every refresh token. | `auth/password-policy.service.ts` |
+| **OTP brute force** | Mobile reset codes are argon2-hashed, single-live-code-per-user, expiring, and burned after 5 wrong attempts (Redis counter that **fails closed** during an outage). Endpoints throttled 5/min. | `auth/otp.service.ts` |
 | **Audit** | Every mutating request → append-only `audit_logs` (actor, tenant, path, status) | `AuditInterceptor` |
 | **File upload** | Metadata-only signed-URL flow; **no multipart body parsing** in the app (no `multer` usage) → no upload-parser attack surface | `StorageService` |
 

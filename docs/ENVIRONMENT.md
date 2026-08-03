@@ -52,12 +52,67 @@ Frontend variables are **baked at build time** (Vite).
 | `PM_SCHEDULER_ENABLED` | — | `true` | Preventive-maintenance cron; `false` disables on an instance. |
 | `AMC_EXPIRY_ENABLED` | — | `true` | Daily AMC expiry/renewal sweep. |
 | `ANNOUNCEMENT_SWEEP_ENABLED` | — | `true` | Hourly announcement publish/expire sweep. |
+| `BILLING_SWEEP_ENABLED` | — | `true` | Nightly overdue/late-fee sweep + maintenance-due reminders. |
 
 > **Scheduler note (multi-instance):** if you run **more than one** API replica,
 > set `PM_SCHEDULER_ENABLED` / `AMC_EXPIRY_ENABLED` / `ANNOUNCEMENT_SWEEP_ENABLED`
-> to `false` on all but one replica (or run a dedicated single-replica worker) —
-> the generation logic is idempotent (compare-and-swap), so duplicates are
-> prevented, but running the sweeps on one node avoids redundant work.
+> / `BILLING_SWEEP_ENABLED` to `false` on all but one replica (or run a dedicated
+> single-replica worker) — the generation logic is idempotent (compare-and-swap),
+> so duplicates are prevented, but running the sweeps on one node avoids
+> redundant work.
+
+### Secret encryption (required in production)
+
+| Variable | Req | Default | Notes |
+| --- | :-: | --- | --- |
+| `APP_ENCRYPTION_KEY` | **✓ (prod)** | — | **≥ 32 chars.** AES-256-GCM passphrase for Razorpay key secrets, webhook secrets and WhatsApp gateway API keys. Generate with `openssl rand -base64 48`. |
+
+> Rotating this key makes every stored secret **undecryptable** — payment
+> configuration and per-session WhatsApp keys must be re-entered afterwards.
+> A missing key fails the *operation*, not boot, so a deployment that never
+> touches secrets still runs. See [`payments.md`](payments.md).
+
+### Authentication (see [`authentication.md`](authentication.md))
+
+| Variable | Req | Default | Notes |
+| --- | :-: | --- | --- |
+| `AUTH_DEFAULT_PASSWORD` | — | `Living@123` | One-time password for provisioned resident/staff/vendor accounts. **Change in production.** Forced change on first sign-in. |
+| `AUTH_PASSWORD_HISTORY_SIZE` | — | `5` | Previous passwords that may not be reused. `0` disables. |
+| `AUTH_PASSWORD_MIN_LENGTH` | — | `8` | Minimum length on change/reset. |
+| `AUTH_OTP_TTL` | — | `10m` | Mobile password-reset code lifetime. |
+| `AUTH_OTP_LENGTH` | — | `6` | Clamped to 4–8. |
+
+### Payments (see [`payments.md`](payments.md))
+
+Per-community Razorpay accounts live **in the database**, encrypted — never in
+env. These are only the gateway endpoint and platform billing defaults.
+
+| Variable | Req | Default | Notes |
+| --- | :-: | --- | --- |
+| `PAYMENT_GATEWAY` | — | `razorpay` | Active gateway. |
+| `PAYMENT_CURRENCY` | — | `INR` | ISO currency for orders. |
+| `RAZORPAY_BASE_URL` | — | `https://api.razorpay.com/v1` | Override for a sandbox/proxy. |
+| `RAZORPAY_TIMEOUT_MS` | — | `15000` | Per-request timeout. |
+| `BILLING_INVOICE_PREFIX` | — | `INV` | → `INV-2026-08-000042`. |
+| `BILLING_DEFAULT_DUE_DAY` | — | `10` | Day of month bills fall due when a run does not override it. |
+
+### WhatsApp · OpenWA gateway (see [`whatsapp.md`](whatsapp.md))
+
+Required only when `WHATSAPP_PROVIDER=openwa` — validated at boot, fail-fast.
+
+| Variable | Req (openwa) | Default | Notes |
+| --- | :-: | --- | --- |
+| `WHATSAPP_PROVIDER` | — | `meta` | `meta` (Cloud API) or `openwa` (self-hosted). |
+| `OPENWA_BASE_URL` | **✓** | `http://localhost:3000` | Gateway base URL. |
+| `OPENWA_API_KEY` | **✓** | — | Sent as `X-API-Key`. Use a **session-scoped `OPERATOR`** key, not admin. |
+| `OPENWA_SESSION` | — | `living` | Default session name. |
+| `OPENWA_TIMEOUT_MS` | — | `20000` | Per-request timeout. |
+| `OPENWA_WEBHOOK_SECRET` | — | `` | HMAC secret. **Unset ⇒ the webhook rejects everything.** |
+| `OPENWA_WEBHOOK_URL` | — | `` | Callback the gateway posts to (usually internal). Empty ⇒ registration skipped, watchdog only. |
+| `OPENWA_HEALTH_INTERVAL_SEC` | — | `60` | Connection watchdog interval. `0` disables. |
+| `OPENWA_AUTO_RECONNECT` | — | `true` | Restart a dropped session automatically. |
+| `OPENWA_DEFAULT_COUNTRY_CODE` | — | `91` | Prefixed to 10-digit local numbers. |
+| `WHATSAPP_RATE_LIMIT_PER_MINUTE` | — | `60` | Outbound cap across the channel. `0` = unlimited. |
 
 ## Frontends (build-time, Vite)
 

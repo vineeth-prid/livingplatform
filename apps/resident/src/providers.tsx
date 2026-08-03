@@ -13,7 +13,9 @@ const queryClient = createQueryClient();
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
+      {/* Residents open in Light by default — a consumer app should feel bright
+          on first launch. Their own choice still wins once they make one. */}
+      <ThemeProvider defaultMode="light">
         <LivingProvider client={living}>
           <QueryClientProvider client={queryClient}>
             <AuthProvider>

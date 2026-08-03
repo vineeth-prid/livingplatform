@@ -5,6 +5,8 @@ import { PassportModule } from '@nestjs/passport';
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
+import { PasswordPolicyService } from './password-policy.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TokensService } from './tokens.service';
 
@@ -17,7 +19,7 @@ import { TokensService } from './tokens.service';
     RbacModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokensService, JwtStrategy],
-  exports: [AuthService, TokensService],
+  providers: [AuthService, TokensService, JwtStrategy, PasswordPolicyService, OtpService],
+  exports: [AuthService, TokensService, PasswordPolicyService],
 })
 export class AuthModule {}

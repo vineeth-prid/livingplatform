@@ -31,11 +31,11 @@ BEGIN
       CREATE POLICY tenant_isolation ON %I
       USING (
         coalesce(current_setting('app.bypass_rls', true), 'off') = 'on'
-        OR tenant_id = current_setting('app.tenant_id', true)
+        OR "tenantId" = current_setting('app.tenant_id', true)
       )
       WITH CHECK (
         coalesce(current_setting('app.bypass_rls', true), 'off') = 'on'
-        OR tenant_id = current_setting('app.tenant_id', true)
+        OR "tenantId" = current_setting('app.tenant_id', true)
       )
     $f$, t);
   END LOOP;
@@ -46,14 +46,14 @@ BEGIN
       CREATE POLICY tenant_isolation ON %I
       USING (
         coalesce(current_setting('app.bypass_rls', true), 'off') = 'on'
-        OR community_id IN (
-          SELECT id FROM communities WHERE tenant_id = current_setting('app.tenant_id', true)
+        OR "communityId" IN (
+          SELECT id FROM communities WHERE "tenantId" = current_setting('app.tenant_id', true)
         )
       )
       WITH CHECK (
         coalesce(current_setting('app.bypass_rls', true), 'off') = 'on'
-        OR community_id IN (
-          SELECT id FROM communities WHERE tenant_id = current_setting('app.tenant_id', true)
+        OR "communityId" IN (
+          SELECT id FROM communities WHERE "tenantId" = current_setting('app.tenant_id', true)
         )
       )
     $f$, t);

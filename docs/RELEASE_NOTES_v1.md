@@ -60,3 +60,70 @@ Seed roles/permissions + demo data once (`db:seed`).
 
 Built across 10 backend sprints and 10 frontend passes, plus this release-
 hardening pass. 🤖 Generated with [Claude Code](https://claude.com/claude-code).
+
+---
+
+# v1.2 — Configuration, Packages & Intelligence (Sprint 12)
+
+An enhancement release. No architecture change, no new engine, no breaking API.
+Every new column defaults to today's behaviour, so an existing deployment
+upgrades without losing a surface.
+
+## Community configuration
+
+- **Maintenance billing is now per-community.** Associations that collect
+  outside Living switch it off; invoice generation, maintenance payments and
+  every maintenance surface disappear from the portal and the resident app.
+  Existing invoices and history are kept, and payments already in flight still
+  settle.
+- **Service packages** can be switched off the same way.
+- **Resident home banners** are configurable per community.
+
+Portal → Community → **Settings**. Both modules default to **ON**.
+
+## Service availability
+
+Services are **enabled or disabled**, never deleted. An inactive service leaves
+the resident app and cannot be requested, while its history and any in-flight
+work are untouched. Portal → Catalog → **Services**.
+
+## Resident home, redesigned
+
+Rotating hero (live announcements + configured slides), quick actions moved to
+the top, active requests only, upcoming booking shown only when there is one.
+Recent activity and the visitors widget are gone; visitors now sit inside **My
+requests** alongside complaints and service requests. The app opens in Light.
+
+## Automatic vendor assignment
+
+New tickets and service requests route to the least-loaded ACTIVE vendor that
+covers the community and matches the category. No match leaves the work
+unassigned for a human. **Assignment never blocks creation.**
+
+## Service Packages
+
+Bundles of existing catalog services sold at a package price — with property-type
+targeting, validity windows, duplicate-as-draft, and frozen savings. Buying uses
+the existing Razorpay SERVICE rail; redeeming creates an ordinary Service
+Request. No package engine, no second booking path.
+
+Portal → Catalog → **Packages**. Residents: **Services** (packages first) and
+**Profile → My packages**.
+
+## Dashboards
+
+- **Community**: adoption, most-booked service and package, maintenance and
+  service collections, outstanding, top vendors.
+- **Platform**: module adoption, popular services and packages, aggregate
+  revenue and growth — with **no per-community financials**.
+
+## Upgrade notes
+
+| Step | |
+| --- | --- |
+| Migrations | `prisma migrate deploy` — `20260804000000_modules_packages_autoassign` |
+| Reseed | Required: `service:catalog:*`, `package:*`, `insights:read` |
+| Review | Community → Settings for any association that does not collect through Living |
+| Optional | Set `basePrice` on services so packages can advertise savings |
+
+228 backend tests, 43 frontend tests, typecheck/lint/build clean.

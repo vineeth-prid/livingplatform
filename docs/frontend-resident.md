@@ -101,8 +101,48 @@ Nothing is invented — the app shows exactly what the platform supports.
 
 Runtime needs the backend up (`infra:up` → migrate → seed) and
 `VITE_API_BASE_URL`; any resident-capable account signs in (the seeded
-`admin@living.local` works for a demo). Installable from the browser's "Add to
-Home Screen".
+`admin@living.local` works for a demo).
+
+**Installation** is now a first-class flow rather than a hidden browser menu —
+real PNG icons, a captured `beforeinstallprompt`, an install banner and an
+explicit button in Profile, with honest handling for iOS (Share-sheet
+instructions) and browsers that cannot install. See
+[`pwa-installation.md`](pwa-installation.md).
+
+**Maintenance** (Sprint 11): `/maintenance` shows the resident's current due,
+next due, invoices, payment history and receipts, and opens Razorpay Checkout
+against their community's own maintenance account. Outstanding dues also surface
+at the top of Home — and only when there are any. See
+[`payments.md`](payments.md).
+
+**Password recovery**: the login screen leads with the mobile number and offers
+*Forgot password?*, which sends a WhatsApp OTP and exchanges it for a new
+password in one sheet. See [`authentication.md`](authentication.md).
+
+## Home (Sprint 12 redesign)
+
+Ordered by what a resident actually opens the app for:
+
+1. **Hero banner** — rotating, merging live published announcements with the
+   community's configured slides. Renders nothing when there is neither.
+2. **Maintenance due** — only when something is owed, and only when the module
+   is on.
+3. **Quick actions** — moved to the top, four large touch targets.
+4. **Open requests** — active only.
+5. **Upcoming booking** — only when a future booking exists.
+
+Removed: the Recent activity feed and the Visitors widget. Visitors now live
+inside **My requests**, which groups complaints, service requests and visitor
+passes into one filterable timeline.
+
+The app opens in **Light** by default (`ThemeProvider defaultMode="light"`); a
+resident's own choice still wins once they make one.
+
+**Services** shows packages before individual services; **Profile → My
+packages** lists prepaid visits and books them. Every maintenance and packages
+surface is gated on `useCommunityFeatures`. See
+[`service-packages.md`](service-packages.md) and
+[`community-settings.md`](community-settings.md).
 
 ---
 

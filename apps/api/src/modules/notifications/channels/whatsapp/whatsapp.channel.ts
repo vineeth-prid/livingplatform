@@ -36,6 +36,12 @@ export class WhatsAppChannel implements INotificationChannel, OnModuleDestroy {
     return this.whatsapp.name;
   }
 
+  /** The active provider instance. Exposed so the OpenWA session manager drives
+   *  the SAME gateway client this channel sends through — never a second one. */
+  get providerInstance(): WhatsAppProvider {
+    return this.whatsapp;
+  }
+
   async send(message: NotificationMessage): Promise<DeliveryResult> {
     const recipients = (Array.isArray(message.to) ? message.to : [message.to]).filter(Boolean);
     if (recipients.length === 0) throw new BadRequestException('WhatsApp requires at least one recipient');

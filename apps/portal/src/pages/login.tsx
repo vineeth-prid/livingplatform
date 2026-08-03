@@ -4,6 +4,8 @@ import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import { Button, Card, Input, toast } from '@living/ui';
 
+import { ForgotPasswordDialog } from './forgot-password';
+
 /**
  * Authentication screen. Uses the SDK via the auth framework — no fetch, no
  * token handling here. Demonstrates the full sign-in path the whole app relies
@@ -14,6 +16,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [forgot, setForgot] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (status === 'authenticated') return <Navigate to="/" />;
@@ -80,8 +83,16 @@ export function LoginPage() {
             <Button type="submit" block loading={submitting} className="mt-1">
               Sign in
             </Button>
+            <button
+              type="button"
+              onClick={() => setForgot(true)}
+              className="text-center text-sm text-brand underline-offset-2 hover:underline"
+            >
+              Forgot password?
+            </button>
           </form>
         </Card>
+        <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} />
       </div>
     </div>
   );

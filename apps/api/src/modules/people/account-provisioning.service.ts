@@ -1,12 +1,18 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 
+import type { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../prisma/prisma.service';
 import { ROLE_KEYS, type RoleKey } from '../rbac/rbac.constants';
 import type { ProfileKind } from './user-link.service';
 
-/** Common one-time password for provisioned people accounts. The portal forces
- *  a change on first login (users.mustChangePassword). */
+/**
+ * Fallback one-time password for provisioned people accounts. The ACTIVE value
+ * comes from AUTH_DEFAULT_PASSWORD (see configuration.ts) — this constant is
+ * only the documented default so a dev environment works out of the box. The
+ * portal forces a change on first login (users.mustChangePassword).
+ */
 export const ONE_TIME_PASSWORD = 'Living@123';
 
 /** Strip a phone number down to its digits so "+91 98765 43210" and
@@ -45,8 +51,19 @@ export interface ProvisionLoginInput {
 @Injectable()
 export class AccountProvisioningService {
   private readonly logger = new Logger(AccountProvisioningService.name);
+  private readonly oneTimePassword: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    config: ConfigService<AppConfig, true>,
+  ) {
+    this.oneTimePassword = config.get('auth', { infer: true }).defaultPassword;
+  }
+
+  /** The one-time password this deployment hands out (for admin-facing copy). */
+  get defaultPassword(): string {
+    return this.oneTimePassword;
+  }
 
   /**
    * Returns the userId to link on the new profile row, or null when the
@@ -97,7 +114,7 @@ export class AccountProvisioningService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    const passwordHash = await argon2.hash(ONE_TIME_PASSWORD, { type: argon2.argon2id });
+    const passwordHash = await argon2.hash(this.oneTimePassword, { type: argon2.argon2id });
     const user = await this.prisma.user.create({
       data: {
         tenantId: input.tenantId,

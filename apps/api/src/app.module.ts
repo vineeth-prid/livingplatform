@@ -5,8 +5,10 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 
+import { CryptoModule } from './common/crypto/crypto.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { ModuleEnabledGuard } from './common/guards/module-enabled.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
@@ -22,6 +24,9 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { AuditInterceptor } from './modules/audit/audit.interceptor';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { PackagesModule } from './modules/packages/packages.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CommunityModule } from './modules/community/community.module';
 import { PlatformStatsModule } from './modules/platform-stats/platform-stats.module';
@@ -83,6 +88,7 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     }),
 
     // Global infrastructure
+    CryptoModule,
     PrismaModule,
     RedisModule,
     NotificationModule,
@@ -137,6 +143,13 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     // Community Operations (Sprint 10)
     CommunityOpsModule,
 
+    // Maintenance Billing + Payments (Sprint 11)
+    BillingModule,
+    PaymentsModule,
+
+    // Service Packages (Sprint 12) — merchandising over the Service catalog
+    PackagesModule,
+
     // Platform-Admin control plane (community provisioning)
     AdminModule,
   ],
@@ -146,6 +159,9 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Community module toggles run last: authenticate and authorize first, then
+    // ask whether the community even has this module switched on.
+    { provide: APP_GUARD, useClass: ModuleEnabledGuard },
 
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
 

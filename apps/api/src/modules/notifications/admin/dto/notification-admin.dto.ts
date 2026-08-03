@@ -21,6 +21,12 @@ export class SetProviderDto {
   provider!: 'ses' | 'smtp';
 }
 
+export class SetSessionApiKeyDto {
+  @ApiProperty({ description: 'Session-scoped gateway API key (stored encrypted, never returned)' })
+  @IsString()
+  apiKey!: string;
+}
+
 export class StatisticsQueryDto {
   @ApiPropertyOptional({ default: 24, description: 'Trailing window in hours' })
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(720)

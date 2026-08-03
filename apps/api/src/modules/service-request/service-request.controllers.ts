@@ -19,6 +19,7 @@ import { SubmitFeedbackDto } from './dto/feedback.dto';
 import {
   CreateServiceDto,
   QueryServiceDto,
+  SetServiceStatusDto,
   UpdateServiceDto,
 } from './dto/service.dto';
 import {
@@ -189,8 +190,31 @@ export class ServiceCatalogController {
     return this.catalog.update(id, dto);
   }
 
+  /**
+   * Enable / disable — the supported way to stop offering a service.
+   * An inactive service vanishes from the resident app and cannot be requested,
+   * while history and in-flight work are untouched.
+   */
+  @Patch(':id/status')
+  @RequirePermissions(PERMISSIONS.SERVICE_CATALOG_MANAGE)
+  @ApiOperation({ summary: 'Activate or deactivate a service (never deletes it)' })
+  setStatus(@Param('id') id: string, @Body() dto: SetServiceStatusDto) {
+    return this.catalog.setStatus(id, dto.isActive);
+  }
+
+  @Get(':id/usage')
+  @RequirePermissions(PERMISSIONS.SERVICE_CATALOG_READ)
+  @ApiOperation({ summary: 'Open requests and packages still referencing this service' })
+  usage(@Param('id') id: string) {
+    return this.catalog.usage(id);
+  }
+
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.SERVICE_UPDATE)
+  @ApiOperation({
+    summary: 'Soft-delete a service. Prefer PATCH :id/status to deactivate.',
+    deprecated: true,
+  })
   remove(@Param('id') id: string) {
     return this.catalog.remove(id);
   }

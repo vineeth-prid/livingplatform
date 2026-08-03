@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { Prisma, ServiceRequestStatus } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
 import {
@@ -26,16 +28,66 @@ export class ServiceCatalogService {
   ) {}
 
   list(query: QueryServiceDto) {
+    const scope = this.tenant.isPlatform
+      ? []
+      : [{ OR: [{ tenantId: null }, { tenantId: this.tenant.tenantId }] }];
     return this.prisma.service.findMany({
       where: {
         deletedAt: null,
         ...(query.activeOnly ? { isActive: true } : {}),
-        ...(this.tenant.isPlatform
-          ? {}
-          : { OR: [{ tenantId: null }, { tenantId: this.tenant.tenantId }] }),
+        AND: [
+          ...scope,
+          ...(query.search
+            ? [
+                {
+                  OR: [
+                    { name: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
+                    { key: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
+                  ],
+                },
+              ]
+            : []),
+        ],
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
+  }
+
+  /**
+   * Enable / disable a service.
+   *
+   * This — not deletion — is how a community stops offering something. An
+   * inactive service disappears from the resident app (`activeOnly`) and can no
+   * longer be requested (`assertUsable` requires `isActive`), while every
+   * historical request keeps pointing at it and existing in-flight work is
+   * untouched. Nothing is lost, and no report develops a hole.
+   */
+  async setStatus(id: string, isActive: boolean) {
+    await this.load(id);
+    return this.prisma.service.update({ where: { id }, data: { isActive } });
+  }
+
+  /** Where a service is still referenced — shown before disabling it. */
+  async usage(id: string): Promise<{ openRequests: number; packages: number }> {
+    const [openRequests, packages] = await Promise.all([
+      this.prisma.serviceRequest.count({
+        where: {
+          serviceId: id,
+          deletedAt: null,
+          status: {
+            in: [
+              ServiceRequestStatus.REQUESTED,
+              ServiceRequestStatus.ASSIGNED,
+              ServiceRequestStatus.ACCEPTED,
+              ServiceRequestStatus.SCHEDULED,
+              ServiceRequestStatus.IN_PROGRESS,
+            ],
+          },
+        },
+      }),
+      this.prisma.servicePackageItem.count({ where: { serviceId: id } }),
+    ]);
+    return { openRequests, packages };
   }
 
   create(dto: CreateServiceDto) {
@@ -54,6 +106,7 @@ export class ServiceCatalogService {
         isActive: dto.isActive ?? true,
         isSystem: tenantId === null,
         sortOrder: dto.sortOrder ?? 0,
+        basePrice: dto.basePrice,
       },
     });
   }
@@ -71,6 +124,7 @@ export class ServiceCatalogService {
         color: dto.color,
         isActive: dto.isActive,
         sortOrder: dto.sortOrder,
+        basePrice: dto.basePrice,
       },
     });
   }

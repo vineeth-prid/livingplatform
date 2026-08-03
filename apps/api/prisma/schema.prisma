@@ -483,6 +483,18 @@ model Community {
   amenityBookings  AmenityBooking[]
   announcements    Announcement[]
 
+  // Service Packages (Sprint 12)
+  servicePackages  ServicePackage[]
+  packagePurchases ServicePackagePurchase[]
+
+  // Payments & Maintenance Billing (Sprint 11)
+  paymentConfigs          CommunityPaymentConfig[]
+  maintenanceCharges      MaintenanceCharge[]
+  maintenanceInvoices     MaintenanceInvoice[]
+  payments                Payment[]
+  notificationPreferences CommunityNotificationPreference[]
+  notificationTemplates   CommunityNotificationTemplate[]
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -522,6 +534,7 @@ model User {
   roles              UserRole[]
   refreshTokens      RefreshToken[]
   verificationTokens VerificationToken[]
+  passwordHistory    PasswordHistory[]
   profile            UserProfile?
   // People Foundation — a user represents at most ONE of these (enforced in
   // UserLinkService; each link column is independently unique).
@@ -834,11 +847,12 @@ model Unit {
   ownerPhone   String?
   metadata     Json?
 
-  residentUnits   ResidentUnit[]
-  tickets         Ticket[]
-  serviceRequests ServiceRequest[]
-  workOrders      WorkOrder[]
-  assets          Asset[]
+  residentUnits       ResidentUnit[]
+  tickets             Ticket[]
+  serviceRequests     ServiceRequest[]
+  workOrders          WorkOrder[]
+  assets              Asset[]
+  maintenanceInvoices MaintenanceInvoice[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -909,6 +923,20 @@ model CommunitySettings {
   smsEnabled      Boolean @default(false)
   whatsappEnabled Boolean @default(false)
   pushEnabled     Boolean @default(true)
+
+  // ── Module toggles (Sprint 12) ──
+  /// Whether Living collects maintenance charges for this community. Not every
+  /// association hands collection over, so billing is opt-out per community.
+  /// OFF disables invoice generation, maintenance payments and every
+  /// maintenance surface in the portal and the resident app.
+  maintenanceBillingEnabled Boolean @default(true)
+  /// Whether residents can browse and buy Service Packages.
+  servicePackagesEnabled    Boolean @default(true)
+
+  /// Rotating hero banners on the resident home. Array of
+  /// { id, title, subtitle?, imageKey?, actionUrl?, kind: 'announcement'|'ad', sortOrder? }.
+  /// Announcements are merged in live; these are the community's own slides.
+  homeBanners Json?
 
   // Policies (structured, extensible)
   petPolicy     Json?
@@ -1220,6 +1248,9 @@ model Ticket {
   assignedById     String?
   assignedAt       DateTime?
   reassignedCount  Int       @default(0)
+  /// True when the assignee was chosen by the auto-assignment rule rather than
+  /// by a person — so a manager can tell "nobody looked at this" from "assigned".
+  autoAssigned     Boolean   @default(false)
 
   dueDate      DateTime?
   resolvedDate DateTime?
@@ -1315,7 +1346,7 @@ model TicketTimeline {
 
 /// Configurable service catalog. tenantId = null is a seeded system default.
 model Service {
-  id                       String  @id @default(cuid())
+  id                       String   @id @default(cuid())
   tenantId                 String?
   key                      String
   name                     String
@@ -1323,11 +1354,15 @@ model Service {
   estimatedDurationMinutes Int?
   iconKey                  String?
   color                    String?
-  isActive                 Boolean @default(true)
-  isSystem                 Boolean @default(false)
-  sortOrder                Int     @default(0)
+  isActive                 Boolean  @default(true)
+  isSystem                 Boolean  @default(false)
+  sortOrder                Int      @default(0)
+  /// List price for one delivery. Optional — a community may run a service
+  /// free of charge; packages use it to compute the advertised saving.
+  basePrice                Decimal? @db.Decimal(14, 2)
 
-  requests ServiceRequest[]
+  requests     ServiceRequest[]
+  packageItems ServicePackageItem[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1364,6 +1399,14 @@ model ServiceRequest {
   assignedById     String?
   assignedAt       DateTime?
   reassignedCount  Int       @default(0)
+  /// True when the assignee was chosen by the auto-assignment rule rather than
+  /// by a person — so a manager can tell "nobody looked at this" from "assigned".
+  autoAssigned     Boolean   @default(false)
+
+  /// Set when this request redeems a Service Package entitlement. A plain
+  /// scalar (no FK) so the Service Request Engine stays independent of the
+  /// packages feature — and so counting these rows IS the remaining balance.
+  packagePurchaseId String?
 
   // Scheduling — no calendar engine, no recurrence.
   preferredDate     DateTime?
@@ -1399,6 +1442,7 @@ model ServiceRequest {
   @@index([assignedStaffId])
   @@index([assignedVendorId])
   @@index([ticketId])
+  @@index([packagePurchaseId])
   @@index([assetId])
   @@index([createdAt])
   @@map("service_requests")
@@ -2116,4 +2160,471 @@ model NotificationDelivery {
   @@index([queueJobId])
   @@index([providerMessageId])
   @@map("notification_deliveries")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 11 — Payments, Maintenance Billing, Auth hardening, WhatsApp sessions
+//
+// Money is always Decimal(14,2) in the major unit (₹), matching the Work Order
+// and AMC cost columns. Gateway secrets are NEVER stored in plaintext — the
+// *Enc columns hold AES-256-GCM ciphertext produced by SecretCipher; nothing
+// outside PaymentConfigService may decrypt them and no API ever returns them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The two independent collection rails every community configures separately.
+enum PaymentPurpose {
+  MAINTENANCE
+  SERVICE
+}
+
+enum PaymentGatewayMode {
+  TEST
+  LIVE
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum WhatsAppSessionStatus {
+  DISCONNECTED
+  CONNECTING
+  QR_PENDING
+  CONNECTED
+  FAILED
+}
+
+/// Notification events that can be routed per community, per channel. Mirrors
+/// the Notification Engine template catalog — one event, any channel.
+enum NotificationEvent {
+  MAINTENANCE_DUE
+  PAYMENT_SUCCESS
+  PAYMENT_CONFIRMATION
+  VISITOR_PASS
+  VISITOR_APPROVED
+  BOOKING_CONFIRMED
+  ANNOUNCEMENT
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  TICKET_UPDATE
+  SERVICE_ASSIGNED
+  SERVICE_UPDATE
+  WORK_ORDER_ASSIGNED
+  WORK_ORDER_UPDATE
+  PASSWORD_RESET
+  WELCOME
+}
+
+/// One Razorpay account per (community, purpose). Community-specific and never
+/// shared: a community admin manages only its own rows; Platform Admin sees
+/// configuration STATUS only (booleans + masked key id), never secrets.
+model CommunityPaymentConfig {
+  id          String         @id @default(cuid())
+  communityId String
+  community   Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  purpose     PaymentPurpose
+
+  provider         String             @default("razorpay")
+  mode             PaymentGatewayMode @default(TEST)
+  accountName      String?
+  merchantId       String?
+  /// Razorpay Key ID — public by design (sent to the checkout widget).
+  keyId            String?
+  /// AES-256-GCM ciphertext of the Razorpay Key Secret.
+  keySecretEnc     String?
+  /// AES-256-GCM ciphertext of the Razorpay webhook signing secret.
+  webhookSecretEnc String?
+  enabled          Boolean            @default(false)
+
+  payments Payment[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, purpose])
+  @@index([communityId])
+  @@map("community_payment_configs")
+}
+
+/// Maintenance rate card, keyed on the community property types (the same
+/// free-form `Unit.type` values — "1BHK", "Villa", "Commercial", …). Revisions
+/// are new rows with a later `effectiveFrom`; the applicable row for a period is
+/// the latest one effective on or before the period start. Nothing is hardcoded.
+model MaintenanceCharge {
+  id           String    @id @default(cuid())
+  communityId  String
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  propertyType String
+
+  monthlyAmount   Decimal  @db.Decimal(14, 2)
+  quarterlyAmount Decimal? @db.Decimal(14, 2)
+  yearlyAmount    Decimal? @db.Decimal(14, 2)
+
+  /// Flat late fee, and/or a percentage of the outstanding amount.
+  lateFeeAmount   Decimal @default(0) @db.Decimal(14, 2)
+  lateFeePercent  Float   @default(0)
+  /// Days after the due date before a late fee applies.
+  gracePeriodDays Int     @default(0)
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  notes         String?
+
+  invoices MaintenanceInvoice[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, propertyType, effectiveFrom])
+  @@index([communityId])
+  @@index([communityId, propertyType])
+  @@map("maintenance_charges")
+}
+
+/// One maintenance bill for one unit and one billing period. Generation is
+/// idempotent on (unitId, cycle, periodStart).
+model MaintenanceInvoice {
+  id          String             @id @default(cuid())
+  communityId String
+  community   Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit               @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  /// Primary resident at generation time (for notifications and "my invoices").
+  residentId  String?
+  chargeId    String?
+  charge      MaintenanceCharge? @relation(fields: [chargeId], references: [id], onDelete: SetNull)
+
+  invoiceNumber String
+  cycle         BillingCycle
+  periodStart   DateTime
+  periodEnd     DateTime
+  issueDate     DateTime     @default(now())
+  dueDate       DateTime
+
+  baseAmount  Decimal       @db.Decimal(14, 2)
+  lateFee     Decimal       @default(0) @db.Decimal(14, 2)
+  adjustment  Decimal       @default(0) @db.Decimal(14, 2)
+  totalAmount Decimal       @db.Decimal(14, 2)
+  paidAmount  Decimal       @default(0) @db.Decimal(14, 2)
+  status      InvoiceStatus @default(ISSUED)
+
+  paidAt      DateTime?
+  cancelledAt DateTime?
+  notes       String?
+  metadata    Json?
+
+  payments Payment[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, invoiceNumber])
+  @@unique([unitId, cycle, periodStart])
+  @@index([communityId])
+  @@index([communityId, status])
+  @@index([unitId])
+  @@index([residentId])
+  @@index([dueDate])
+  @@map("maintenance_invoices")
+}
+
+/// Every collection attempt — maintenance OR service — in one transaction
+/// history. `purpose` decides which community Razorpay account handled it.
+model Payment {
+  id          String                  @id @default(cuid())
+  communityId String
+  community   Community               @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  purpose     PaymentPurpose
+  configId    String?
+  config      CommunityPaymentConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+
+  invoiceId        String?
+  invoice          MaintenanceInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  /// Set for SERVICE collections (the service request being paid for).
+  serviceRequestId String?
+  unitId           String?
+  residentId       String?
+  /// The signed-in user who initiated the payment.
+  userId           String?
+
+  amount   Decimal       @db.Decimal(14, 2)
+  currency String        @default("INR")
+  status   PaymentStatus @default(CREATED)
+
+  gateway          String  @default("razorpay")
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  gatewaySignature String?
+  method           String?
+  receiptNumber    String?
+  failureReason    String?
+  gatewayResponse  Json?
+
+  paidAt       DateTime?
+  refundedAt   DateTime?
+  refundAmount Decimal?  @db.Decimal(14, 2)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([communityId, purpose])
+  @@index([communityId, status])
+  @@index([invoiceId])
+  @@index([residentId])
+  @@index([gatewayOrderId])
+  @@index([gatewayPaymentId])
+  @@map("payments")
+}
+
+/// Previous password hashes, so a reset/change cannot reuse a recent password.
+/// Trimmed to AUTH_PASSWORD_HISTORY_SIZE entries per user.
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("password_history")
+}
+
+/// A WhatsApp gateway session (OpenWA). The gateway owns the actual WhatsApp
+/// credentials; this row is the platform handle on it — status, phone, health
+/// and an encrypted per-session API key. Platform-level (no tenant).
+model WhatsAppSession {
+  id         String  @id @default(cuid())
+  /// Stable session name used against the gateway.
+  name       String  @unique
+  provider   String  @default("openwa")
+  /// The gateway session id, when it differs from `name`.
+  externalId String?
+
+  status      WhatsAppSessionStatus @default(DISCONNECTED)
+  phoneNumber String?
+  /// AES-256-GCM ciphertext of the session-scoped gateway API key.
+  apiKeyEnc   String?
+  /// Last QR payload seen (short-lived; cleared once connected).
+  lastQr      String?
+  lastQrAt    DateTime?
+
+  lastConnectedAt    DateTime?
+  lastDisconnectedAt DateTime?
+  lastError          String?
+  isDefault          Boolean   @default(false)
+  metadata           Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
+
+  @@index([status])
+  @@map("whatsapp_sessions")
+}
+
+/// Per-community routing for a notification event. Absent row = platform
+/// default (email on, whatsapp follows CommunitySettings.whatsappEnabled).
+model CommunityNotificationPreference {
+  id          String            @id @default(cuid())
+  communityId String
+  community   Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  event       NotificationEvent
+
+  enabled         Boolean @default(true)
+  emailEnabled    Boolean @default(true)
+  whatsappEnabled Boolean @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@unique([communityId, event])
+  @@index([communityId])
+  @@map("community_notification_preferences")
+}
+
+/// Community-authored message body for an event on a channel. Overrides the
+/// platform default template. Handlebars variables, same as the .hbs registry.
+model CommunityNotificationTemplate {
+  id          String            @id @default(cuid())
+  communityId String
+  community   Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  event       NotificationEvent
+  channel     String
+  locale      String            @default("en")
+
+  subject String?
+  body    String
+  enabled Boolean @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, event, channel, locale])
+  @@index([communityId])
+  @@map("community_notification_templates")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 12 — Service Packages
+//
+// NOT a second catalog and NOT a second booking engine. A package is a priced
+// BUNDLE of rows that already exist in the Service catalog; buying one creates a
+// Payment on the existing SERVICE rail, and redeeming an entitlement creates an
+// ordinary ServiceRequest. Remaining quantity is DERIVED by counting those
+// requests, so there is no redemption counter to drift out of sync.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ServicePackageStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PackagePurchaseStatus {
+  /// Created, awaiting payment.
+  PENDING
+  /// Paid and inside its validity window.
+  ACTIVE
+  /// Validity window has passed.
+  EXPIRED
+  /// Fully redeemed.
+  COMPLETED
+  CANCELLED
+}
+
+/// A bundle of catalog services sold at a package price. Community-scoped so one
+/// community's offers never leak into another's app.
+model ServicePackage {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  name          String
+  description   String?
+  /// What the resident pays for the bundle.
+  price         Decimal  @db.Decimal(14, 2)
+  /// Sum of the member services at list price, captured at save time so the
+  /// advertised saving stays stable even if a service is later re-priced.
+  listPrice     Decimal? @db.Decimal(14, 2)
+  /// How long the entitlements stay redeemable after purchase.
+  durationDays  Int      @default(90)
+  /// Property types this package is offered to (empty = every type).
+  propertyTypes String[]
+
+  status    ServicePackageStatus @default(ACTIVE)
+  sortOrder Int                  @default(0)
+  iconKey   String?
+  color     String?
+
+  items     ServicePackageItem[]
+  purchases ServicePackagePurchase[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([communityId, status])
+  @@map("service_packages")
+}
+
+/// One catalog service inside a package, with how many times it may be redeemed.
+model ServicePackageItem {
+  id        String         @id @default(cuid())
+  packageId String
+  package   ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  quantity  Int      @default(1)
+  /// List price per redemption at the time the package was saved (for savings).
+  unitPrice Decimal? @db.Decimal(14, 2)
+  sortOrder Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([packageId, serviceId])
+  @@index([packageId])
+  @@index([serviceId])
+  @@map("service_package_items")
+}
+
+/// A resident's purchase of a package. Payment reuses the SERVICE rail; the
+/// linked Payment id is a plain scalar (the AuditLog pattern) so the packages
+/// feature never reaches into the payment engine's tables.
+model ServicePackagePurchase {
+  id          String         @id @default(cuid())
+  communityId String
+  community   Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  packageId   String
+  package     ServicePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+
+  residentId String?
+  unitId     String?
+  userId     String?
+
+  /// Package name + item list frozen at purchase, so history survives edits.
+  snapshot Json?
+
+  amount    Decimal               @db.Decimal(14, 2)
+  currency  String                @default("INR")
+  status    PackagePurchaseStatus @default(PENDING)
+  paymentId String?
+
+  purchasedAt DateTime?
+  validFrom   DateTime?
+  validUntil  DateTime?
+  cancelledAt DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId])
+  @@index([communityId, status])
+  @@index([packageId])
+  @@index([residentId])
+  @@index([paymentId])
+  @@map("service_package_purchases")
 }

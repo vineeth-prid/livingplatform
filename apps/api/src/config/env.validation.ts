@@ -89,6 +89,49 @@ export class EnvironmentVariables {
   @IsOptional()
   JWT_REFRESH_TTL_REMEMBER = '30d';
 
+  /**
+   * One-time password given to provisioned people accounts (residents, staff,
+   * vendors). Users are forced to change it on first login. Configurable so
+   * production never ships with the documented default.
+   */
+  @IsString()
+  @MinLength(8, { message: 'AUTH_DEFAULT_PASSWORD must be at least 8 characters' })
+  @IsOptional()
+  AUTH_DEFAULT_PASSWORD = 'Living@123';
+
+  /** Number of previous passwords that may not be reused (0 disables). */
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  AUTH_PASSWORD_HISTORY_SIZE = 5;
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  AUTH_PASSWORD_MIN_LENGTH = 8;
+
+  /** Lifetime of the mobile password-reset OTP. */
+  @IsString()
+  @IsOptional()
+  AUTH_OTP_TTL = '10m';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  AUTH_OTP_LENGTH = 6;
+
+  // ── Secret encryption (payment keys, webhook secrets, WhatsApp API keys) ──
+  /**
+   * Passphrase for AES-256-GCM encryption of secret columns. REQUIRED in
+   * production — without it, saving a Razorpay key or WhatsApp API key fails.
+   */
+  @ValidateIf((e: EnvironmentVariables) => e.NODE_ENV === NodeEnv.Production)
+  @IsString()
+  @MinLength(32, {
+    message: 'APP_ENCRYPTION_KEY must be at least 32 characters in production',
+  })
+  APP_ENCRYPTION_KEY = '';
+
   // ── Email (verification / password reset) ──
   @IsString()
   @IsOptional()
@@ -232,6 +275,88 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   WHATSAPP_APP_SECRET = '';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  WHATSAPP_RATE_LIMIT_PER_MINUTE = 60;
+
+  // ── WhatsApp channel · OpenWA gateway (WHATSAPP_PROVIDER=openwa) ──
+  /** Base URL of the self-hosted OpenWA gateway, e.g. http://openwa:3000 */
+  @ValidateIf((e: EnvironmentVariables) => e.WHATSAPP_PROVIDER === 'openwa')
+  @IsString()
+  @MinLength(1, { message: 'OPENWA_BASE_URL is required when WHATSAPP_PROVIDER=openwa' })
+  OPENWA_BASE_URL = 'http://localhost:3000';
+
+  /** Gateway API key sent as X-API-Key. Session-scoped OPERATOR key recommended. */
+  @ValidateIf((e: EnvironmentVariables) => e.WHATSAPP_PROVIDER === 'openwa')
+  @IsString()
+  @MinLength(1, { message: 'OPENWA_API_KEY is required when WHATSAPP_PROVIDER=openwa' })
+  OPENWA_API_KEY = '';
+
+  /** Default gateway session name the platform sends from. */
+  @IsString()
+  @IsOptional()
+  OPENWA_SESSION = 'living';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  OPENWA_TIMEOUT_MS = 20000;
+
+  /** Shared secret OpenWA signs webhook deliveries with. */
+  @IsString()
+  @IsOptional()
+  OPENWA_WEBHOOK_SECRET = '';
+
+  /**
+   * Callback URL the gateway posts events to. Usually an INTERNAL address
+   * (http://api:4000/api/v1/notifications/webhooks/openwa) — left empty, the
+   * platform skips webhook registration and relies on the status watchdog.
+   */
+  @IsString()
+  @IsOptional()
+  OPENWA_WEBHOOK_URL = '';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  OPENWA_HEALTH_INTERVAL_SEC = 60;
+
+  @IsString()
+  @IsOptional()
+  OPENWA_AUTO_RECONNECT = 'true';
+
+  @IsString()
+  @IsOptional()
+  OPENWA_DEFAULT_COUNTRY_CODE = '91';
+
+  // ── Payments (Razorpay; per-community accounts live in the database) ──
+  @IsString()
+  @IsOptional()
+  PAYMENT_GATEWAY = 'razorpay';
+
+  @IsString()
+  @IsOptional()
+  PAYMENT_CURRENCY = 'INR';
+
+  @IsString()
+  @IsOptional()
+  RAZORPAY_BASE_URL = 'https://api.razorpay.com/v1';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  RAZORPAY_TIMEOUT_MS = 15000;
+
+  @IsString()
+  @IsOptional()
+  BILLING_INVOICE_PREFIX = 'INV';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  BILLING_DEFAULT_DUE_DAY = 10;
 
   // ── Rate limiting ──
   @Type(() => Number)

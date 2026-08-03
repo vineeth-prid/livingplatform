@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { VendorModule } from '../vendor/vendor.module';
+
 import { TicketModule } from '../ticket/ticket.module';
 import {
   ServiceCatalogController,
@@ -18,7 +20,7 @@ import { ServiceRequestService } from './service-request.service';
  * unchanged and independent (the link is a nullable scalar `ticketId`).
  */
 @Module({
-  imports: [TicketModule],
+  imports: [TicketModule, VendorModule],
   controllers: [
     ServiceRequestController,
     ServiceFeedbackController,

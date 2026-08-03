@@ -8,7 +8,15 @@ import { NotificationController } from './admin/notification.controller';
 import { EmailChannel } from './channels/email/email.channel';
 import { EmailProviderRegistry } from './channels/email/email-provider.registry';
 import { WhatsAppChannel } from './channels/whatsapp/whatsapp.channel';
+import { WhatsAppSessionService } from './channels/whatsapp/whatsapp-session.service';
 import { ChannelRouter } from './core/channel-router';
+import { NotificationRouterService } from './core/notification-router.service';
+import {
+  NotificationPreferenceController,
+  NotificationTemplateController,
+} from './preferences/notification-preference.controller';
+import { NotificationPreferenceService } from './preferences/notification-preference.service';
+import { OpenWaWebhookController } from './webhooks/openwa-webhook.controller';
 import { DeliveryTracker } from './core/delivery-tracker';
 import { NotificationDispatcher } from './core/notification.dispatcher';
 import { NotificationHistory } from './core/notification-history.service';
@@ -51,12 +59,20 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
     }),
     BullModule.registerQueue({ name: NOTIFICATION_QUEUE }, { name: NOTIFICATION_DLQ }),
   ],
-  controllers: [NotificationController, MetaWebhookController],
+  controllers: [
+    NotificationController,
+    MetaWebhookController,
+    OpenWaWebhookController,
+    NotificationPreferenceController,
+    NotificationTemplateController,
+  ],
   providers: [
     // Channels + their reused provider stacks
     EmailProviderRegistry,
     EmailChannel,
     WhatsAppChannel,
+    // OpenWA connection manager (QR pairing, reconnect, health watchdog)
+    WhatsAppSessionService,
     // The single place enumerating channels (the channel factory)
     {
       provide: NOTIFICATION_CHANNEL_LIST,
@@ -73,9 +89,20 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
     SenderResolver,
     NotificationDispatcher,
     NotificationProcessor,
+    // Community routing/templates + the domain-event → notification seam
+    NotificationPreferenceService,
+    NotificationRouterService,
     // Inbound
     MetaWebhookService,
   ],
-  exports: [NotificationDispatcher, EmailTemplateEngine, RecipientResolver, ChannelRouter],
+  exports: [
+    NotificationDispatcher,
+    EmailTemplateEngine,
+    RecipientResolver,
+    ChannelRouter,
+    NotificationPreferenceService,
+    NotificationRouterService,
+    WhatsAppSessionService,
+  ],
 })
 export class NotificationModule {}

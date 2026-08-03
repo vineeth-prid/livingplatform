@@ -1,0 +1,5 @@
+Subject: Ticket {{ticketNumber}} raised
+<h1>Ticket raised</h1>
+<p>{{t "greeting"}} {{recipientName}},</p>
+<p>Ticket <strong>{{ticketNumber}}</strong> — {{ticketTitle}} — has been raised{{#if communityName}} at {{communityName}}{{/if}}.</p>
+{{#if actionUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{actionUrl}}">View ticket</a></p>{{/if}}

@@ -89,7 +89,43 @@ export class EmailAdminResource {
   }
 }
 
-/** WhatsApp-channel admin controls. */
+export type WhatsAppSessionStatus =
+  | 'DISCONNECTED'
+  | 'CONNECTING'
+  | 'QR_PENDING'
+  | 'CONNECTED'
+  | 'FAILED';
+
+export interface WhatsAppSession {
+  id: string;
+  name: string;
+  provider: string;
+  status: WhatsAppSessionStatus;
+  phoneNumber: string | null;
+  isDefault: boolean;
+  hasApiKey: boolean;
+  lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  lastError: string | null;
+  updatedAt: string;
+}
+
+export interface WhatsAppSettings {
+  provider: string;
+  supported: string[];
+  rateLimitPerMinute: number;
+  defaultSender: string;
+  openwa: {
+    baseUrl: string;
+    session: string;
+    autoReconnect: boolean;
+    healthIntervalSec: number;
+    webhookConfigured: boolean;
+    webhookUrl: string | null;
+  };
+}
+
+/** WhatsApp-channel admin controls, including the OpenWA connection manager. */
 export class WhatsAppAdminResource {
   constructor(private readonly http: HttpClient) {}
   health(): Promise<ChannelHealth> {
@@ -101,15 +137,117 @@ export class WhatsAppAdminResource {
   statistics(windowHours = 24): Promise<NotificationStatistics> {
     return this.http.get('/notifications/whatsapp/statistics', { windowHours });
   }
+
+  // ── Gateway configuration + sessions (Platform Admin) ──
+  settings(): Promise<WhatsAppSettings> {
+    return this.http.get('/notifications/whatsapp/settings');
+  }
+  sessions(): Promise<WhatsAppSession[]> {
+    return this.http.get('/notifications/whatsapp/sessions');
+  }
+  session(name: string): Promise<WhatsAppSession & { reachable: boolean }> {
+    return this.http.get(`/notifications/whatsapp/sessions/${encodeURIComponent(name)}`);
+  }
+  qr(name: string): Promise<{ qr: string | null; dataUrl: string | null; status: WhatsAppSessionStatus }> {
+    return this.http.get(`/notifications/whatsapp/sessions/${encodeURIComponent(name)}/qr`);
+  }
+  connect(name: string): Promise<WhatsAppSession> {
+    return this.http.post(`/notifications/whatsapp/sessions/${encodeURIComponent(name)}/connect`, {});
+  }
+  reconnect(name: string): Promise<WhatsAppSession> {
+    return this.http.post(`/notifications/whatsapp/sessions/${encodeURIComponent(name)}/reconnect`, {});
+  }
+  disconnect(name: string): Promise<WhatsAppSession> {
+    return this.http.post(`/notifications/whatsapp/sessions/${encodeURIComponent(name)}/disconnect`, {});
+  }
+  setApiKey(name: string, apiKey: string): Promise<WhatsAppSession> {
+    return this.http.put(`/notifications/whatsapp/sessions/${encodeURIComponent(name)}/api-key`, { apiKey });
+  }
+}
+
+export type NotificationEventKey =
+  | 'MAINTENANCE_DUE' | 'PAYMENT_SUCCESS' | 'PAYMENT_CONFIRMATION' | 'VISITOR_PASS'
+  | 'VISITOR_APPROVED' | 'BOOKING_CONFIRMED' | 'ANNOUNCEMENT' | 'TICKET_CREATED'
+  | 'TICKET_ASSIGNED' | 'TICKET_UPDATE' | 'SERVICE_ASSIGNED' | 'SERVICE_UPDATE'
+  | 'WORK_ORDER_ASSIGNED' | 'WORK_ORDER_UPDATE' | 'PASSWORD_RESET' | 'WELCOME';
+
+export interface NotificationPreference {
+  event: NotificationEventKey;
+  enabled: boolean;
+  emailEnabled: boolean;
+  whatsappEnabled: boolean;
+  configured: boolean;
+}
+
+export interface CommunityNotificationTemplate {
+  id: string;
+  communityId: string;
+  event: NotificationEventKey;
+  channel: string;
+  locale: string;
+  subject: string | null;
+  body: string;
+  enabled: boolean;
+}
+
+/** Community Admin: routing and message wording. Configuration only — no sends. */
+export class NotificationPreferencesResource {
+  constructor(private readonly http: HttpClient) {}
+
+  list(communityId: string): Promise<NotificationPreference[]> {
+    return this.http.get(`/communities/${communityId}/notification-preferences`);
+  }
+  update(
+    communityId: string,
+    event: NotificationEventKey,
+    input: { enabled?: boolean; emailEnabled?: boolean; whatsappEnabled?: boolean },
+  ): Promise<NotificationPreference> {
+    return this.http.put(`/communities/${communityId}/notification-preferences/${event}`, input);
+  }
+
+  templates(communityId: string): Promise<CommunityNotificationTemplate[]> {
+    return this.http.get(`/communities/${communityId}/notification-templates`);
+  }
+  saveTemplate(
+    communityId: string,
+    input: {
+      event: NotificationEventKey;
+      channel: string;
+      body: string;
+      subject?: string;
+      locale?: string;
+      enabled?: boolean;
+    },
+  ): Promise<CommunityNotificationTemplate> {
+    return this.http.post(`/communities/${communityId}/notification-templates`, input);
+  }
+  deleteTemplate(communityId: string, id: string): Promise<{ id: string; deleted: boolean }> {
+    return this.http.delete(`/communities/${communityId}/notification-templates/${id}`);
+  }
 }
 
 /** Notification Engine — one engine, many channels. */
 export class NotificationsResource {
   readonly email: EmailAdminResource;
   readonly whatsapp: WhatsAppAdminResource;
+  readonly preferences: NotificationPreferencesResource;
   constructor(private readonly http: HttpClient) {
     this.email = new EmailAdminResource(http);
     this.whatsapp = new WhatsAppAdminResource(http);
+    this.preferences = new NotificationPreferencesResource(http);
+  }
+
+  /** Shared queue depth across every channel. */
+  queue(): Promise<{
+    waiting: number; active: number; delayed: number; failed: number; completed: number;
+    retrying: number; deadLettered: number;
+  }> {
+    return this.http.get('/notifications/queue');
+  }
+
+  /** Platform default templates available to every community. */
+  templates(): Promise<Array<{ name: string; source: 'platform' }>> {
+    return this.http.get('/notifications/templates');
   }
 
   channels(): Promise<ChannelInfo[]> {

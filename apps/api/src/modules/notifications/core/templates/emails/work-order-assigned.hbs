@@ -1,0 +1,5 @@
+Subject: Work order {{workOrderNumber}} assigned
+<h1>Work order assigned</h1>
+<p>{{t "greeting"}} {{assigneeName}},</p>
+<p>Work order <strong>{{workOrderNumber}}</strong> — {{title}} — has been assigned to you{{#if communityName}} at {{communityName}}{{/if}}.</p>
+{{#if actionUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{actionUrl}}">View work order</a></p>{{/if}}

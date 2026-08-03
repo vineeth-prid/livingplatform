@@ -1,0 +1,6 @@
+Subject: Maintenance due — {{invoiceNumber}}
+<h1>Your maintenance bill is due</h1>
+<p>{{t "greeting"}} {{residentName}},</p>
+<p>Maintenance for <strong>{{unitNumber}}</strong> ({{periodLabel}}) is <strong>{{currency}} {{amount}}</strong>, due on <strong>{{dueDate}}</strong>.</p>
+{{#if lateFeeNote}}<p class="muted">{{lateFeeNote}}</p>{{/if}}
+{{#if actionUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{actionUrl}}">Pay now</a></p>{{/if}}

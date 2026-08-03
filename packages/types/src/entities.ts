@@ -147,6 +147,8 @@ export interface Service {
   id: ID; tenantId: ID | null; key: string; name: string; description?: string | null;
   estimatedDurationMinutes?: number | null; iconKey?: string | null; color?: string | null;
   isActive: boolean; isSystem: boolean; sortOrder: number;
+  /** List price for one delivery. Prices packages and shows the saving. */
+  basePrice?: number | null;
 }
 export interface ServiceRequest extends AuditFields {
   id: ID; number: number; requestNumber: string; communityId: ID; unitId: ID; serviceId: ID;
