@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CommunityStatus, InvoiceStatus } from '@prisma/client';
 
 import { NotificationRouterService } from '../notifications/core/notification-router.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { SettingsService } from '../settings/settings.service';
+import { CommunityModulesService } from '../settings/community-modules.service';
 import { InvoiceService } from './invoice.service';
 
 /**
@@ -16,6 +17,16 @@ import { InvoiceService } from './invoice.service';
  * NotificationRouter listens for) — this service never sends a message itself,
  * so it stays out of the notification abstraction entirely.
  *
+ * **This class MUST resolve as a singleton.** `ScheduleModule` discovers
+ * `@Cron` handlers by walking singleton instances; a request-scoped scheduler is
+ * silently never registered — no error, no log, the sweep simply never runs.
+ *
+ * `InvoiceService` and `NotificationRouterService` are both request-scoped (they
+ * reach `CommunityAccessService` → `TenantContextService`), so they are resolved
+ * per run through ModuleRef with a synthetic system principal — the same
+ * idiomatic pattern `MaintenanceGenerationService` uses to call the
+ * request-scoped Work Order engine from its scheduler.
+ *
  * Set BILLING_SWEEP_ENABLED=false to disable (same switch style as the
  * announcement sweep).
  */
@@ -26,10 +37,28 @@ export class BillingSchedulerService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly invoices: InvoiceService,
-    private readonly notifications: NotificationRouterService,
-    private readonly settings: SettingsService,
+    private readonly modules: CommunityModulesService,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  /**
+   * A DI context for this run. Cron executes outside any HTTP request, so the
+   * request-scoped chain needs a context registered by hand; the sweep touches
+   * no tenant-guarded method, so an empty principal is correct rather than a
+   * forged one.
+   */
+  private async scoped(): Promise<{
+    invoices: InvoiceService;
+    notifications: NotificationRouterService;
+  }> {
+    const contextId = ContextIdFactory.create();
+    this.moduleRef.registerRequestByContextId({}, contextId);
+    const [invoices, notifications] = await Promise.all([
+      this.moduleRef.resolve(InvoiceService, contextId, { strict: false }),
+      this.moduleRef.resolve(NotificationRouterService, contextId, { strict: false }),
+    ]);
+    return { invoices, notifications };
+  }
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM, { name: 'billing-overdue-sweep' })
   async scheduledSweep(): Promise<void> {
@@ -37,10 +66,11 @@ export class BillingSchedulerService {
     if (this.running) return;
     this.running = true;
     try {
+      const { notifications } = await this.scoped();
       const result = await this.sweep();
       // Reminders ride the Notification Engine's routing (per-community
       // channel preferences); this service never picks a channel itself.
-      const reminded = await this.notifications.sendMaintenanceDue(await this.dueSoon());
+      const reminded = await notifications.sendMaintenanceDue(await this.dueSoon());
       if (result.invoicesUpdated > 0 || reminded > 0) {
         this.logger.log(
           `Billing sweep: ${result.invoicesUpdated} invoices updated across ${result.communities} communities, ${reminded} reminders queued`,
@@ -54,10 +84,11 @@ export class BillingSchedulerService {
   }
 
   async sweep(): Promise<{ communities: number; invoicesUpdated: number }> {
+    const { invoices } = await this.scoped();
     const communities = await this.billingCommunityIds();
     let invoicesUpdated = 0;
     for (const id of communities) {
-      const { updated } = await this.invoices.refreshOverdue(id);
+      const { updated } = await invoices.refreshOverdue(id);
       invoicesUpdated += updated;
     }
     return { communities: communities.length, invoicesUpdated };
@@ -73,7 +104,7 @@ export class BillingSchedulerService {
       where: { deletedAt: null, status: CommunityStatus.ACTIVE },
       select: { id: true },
     });
-    const enabled = await this.settings.maintenanceEnabledByCommunity(
+    const enabled = await this.modules.maintenanceEnabledByCommunity(
       communities.map((c) => c.id),
     );
     return communities.filter((c) => enabled.get(c.id)).map((c) => c.id);

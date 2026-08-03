@@ -8,7 +8,7 @@ import {
 
 import { round2 } from '../billing/billing.math';
 import { PrismaService } from '../prisma/prisma.service';
-import { SettingsService } from '../settings/settings.service';
+import { CommunityModulesService } from '../settings/community-modules.service';
 
 export interface PlatformBusinessIntelligence {
   communities: {
@@ -61,7 +61,7 @@ export interface PlatformBusinessIntelligence {
 export class PlatformBusinessService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly settings: SettingsService,
+    private readonly modules: CommunityModulesService,
   ) {}
 
   async overview(): Promise<PlatformBusinessIntelligence> {
@@ -195,7 +195,7 @@ export class PlatformBusinessService {
       where: { deletedAt: null },
       select: { id: true },
     });
-    const enabled = await this.settings.maintenanceEnabledByCommunity(communities.map((c) => c.id));
+    const enabled = await this.modules.maintenanceEnabledByCommunity(communities.map((c) => c.id));
     return communities.map((c) => ({ communityId: c.id, enabled: enabled.get(c.id) ?? true }));
   }
 

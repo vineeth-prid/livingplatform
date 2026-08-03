@@ -25,7 +25,7 @@ import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
-import { SettingsService } from '../settings/settings.service';
+import { CommunityModulesService } from '../settings/community-modules.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import type {
   CheckoutSession,
@@ -83,7 +83,7 @@ export class PaymentService {
     private readonly configs: PaymentConfigService,
     private readonly invoices: InvoiceService,
     private readonly events: DomainEventsService,
-    private readonly settings: SettingsService,
+    private readonly modules: CommunityModulesService,
     private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
@@ -514,7 +514,7 @@ export class PaymentService {
       // maintenance money. Settlement of payments ALREADY in flight is
       // deliberately not gated (see handleWebhook) — turning the module off
       // must never strand a resident's money mid-transaction.
-      await this.settings.assertMaintenanceBillingEnabled(communityId);
+      await this.modules.assertEnabled(communityId, 'maintenanceBilling');
       if (!dto.invoiceId) throw new BadRequestException('invoiceId is required for a maintenance payment');
       const invoice = await this.prisma.maintenanceInvoice.findFirst({
         where: { id: dto.invoiceId, communityId, deletedAt: null },

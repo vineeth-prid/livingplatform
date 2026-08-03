@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
@@ -6,7 +6,13 @@ import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import {
+  CommunityModulesService,
+  type CommunityFeatures,
+} from './community-modules.service';
 import { UpdateCommunitySettingsDto } from './dto/update-settings.dto';
+
+export type { CommunityFeatures };
 
 const json = (v: unknown) => v as Prisma.InputJsonValue | undefined;
 
@@ -16,6 +22,7 @@ export class SettingsService {
     private readonly prisma: PrismaService,
     private readonly access: CommunityAccessService,
     private readonly events: DomainEventsService,
+    private readonly modules: CommunityModulesService,
   ) {}
 
   async get(communityId: string) {
@@ -69,62 +76,31 @@ export class SettingsService {
 
   // ── Module toggles ─────────────────────────────────────────────────────────
   //
-  // ONE place answers "is this module on for this community?". Every guard —
-  // billing, payments, packages, the resident app's feature list — reads from
-  // here, so a toggle can never be honoured in one code path and ignored in
-  // another. A community with no settings row yet gets the defaults (on), which
-  // is what keeps this change non-breaking.
+  // Delegated to CommunityModulesService, which is a SINGLETON. This service is
+  // request-scoped (it injects CommunityAccessService → TenantContextService),
+  // and toggles must be readable from a global guard and from cron — neither of
+  // which may be request-scoped. These pass-throughs exist so callers that
+  // already hold SettingsService need not know that; there is still exactly one
+  // implementation of "is this module on?".
 
   /** Every module toggle in one read — what the frontends gate their UI on. */
-  async features(communityId: string): Promise<CommunityFeatures> {
-    const row = await this.prisma.communitySettings.findUnique({
-      where: { communityId },
-      select: { maintenanceBillingEnabled: true, servicePackagesEnabled: true },
-    });
-    return {
-      maintenanceBilling: row?.maintenanceBillingEnabled ?? true,
-      servicePackages: row?.servicePackagesEnabled ?? true,
-    };
+  features(communityId: string): Promise<CommunityFeatures> {
+    return this.modules.features(communityId);
   }
 
-  async isMaintenanceBillingEnabled(communityId: string): Promise<boolean> {
-    return (await this.features(communityId)).maintenanceBilling;
+  isMaintenanceBillingEnabled(communityId: string): Promise<boolean> {
+    return this.modules.isEnabled(communityId, 'maintenanceBilling');
   }
 
-  /**
-   * Guard for every maintenance-billing write and read. 404 rather than 403:
-   * when a community has not enabled the module, the endpoints genuinely do not
-   * exist for it, and a 403 would confirm the feature is merely switched off.
-   */
-  async assertMaintenanceBillingEnabled(communityId: string): Promise<void> {
-    if (!(await this.isMaintenanceBillingEnabled(communityId))) {
-      throw new NotFoundException('Maintenance billing is not enabled for this community');
-    }
+  assertMaintenanceBillingEnabled(communityId: string): Promise<void> {
+    return this.modules.assertEnabled(communityId, 'maintenanceBilling');
   }
 
-  async assertServicePackagesEnabled(communityId: string): Promise<void> {
-    const { servicePackages } = await this.features(communityId);
-    if (!servicePackages) {
-      throw new NotFoundException('Service packages are not enabled for this community');
-    }
+  assertServicePackagesEnabled(communityId: string): Promise<void> {
+    return this.modules.assertEnabled(communityId, 'servicePackages');
   }
 
-  /** Bulk lookup for dashboards — one query instead of N. */
-  async maintenanceEnabledByCommunity(
-    communityIds: string[],
-  ): Promise<Map<string, boolean>> {
-    const rows = await this.prisma.communitySettings.findMany({
-      where: { communityId: { in: communityIds } },
-      select: { communityId: true, maintenanceBillingEnabled: true },
-    });
-    const byId = new Map(rows.map((r) => [r.communityId, r.maintenanceBillingEnabled]));
-    // Communities without a settings row run on the defaults.
-    return new Map(communityIds.map((id) => [id, byId.get(id) ?? true]));
+  maintenanceEnabledByCommunity(communityIds: string[]): Promise<Map<string, boolean>> {
+    return this.modules.maintenanceEnabledByCommunity(communityIds);
   }
-}
-
-/** The module toggles a client needs to decide what to render. */
-export interface CommunityFeatures {
-  maintenanceBilling: boolean;
-  servicePackages: boolean;
 }

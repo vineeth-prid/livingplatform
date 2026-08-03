@@ -1,13 +1,7 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  NotFoundException,
-  SetMetadata,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
-import { SettingsService } from '../../modules/settings/settings.service';
+import { CommunityModulesService } from '../../modules/settings/community-modules.service';
 
 export const REQUIRE_MODULE_KEY = 'requireCommunityModule';
 
@@ -34,12 +28,21 @@ export const RequireCommunityModule = (module: CommunityModule) =>
  * these endpoints genuinely do not exist; a 403 would confirm the feature is
  * merely switched off and invite probing. This mirrors how cross-tenant ids
  * already return 404 rather than leaking existence.
+ *
+ * **This guard MUST stay a singleton.** It is registered as a global APP_GUARD,
+ * so it is constructed for every request in the application. Injecting anything
+ * request-scoped here — `SettingsService`, `CommunityAccessService`,
+ * `TenantContextService` — makes the guard request-scoped and forces Nest to
+ * resolve an `@Inject(REQUEST)` chain on every request, including the ones this
+ * guard exits immediately. `CommunityModulesService` exists precisely so this
+ * dependency stays singleton-safe; module-enabled.guard.spec.ts fails if that
+ * ever regresses.
  */
 @Injectable()
 export class ModuleEnabledGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly settings: SettingsService,
+    private readonly modules: CommunityModulesService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -47,21 +50,18 @@ export class ModuleEnabledGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    // The overwhelming majority of routes are not gated — leave before any I/O.
     if (!required) return true;
+
+    // Non-HTTP execution contexts (cron, events) carry no route to gate.
+    if (context.getType() !== 'http') return true;
 
     const request = context.switchToHttp().getRequest<{ params?: Record<string, string> }>();
     const communityId = request.params?.communityId;
     // No community in the route → nothing community-scoped to gate.
     if (!communityId) return true;
 
-    const features = await this.settings.features(communityId);
-    if (!features[required]) {
-      throw new NotFoundException(
-        required === 'maintenanceBilling'
-          ? 'Maintenance billing is not enabled for this community'
-          : 'Service packages are not enabled for this community',
-      );
-    }
+    await this.modules.assertEnabled(communityId, required);
     return true;
   }
 }
