@@ -56,6 +56,31 @@ Portal → Billing → Collection → *Generate invoices*. Re-running a period i
 (unique on unit + cycle + period). Preview first; it reports which property types
 have no rate in force.
 
+## Deploy pre-flight
+
+`nest build` succeeding does **not** mean the app will serve traffic — it never
+instantiates the DI graph. A dependency-scope bug builds cleanly, boots cleanly,
+and then 500s on every request.
+
+Run before restarting the service:
+
+```bash
+pnpm --filter @living/api test        # includes app.bootstrap.spec.ts
+```
+
+`app.bootstrap.spec.ts` compiles the real `AppModule` and asserts every global
+guard and every `@Cron` service is still a singleton. It needs no database or
+Redis and exits cleanly, so it is safe in any pre-flight.
+
+After restarting, make **one authenticated request** against a real endpoint —
+not just `/health`. The Sprint 12 outage passed a liveness check while every
+business route returned 500:
+
+```bash
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  https://api.living.example/api/v1/communities | head -c 200
+```
+
 ## Community modules
 
 | Situation | What to do |

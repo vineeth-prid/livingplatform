@@ -111,10 +111,54 @@ Resident gets `service:catalog:read`, `package:read`, `package:purchase`.
 
 ---
 
-## 6. Verification
+## 6. Dependency scope — the one that bit us
+
+`ModuleEnabledGuard` originally read the toggles through `SettingsService`.
+That service injects `CommunityAccessService`, which injects the **REQUEST**-scoped
+`TenantContextService`, and **Nest propagates scope upward** — so a global
+`APP_GUARD` became request-scoped and every request in the application had to
+resolve an `@Inject(REQUEST)` chain. The API returned 500 on everything.
+
+The same root cause had already broken `BillingSchedulerService` in Sprint 11:
+`ScheduleModule` only discovers `@Cron` handlers on **singleton** instances, so
+a request-scoped scheduler is never registered — silently, no error, no log.
+The nightly billing sweep had never run.
+
+Two rules follow:
+
+| Must stay a singleton | Why |
+| --- | --- |
+| Anything registered as `APP_GUARD` / `APP_INTERCEPTOR` | It is constructed for every request in the app |
+| Anything holding a `@Cron` handler | `ScheduleModule` walks singletons only |
+
+Read toggles through the singleton `CommunityModulesService` (PrismaService and
+nothing else). When a singleton genuinely needs a request-scoped collaborator,
+resolve it per run with `ModuleRef` — the pattern
+`MaintenanceGenerationService` and `BillingSchedulerService` both use.
+
+### How this is now caught
+
+`src/app.bootstrap.spec.ts` compiles the **real** `AppModule` and asserts that
+every global guard and every `@Cron` service still has a static dependency tree.
+It runs by default with no infrastructure — Postgres, Redis and the BullMQ
+Worker are stubbed at their edges.
+
+Two probes that do **not** work, both discarded after they gave false passes:
+
+- `moduleRef.get(Cls)` throws only for a *directly* request-scoped provider; one
+  that merely **inherited** the scope resolves happily.
+- `moduleRef.get(Cls)` also cannot find a provider registered as
+  `{ provide: APP_GUARD, useClass: Cls }`, and enhancer tokens are not
+  retrievable at all.
+
+`common/testing/di-scope.ts` scans the container by **metatype** and reads
+`isDependencyTreeStatic()`, which does reflect propagated scope. The helper has
+its own spec pinning both failure modes.
+
+## 7. Verification
 
 ```bash
-cd apps/api      && npx jest        # 228 tests (was 204)
+cd apps/api      && npx jest        # 257 tests
 cd apps/portal   && npx vitest run  #  31
 cd apps/resident && npx vitest run  #  12
 ```
