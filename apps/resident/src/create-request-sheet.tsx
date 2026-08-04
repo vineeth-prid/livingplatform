@@ -7,6 +7,7 @@ import { LivingApiError } from '@living/living-sdk';
 import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 
 import { useResidentCommunity } from './community';
+import { useMyResident } from './community-ops';
 import { living } from './lib/living';
 
 const schema = z.object({
@@ -20,9 +21,11 @@ type FormValues = z.infer<typeof schema>;
 
 /**
  * A bottom-sheet to raise a complaint (ticket) or, when a `serviceId` is given,
- * request a service. Residents pick their unit + category/service (no self-unit
- * endpoint exists yet, so the unit is chosen — this auto-fills once the backend
- * exposes the resident's own record).
+ * request a service.
+ *
+ * The unit list is the resident's OWN unit(s), not the community's — a resident
+ * raising a complaint against a neighbour's flat is never the intent. With a
+ * single unit (the normal case) it is preselected and the field is read-only.
  */
 export function CreateRequestSheet({
   open, onOpenChange, mode, serviceId, serviceName, onCreated,
@@ -37,11 +40,7 @@ export function CreateRequestSheet({
   const { communityId } = useResidentCommunity();
   const qc = useQueryClient();
 
-  const units = useQuery({
-    queryKey: ['units', communityId, 'pick'],
-    queryFn: () => living.community.listUnits(communityId!, { limit: 200, sortBy: 'unitNumber', sortDir: 'asc' }),
-    enabled: open && !!communityId,
-  });
+  const { units, isLoading: unitsLoading } = useMyResident();
   const categories = useQuery({
     queryKey: ['ticket-categories'],
     queryFn: () => living.ticket.listCategories({ activeOnly: true }),
@@ -53,7 +52,11 @@ export function CreateRequestSheet({
     defaultValues: { priority: 'MEDIUM' },
   });
 
-  useEffect(() => { if (open) reset({ unitId: '', categoryId: '', title: '', description: '', priority: 'MEDIUM' }); }, [open, reset]);
+  // Preselect the only unit they have, so the common case is one less tap.
+  const onlyUnitId = units.length === 1 ? units[0]!.id : '';
+  useEffect(() => {
+    if (open) reset({ unitId: onlyUnitId, categoryId: '', title: '', description: '', priority: 'MEDIUM' });
+  }, [open, reset, onlyUnitId]);
 
   const onSubmit = handleSubmit(async (values) => {
     if (!communityId) return;
@@ -89,10 +92,20 @@ export function CreateRequestSheet({
         className="mx-auto max-w-md"
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-4 pb-2">
-          <Field label="Your unit" error={errors.unitId?.message}>
-            <select {...register('unitId')} className={selectCls}>
-              <option value="">{units.isLoading ? 'Loading…' : 'Select unit'}</option>
-              {(units.data?.items ?? []).map((u) => <option key={u.id} value={u.id}>{u.unitNumber}</option>)}
+          <Field
+            label="Your unit"
+            error={
+              errors.unitId?.message ??
+              (!unitsLoading && units.length === 0
+                ? 'Your account is not linked to a unit yet — ask management to link it.'
+                : undefined)
+            }
+          >
+            <select {...register('unitId')} className={selectCls} disabled={units.length <= 1}>
+              {units.length !== 1 && (
+                <option value="">{unitsLoading ? 'Loading…' : 'Select unit'}</option>
+              )}
+              {units.map((u) => <option key={u.id} value={u.id}>{u.unitNumber}</option>)}
             </select>
           </Field>
 

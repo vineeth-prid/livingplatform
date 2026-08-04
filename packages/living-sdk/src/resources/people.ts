@@ -13,6 +13,26 @@ export class PeopleResource {
   listResidents(communityId: string, params?: Query): Promise<Paginated<Resident>> {
     return this.http.get(`/communities/${communityId}/residents`, params);
   }
+
+  /**
+   * The signed-in resident's OWN record(s) + household. Needs no `resident:read`,
+   * which is exactly why it exists — a resident must be able to find their own
+   * residentId and unit to invite visitors, book amenities or raise a request.
+   */
+  myResident(): Promise<{ residents: Resident[]; family: Resident[] }> {
+    return this.http.get('/residents/me');
+  }
+  addFamilyMember(input: {
+    firstName: string;
+    lastName?: string;
+    mobile: string;
+    email?: string;
+  }): Promise<Resident> {
+    return this.http.post('/residents/me/family', input);
+  }
+  removeFamilyMember(id: string): Promise<unknown> {
+    return this.http.delete(`/residents/me/family/${id}`);
+  }
   createResident(communityId: string, input: Body): Promise<Resident> {
     return this.http.post(`/communities/${communityId}/residents`, input);
   }

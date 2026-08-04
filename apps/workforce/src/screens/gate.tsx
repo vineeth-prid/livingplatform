@@ -10,6 +10,7 @@ import type { Visitor } from '@living/types';
 import { living } from '../lib/living';
 import { useWorker } from '../worker';
 import { ScreenHeader } from '../shell';
+import { GateDeliveriesScreen } from './gate-deliveries';
 
 type Tone = NonNullable<BadgeProps['tone']>;
 const TONE: Record<string, Tone> = { PENDING: 'info', APPROVED: 'brand', CHECKED_IN: 'warning', CHECKED_OUT: 'success', REJECTED: 'danger' };
@@ -17,8 +18,75 @@ const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const residentName = (v: Visitor) => v.resident ? `${v.resident.firstName} ${v.resident.lastName}` : '—';
 
-/** The security gate: today's visitor queue, grouped, with the full lifecycle. */
+/**
+ * The security desk. Two registers behind one tab:
+ *
+ *  • Visitors — the existing invite/pass-code flow, unchanged.
+ *  • Deliveries — Gate Management (Sprint 13), where the guard records an
+ *    arrival and the resident approves it in real time.
+ *
+ * Split by sub-tab rather than merged into one list: they have different
+ * lifecycles and a guard is doing one job or the other, never both at once.
+ */
 export function GateScreen() {
+  const { hasPermission } = useAuth();
+  const [tab, setTab] = useState<'deliveries' | 'visitors'>('deliveries');
+
+  const canDeliveries = hasPermission('gate:entry:view');
+  const canVisitors = hasPermission('visitor:approve') || hasPermission('visitor:checkin');
+
+  // Only one register available → show it directly, no pointless tab row.
+  if (canDeliveries && !canVisitors) {
+    return (
+      <div>
+        <ScreenHeader title="Gate" subtitle="Security" />
+        <GateDeliveriesScreen />
+      </div>
+    );
+  }
+  if (!canDeliveries && canVisitors) {
+    return (
+      <div>
+        <ScreenHeader title="Gate" subtitle="Security" />
+        <VisitorQueue />
+      </div>
+    );
+  }
+  if (!canDeliveries && !canVisitors) {
+    return (
+      <div>
+        <ScreenHeader title="Gate" subtitle="Security" />
+        <div className="px-4">
+          <EmptyState icon={ShieldCheck} title="No gate access" description="Your role doesn’t include gate duties." />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <ScreenHeader title="Gate" subtitle="Security" />
+      <div className="flex gap-1.5 px-4">
+        {([['deliveries', 'Deliveries'], ['visitors', 'Visitors']] as const).map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => setTab(v)}
+            className={cn(
+              'flex-1 rounded-pill px-3 py-1.5 text-sm font-medium transition-colors',
+              tab === v ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'deliveries' ? <GateDeliveriesScreen /> : <VisitorQueue />}
+    </div>
+  );
+}
+
+/** The visitor queue — unchanged behaviour, now rendered under a sub-tab. */
+function VisitorQueue() {
   const { communityId, isLinked } = useWorker();
   const { hasPermission } = useAuth();
   const [q, setQ] = useState('');
@@ -45,9 +113,8 @@ export function GateScreen() {
 
   if (!canOperate) {
     return (
-      <div>
-        <ScreenHeader title="Gate" subtitle="Security" />
-        <div className="px-4"><EmptyState icon={ShieldCheck} title="No gate access" description="Your role doesn’t include visitor management." /></div>
+      <div className="px-4 pt-4">
+        <EmptyState icon={ShieldCheck} title="No visitor access" description="Your role doesn’t include visitor management." />
       </div>
     );
   }
@@ -56,8 +123,7 @@ export function GateScreen() {
 
   return (
     <div>
-      <ScreenHeader title="Gate" subtitle="Security" />
-      <div className="px-4"><SearchInput value={q} onValueChange={setQ} placeholder="Search name, mobile, pass code…" /></div>
+      <div className="px-4 pt-3"><SearchInput value={q} onValueChange={setQ} placeholder="Search name, mobile, pass code…" /></div>
       <div className="mt-4 flex flex-col gap-6 px-4">
         {!isLinked && !query.isLoading ? null : query.isLoading ? (
           <div className="flex flex-col gap-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-card" />)}</div>

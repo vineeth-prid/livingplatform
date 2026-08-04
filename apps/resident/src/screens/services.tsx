@@ -209,7 +209,9 @@ function PackageDetailDialog({ pkg, onClose }: { pkg: ServicePackage; onClose: (
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent open title={pkg.name} description={pkg.description ?? undefined}>
+      {/* max-w-md keeps the sheet inside the phone frame the shell renders on
+          tablet/desktop — the default 560px dialog overflows it. */}
+      <DialogContent open title={pkg.name} description={pkg.description ?? undefined} className="max-w-md">
         <div className="mb-4 flex items-baseline gap-2">
           <span className="font-display text-h1 leading-none tracking-tight text-strong" data-numeric>
             {inr(pkg.price)}

@@ -7,7 +7,7 @@ import { cn } from '@living/utils';
 import type { Visitor } from '@living/types';
 
 import { useResidentCommunity } from '../community';
-import { useMyResidentId, useMyVisitors, useVisitorMutations } from '../community-ops';
+import { useMyResident, useMyVisitors, useVisitorMutations } from '../community-ops';
 import { ScreenHeader } from '../shell';
 
 type Tone = NonNullable<BadgeProps['tone']>;
@@ -17,7 +17,7 @@ const VTYPES = ['GUEST', 'DELIVERY', 'SERVICE', 'CAB', 'OTHER'] as const;
 
 export function VisitorsScreen() {
   const { data, isLoading } = useMyVisitors();
-  const { residentId } = useMyResidentId();
+  const { residentId } = useMyResident();
   const { cancel } = useVisitorMutations();
   const confirm = useConfirm();
   const [creating, setCreating] = useState(false);

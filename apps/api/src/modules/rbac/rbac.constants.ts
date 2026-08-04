@@ -213,6 +213,21 @@ export const PERMISSIONS = {
 
   // Business intelligence for a community (adoption, revenue, top vendors).
   INSIGHTS_READ: 'insights:read',
+
+  // ── Sprint 13 — Gate Management ──
+  // Recording an arrival at the gate (security staff).
+  GATE_ENTRY_CREATE: 'gate:entry:create',
+  // Reading the gate register. Residents do NOT need this: their own entries
+  // are served by a self-scoped route, exactly like /residents/me.
+  GATE_ENTRY_VIEW: 'gate:entry:view',
+  // Correcting or cancelling an entry after the fact.
+  GATE_ENTRY_UPDATE: 'gate:entry:update',
+  // Marking an approved arrival as handed over / completed at the gate.
+  GATE_ENTRY_COMPLETE: 'gate:entry:complete',
+  // Register-wide analytics and reporting.
+  GATE_ANALYTICS_READ: 'gate:analytics:read',
+  // Managing the community's named gates.
+  GATE_MANAGE: 'gate:manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -244,6 +259,13 @@ export const ROLE_KEYS = {
   FACILITY_MANAGER: 'FACILITY_MANAGER',
   RESIDENT: 'RESIDENT',
   STAFF: 'STAFF',
+  /**
+   * Gate duty. Granted IN ADDITION to STAFF — a guard is still a staff member
+   * with tickets and work orders, they just also man the gate. Keeping it
+   * additive means ordinary staff need no exclusion logic: they simply never
+   * receive this role.
+   */
+  SECURITY: 'SECURITY',
   VENDOR: 'VENDOR',
 } as const;
 
@@ -411,6 +433,13 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.PACKAGE_READ,
       P.PACKAGE_MANAGE,
       P.INSIGHTS_READ,
+      // Gate Management — full oversight of the register and its reporting.
+      P.GATE_ENTRY_CREATE,
+      P.GATE_ENTRY_VIEW,
+      P.GATE_ENTRY_UPDATE,
+      P.GATE_ENTRY_COMPLETE,
+      P.GATE_ANALYTICS_READ,
+      P.GATE_MANAGE,
     ],
   },
   {
@@ -516,6 +545,13 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.PACKAGE_READ,
       P.PACKAGE_MANAGE,
       P.INSIGHTS_READ,
+      // Gate Management — the FM runs the desk and names the gates.
+      P.GATE_ENTRY_CREATE,
+      P.GATE_ENTRY_VIEW,
+      P.GATE_ENTRY_UPDATE,
+      P.GATE_ENTRY_COMPLETE,
+      P.GATE_ANALYTICS_READ,
+      P.GATE_MANAGE,
     ],
   },
   {
@@ -579,10 +615,38 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.WORKORDER_START,
       P.WORKORDER_COMPLETE,
       P.ASSET_READ,
+      P.ANNOUNCEMENT_READ,
+      // NOTE: gate and visitor permissions deliberately live on the SECURITY
+      // role, not here. A plumber or housekeeper has no business seeing who is
+      // delivering what to which flat, and the gate register carries resident
+      // names, unit numbers and phone numbers.
+    ],
+  },
+  {
+    key: ROLE_KEYS.SECURITY,
+    name: 'Security',
+    description: 'Mans the gate — records arrivals, and runs the visitor register.',
+    scope: RoleScope.COMMUNITY,
+    permissions: [
+      // Enough context to do gate duty and nothing more. Notably absent:
+      // RESIDENT_READ — a guard must not be able to page through the resident
+      // register. The unit occupants they legitimately need are served by a
+      // purpose-built gate endpoint that returns name + mobile only.
+      P.COMMUNITY_READ,
+      P.HIERARCHY_READ,
+      P.UNIT_READ,
+      P.ANNOUNCEMENT_READ,
+      // Gate Management — record an arrival, correct a mistake, hand it over.
+      // No analytics and no gate administration: that is a manager's job.
+      P.GATE_ENTRY_CREATE,
+      P.GATE_ENTRY_VIEW,
+      P.GATE_ENTRY_UPDATE,
+      P.GATE_ENTRY_COMPLETE,
+      // Visitors — the gate desk checks people in and out. Approval stays with
+      // the resident (and the Facility Manager as an override), unchanged.
       P.VISITOR_READ,
       P.VISITOR_CHECKIN,
       P.VISITOR_CHECKOUT,
-      P.ANNOUNCEMENT_READ,
     ],
   },
   {

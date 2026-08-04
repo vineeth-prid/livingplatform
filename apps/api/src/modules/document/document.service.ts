@@ -101,7 +101,7 @@ export class DocumentService {
       }),
       this.prisma.communityDocument.count({ where }),
     ]);
-    return paginate(items.map((d) => this.present(d)), total, query);
+    return paginate(await Promise.all(items.map((d) => this.present(d))), total, query);
   }
 
   async findOne(id: string) {
@@ -146,7 +146,15 @@ export class DocumentService {
     return { id, deleted: true };
   }
 
-  private present<T extends { storageKey: string | null }>(doc: T) {
-    return { ...doc, downloadUrl: this.storage.resolveUrl(doc.storageKey) };
+  /**
+   * Attach a *signed* download URL, not a public one. The bucket is private, so
+   * `getPublicUrl` produces a link that 403s — every "document won't open" report
+   * traces back to here. Signing is local crypto (no round-trip), so doing it per
+   * row in a list is cheap.
+   */
+  private async present<T extends { storageKey: string | null }>(doc: T) {
+    if (!doc.storageKey) return { ...doc, downloadUrl: null };
+    const signed = await this.storage.signDownload(doc.storageKey);
+    return { ...doc, downloadUrl: signed.url };
   }
 }

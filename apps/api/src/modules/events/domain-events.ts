@@ -98,6 +98,15 @@ export const DomainEventName = {
   // Sprint 11 — WhatsApp gateway sessions
   WhatsAppSessionConnected: 'whatsapp.session_connected',
   WhatsAppSessionDisconnected: 'whatsapp.session_disconnected',
+  // Sprint 13 — Gate Management. `DeliveryEntryCreated` is the specified name
+  // for the delivery case; it is published in addition to the generic
+  // GateEntryCreated so a listener can bind to either granularity.
+  GateEntryCreated: 'gate_entry.created',
+  DeliveryEntryCreated: 'gate_entry.delivery_created',
+  GateEntryApproved: 'gate_entry.approved',
+  GateEntryRejected: 'gate_entry.rejected',
+  GateEntryCompleted: 'gate_entry.completed',
+  GateEntryCancelled: 'gate_entry.cancelled',
 } as const;
 
 export type DomainEventName =
@@ -330,6 +339,25 @@ export type WhatsAppSessionEvent = DomainEventEnvelope<
   { session: string; phoneNumber?: string | null; reason?: string }
 >;
 
+export type GateEntryEvent = DomainEventEnvelope<
+  | typeof DomainEventName.GateEntryCreated
+  | typeof DomainEventName.DeliveryEntryCreated
+  | typeof DomainEventName.GateEntryApproved
+  | typeof DomainEventName.GateEntryRejected
+  | typeof DomainEventName.GateEntryCompleted
+  | typeof DomainEventName.GateEntryCancelled,
+  {
+    entryNumber: string;
+    entryType: string;
+    status: string;
+    unitId: string;
+    residentId?: string | null;
+    personName: string;
+    vendorName?: string | null;
+    decisionNote?: string | null;
+  }
+>;
+
 export type DomainEvent =
   | CommunityEvent
   | HierarchyEvent
@@ -352,4 +380,5 @@ export type DomainEvent =
   | AnnouncementEvent
   | BillingEvent
   | PaymentEvent
-  | WhatsAppSessionEvent;
+  | WhatsAppSessionEvent
+  | GateEntryEvent;

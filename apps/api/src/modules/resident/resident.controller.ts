@@ -18,6 +18,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import {
   AssignUnitDto,
   BulkResidentUploadDto,
+  CreateFamilyMemberDto,
   CreateResidentDto,
   QueryResidentDto,
   UpdateResidentDto,
@@ -57,6 +58,32 @@ export class ResidentController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.residents.bulkCreate(communityId, dto, user);
+  }
+
+  // ── Self-service ──
+  // Declared BEFORE `residents/:id` so "me" is not swallowed by the param route.
+  // No @RequirePermissions: a plain resident holds no `resident:read`, and every
+  // query below is scoped to the caller's own record.
+
+  @Get('residents/me')
+  @ApiOperation({ summary: 'My own resident record(s), unit assignment and household' })
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.residents.findMine(user);
+  }
+
+  @Post('residents/me/family')
+  @ApiOperation({ summary: 'Add a household member to my unit (provisions their login)' })
+  addFamilyMember(
+    @Body() dto: CreateFamilyMemberDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.residents.addFamilyMember(dto, user);
+  }
+
+  @Delete('residents/me/family/:id')
+  @ApiOperation({ summary: 'Remove a household member from my unit' })
+  removeFamilyMember(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.residents.removeFamilyMember(id, user);
   }
 
   @Get('residents/:id')

@@ -12,6 +12,7 @@ import { WhatsAppSessionService } from './modules/notifications/channels/whatsap
 import { NotificationProcessor } from './modules/notifications/core/notification.processor';
 import { NOTIFICATION_DLQ, NOTIFICATION_QUEUE } from './modules/notifications/notification.constants';
 import { PrismaService } from './modules/prisma/prisma.service';
+import { RealtimeService } from './modules/realtime/realtime.service';
 import { RedisService } from './modules/redis/redis.service';
 
 /**
@@ -60,6 +61,17 @@ describe('AppModule wiring', () => {
       // The BullMQ Worker: connects on init and parks on a blocking command.
       .overrideProvider(NotificationProcessor)
       .useValue({ worker: { close: jest.fn() } })
+      // The realtime hub opens its own pub/sub pair on init. Same edge, same
+      // reason as RedisService above: without a server its reconnect timers
+      // outlive the run. Consumers (InAppChannel, GateEntryService) are still
+      // constructed for real and still have to resolve this dependency.
+      .overrideProvider(RealtimeService)
+      .useValue({
+        publish: jest.fn(),
+        streamFor: jest.fn(),
+        userChannel: jest.fn(),
+        roomChannel: jest.fn(),
+      })
       .compile();
 
     await moduleRef.init();

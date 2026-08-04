@@ -50,3 +50,16 @@ export {
   type PackagePurchase, type PackagePurchaseStatus, type PackageEntitlement,
   type CommunityInsights, type PlatformBusinessIntelligence,
 } from './resources/packages';
+
+// ── Gate Management + realtime (Sprint 13) ──
+export {
+  GateResource,
+  type Gate, type GateEntry, type GateEntryType, type GateEntryStatus,
+  type GateEntryAction, type GateEntryTimelineRow,
+  type CreateGateEntryInput, type GateStatistics,
+} from './resources/gate';
+export { PushResource, type PushDevice } from './resources/push';
+export {
+  RealtimeClient,
+  type RealtimeEvent, type RealtimeEventTypeName, type RealtimeOptions,
+} from './realtime';

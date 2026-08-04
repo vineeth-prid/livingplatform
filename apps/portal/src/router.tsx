@@ -62,6 +62,11 @@ const PackagesPage = lazy(() => import('./features/packages/packages-page').then
 const PlatformBusinessPage = lazy(() => import('./features/platform-admin/platform-business').then((m) => ({ default: m.PlatformBusinessPage })));
 
 // Community Operations (Frontend Sprint 9).
+// Gate Management (Sprint 13) — delivery register, analytics and audit trail.
+const GateDeliveriesPage = lazy(() => import('./features/gate/gate-list').then((m) => ({ default: m.GateDeliveriesPage })));
+const GateAnalyticsPage = lazy(() => import('./features/gate/gate-analytics').then((m) => ({ default: m.GateAnalyticsPage })));
+const GateEntryDetailPage = lazy(() => import('./features/gate/gate-detail').then((m) => ({ default: m.GateEntryDetailPage })));
+
 const VisitorsPage = lazy(() => import('./features/visitors/visitors-list').then((m) => ({ default: m.VisitorsPage })));
 const VisitorDetailPage = lazy(() => import('./features/visitors/visitor-detail').then((m) => ({ default: m.VisitorDetailPage })));
 const AmenitiesPage = lazy(() => import('./features/amenities/amenities').then((m) => ({ default: m.AmenitiesPage })));
@@ -154,6 +159,12 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => dashboardRoute, path: '/bookings', component: BookingsPage, validateSearch: parseListSearch }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/documents', component: DocumentsPage, validateSearch: parseListSearch }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/announcements', component: AnnouncementsPage, validateSearch: parseListSearch }),
+
+    // Gate Management (Sprint 13). `/gate/analytics` is declared BEFORE
+    // `/gate/$entryId`, or the param route would capture it.
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/gate', component: GateDeliveriesPage, validateSearch: parseListSearch }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/gate/analytics', component: GateAnalyticsPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/gate/$entryId', component: GateEntryDetailPage }),
 
     // Payments & Maintenance Billing (Sprint 11)
     createRoute({ getParentRoute: () => dashboardRoute, path: '/billing', component: CollectionDashboardPage }),

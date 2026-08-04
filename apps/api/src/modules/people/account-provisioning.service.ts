@@ -146,4 +146,62 @@ export class AccountProvisioningService {
     }
     return user.id;
   }
+
+  /**
+   * Keep a staff member's SECURITY role grant in step with their job title.
+   *
+   * SECURITY is additive to STAFF, so this only ever adds or removes that one
+   * grant — a guard keeps their ordinary staff access either way. Called on
+   * create AND on update, which is what makes promoting a housekeeper to the
+   * gate (or moving a guard off it) actually take effect rather than being
+   * frozen at whatever they were provisioned as.
+   *
+   * Idempotent: safe to call with the same value repeatedly.
+   */
+  async syncSecurityRole(
+    userId: string | null,
+    communityId: string,
+    isSecurity: boolean,
+    actorId: string,
+  ): Promise<void> {
+    // No linked login (e.g. a second profile sharing one account) — nothing to grant.
+    if (!userId) return;
+
+    const role = await this.prisma.role.findFirst({
+      where: { tenantId: null, key: ROLE_KEYS.SECURITY },
+      select: { id: true },
+    });
+    if (!role) {
+      this.logger.warn('SECURITY system role is missing — reseed required for gate access');
+      return;
+    }
+
+    const where = { userId_roleId_communityId: { userId, roleId: role.id, communityId } };
+
+    if (isSecurity) {
+      await this.prisma.userRole.upsert({
+        where,
+        create: { userId, roleId: role.id, communityId, assignedById: actorId },
+        update: {},
+      });
+      return;
+    }
+
+    // deleteMany, not delete: removing a grant that was never there must not throw.
+    await this.prisma.userRole.deleteMany({
+      where: { userId, roleId: role.id, communityId },
+    });
+  }
+
+  /**
+   * Whether a staff job title should carry gate duty. The title is a free
+   * per-tenant string (CatalogOption), so this compares loosely rather than
+   * against an enum — but ONLY 'SECURITY' matches. Deliberately no mapping for
+   * 'FACILITY_MANAGER' or 'ADMIN': letting a dropdown silently confer manager
+   * permissions would be a privilege-escalation path, and those roles are
+   * assigned explicitly through role management.
+   */
+  static isSecurityJobRole(jobRole: string | null | undefined): boolean {
+    return (jobRole ?? '').trim().toUpperCase() === 'SECURITY';
+  }
 }

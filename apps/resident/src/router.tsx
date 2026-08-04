@@ -15,6 +15,7 @@ import { BookingsScreen } from './screens/bookings';
 import { AmenitiesScreen } from './screens/amenities';
 import { MaintenanceScreen } from './screens/maintenance';
 import { MyPackagesScreen } from './screens/my-packages';
+import { GateEntryScreen, GateHistoryScreen } from './screens/gate';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -42,6 +43,10 @@ const routeTree = rootRoute.addChildren([
     tab('/maintenance', MaintenanceScreen),
     // Service packages (Sprint 12) — prepaid visits and redemption.
     tab('/packages', MyPackagesScreen),
+    // Gate Management (Sprint 13). `/gate/$entryId` is the deep link a push
+    // notification opens — it must be declared after the list route.
+    tab('/gate', GateHistoryScreen),
+    tab('/gate/$entryId', GateEntryScreen),
   ]),
 ]);
 

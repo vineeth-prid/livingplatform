@@ -13,3 +13,4 @@ export {
   useCommunityFeatures,
   type CommunityFeatureState,
 } from './community-features';
+export { useRealtime, type RealtimeStatus, type UseRealtimeOptions } from './realtime';

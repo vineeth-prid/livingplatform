@@ -5,21 +5,52 @@ import { useResidentCommunity } from './community';
 import { living } from './lib/living';
 
 /**
- * The resident's own resident-profile id, needed to create visitors/bookings.
- * There is no "my resident" endpoint, so we resolve it from the community's
- * resident list (best-effort — degrades gracefully if the account can't read it).
+ * The signed-in resident's own record — their residentId (needed to create
+ * visitors and bookings), the unit(s) they live in, and their household.
+ *
+ * This used to scan the community's resident list, which a plain resident is
+ * not allowed to read (`resident:read` is a manager permission): the request
+ * 403'd, residentId stayed null, and every "Book"/"Invite" button was hidden.
+ * `/residents/me` is self-scoped and needs no permission.
  */
-export function useMyResidentId(): { residentId: string | null; isResolving: boolean } {
+export function useMyResident() {
   const { session } = useAuth();
-  const { communityId } = useResidentCommunity();
   const q = useQuery({
-    queryKey: ['my-resident', communityId, session?.user.id],
-    queryFn: () => living.people.listResidents(communityId!, { limit: 200 }),
-    enabled: !!communityId && !!session?.user.id,
-    retry: false,
+    queryKey: ['my-resident', session?.user.id],
+    queryFn: () => living.people.myResident(),
+    enabled: !!session?.user.id,
   });
-  const mine = (q.data?.items ?? []).find((r) => r.userId === session?.user.id);
-  return { residentId: mine?.id ?? null, isResolving: q.isLoading };
+
+  const residents = q.data?.residents ?? [];
+  const primary = residents[0] ?? null;
+  const units = residents
+    .map((r) => r.unitAssignment?.unit)
+    .filter((u): u is NonNullable<typeof u> => !!u);
+
+  return {
+    resident: primary,
+    residentId: primary?.id ?? null,
+    residents,
+    units,
+    family: q.data?.family ?? [],
+    isLoading: q.isLoading,
+  };
+}
+
+export function useFamilyMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['my-resident'] });
+  return {
+    add: useMutation({
+      mutationFn: (input: { firstName: string; lastName?: string; mobile: string }) =>
+        living.people.addFamilyMember(input),
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => living.people.removeFamilyMember(id),
+      onSuccess: invalidate,
+    }),
+  };
 }
 
 export function useAnnouncements() {

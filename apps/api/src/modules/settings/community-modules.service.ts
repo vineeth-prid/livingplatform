@@ -6,12 +6,22 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface CommunityFeatures {
   maintenanceBilling: boolean;
   servicePackages: boolean;
+  // Gate Management (Sprint 13). Carried here rather than on the settings
+  // document because residents need them and hold no `settings:read` — this
+  // endpoint exists precisely to answer "what should I render?" cheaply.
+  gateManagement: boolean;
+  gateApproval: boolean;
+  /** Whether the resident app plays a chime + vibrates for a gate popup. */
+  gateSound: boolean;
 }
 
 /** Every optional module is ON until a community says otherwise. */
 const DEFAULTS: CommunityFeatures = {
   maintenanceBilling: true,
   servicePackages: true,
+  gateManagement: true,
+  gateApproval: true,
+  gateSound: true,
 };
 
 /**
@@ -50,12 +60,21 @@ export class CommunityModulesService {
   async features(communityId: string): Promise<CommunityFeatures> {
     const row = await this.prisma.communitySettings.findUnique({
       where: { communityId },
-      select: { maintenanceBillingEnabled: true, servicePackagesEnabled: true },
+      select: {
+        maintenanceBillingEnabled: true,
+        servicePackagesEnabled: true,
+        gateManagementEnabled: true,
+        gateApprovalEnabled: true,
+        gateSoundEnabled: true,
+      },
     });
     if (!row) return { ...DEFAULTS };
     return {
       maintenanceBilling: row.maintenanceBillingEnabled,
       servicePackages: row.servicePackagesEnabled,
+      gateManagement: row.gateManagementEnabled,
+      gateApproval: row.gateApprovalEnabled,
+      gateSound: row.gateSoundEnabled,
     };
   }
 

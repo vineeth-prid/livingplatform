@@ -1,17 +1,26 @@
 import { useQueries } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { Download, FileText, Megaphone, PhoneCall, Sparkles } from 'lucide-react';
 import { Can } from '@living/hooks';
-import { Badge, Card, EmptyState, Skeleton } from '@living/ui';
+import { timeAgo } from '@living/utils';
+import { Badge, type BadgeProps, Card, EmptyState, Skeleton } from '@living/ui';
 
 import { useResidentCommunity } from '../community';
+import { useAnnouncements } from '../community-ops';
 import { living } from '../lib/living';
 import { ListCard, Section, SoftPlaceholder } from '../components';
 import { ScreenHeader } from '../shell';
 
 interface EmergencyContact { name: string; role?: string; phone: string }
 
+const PRIORITY_TONE: Record<string, NonNullable<BadgeProps['tone']>> = {
+  LOW: 'neutral', NORMAL: 'info', HIGH: 'warning', CRITICAL: 'danger',
+};
+
 export function CommunityScreen() {
   const { community, communityId } = useResidentCommunity();
+  const announcementsQuery = useAnnouncements();
+  const announcements = announcementsQuery.data?.items ?? [];
 
   const [amenities, documents] = useQueries({
     queries: [
@@ -26,8 +35,40 @@ export function CommunityScreen() {
     <div>
       <ScreenHeader title="Community" subtitle={community?.name} />
       <div className="px-4">
-        <Section title="Announcements">
-          <SoftPlaceholder icon={Megaphone} title="Nothing new" note="Notices from your association appear here." />
+        <Section
+          title="Announcements"
+          action={
+            announcements.length > 0 ? (
+              <Link to={'/announcements' as string} className="text-sm text-brand">See all</Link>
+            ) : undefined
+          }
+        >
+          {announcementsQuery.isLoading ? (
+            <Skeleton className="h-20 rounded-card" />
+          ) : announcements.length === 0 ? (
+            <SoftPlaceholder icon={Megaphone} title="Nothing new" note="Notices from your association appear here." />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {announcements.slice(0, 3).map((a) => (
+                <Link
+                  key={a.id}
+                  to={'/announcements' as string}
+                  className="rounded-card focus-visible:outline-none focus-visible:shadow-ring"
+                >
+                  <Card variant="elevated" className="p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-medium text-strong">{a.title}</p>
+                      <Badge tone={PRIORITY_TONE[a.priority] ?? 'neutral'} size="sm" dot>
+                        {a.priority.charAt(0) + a.priority.slice(1).toLowerCase()}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted">{a.content}</p>
+                    {a.publishAt && <p className="mt-1.5 text-2xs text-subtle">{timeAgo(a.publishAt)}</p>}
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section title="Amenities">
@@ -67,20 +108,37 @@ export function CommunityScreen() {
             <EmptyState icon={FileText} title="No documents" />
           ) : (
             <div className="flex flex-col gap-2">
-              {(documents.data?.items ?? []).map((d) => (
-                <Card key={d.id} variant="elevated" className="flex items-center gap-3 p-3.5">
-                  <FileText className="h-5 w-5 shrink-0 text-muted" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-strong">{d.title}</p>
-                    <p className="text-xs text-subtle">{d.category.replace(/_/g, ' ').toLowerCase()}</p>
-                  </div>
-                  {d.downloadUrl && (
-                    <a href={d.downloadUrl} target="_blank" rel="noreferrer" aria-label="Open" className="rounded-md p-1.5 text-muted hover:text-brand">
-                      <Download className="h-4 w-4" />
-                    </a>
-                  )}
-                </Card>
-              ))}
+              {/* The whole row opens the document — a 5mm icon is not a mobile
+                  tap target. Rows without a file stay inert instead of dead. */}
+              {(documents.data?.items ?? []).map((d) => {
+                const body = (
+                  <Card variant="elevated" className="flex items-center gap-3 p-3.5">
+                    <FileText className="h-5 w-5 shrink-0 text-muted" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-strong">{d.title}</p>
+                      <p className="text-xs text-subtle">
+                        {d.downloadUrl
+                          ? d.category.replace(/_/g, ' ').toLowerCase()
+                          : 'No file attached yet'}
+                      </p>
+                    </div>
+                    {d.downloadUrl && <Download className="h-4 w-4 shrink-0 text-muted" />}
+                  </Card>
+                );
+                return d.downloadUrl ? (
+                  <a
+                    key={d.id}
+                    href={d.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-card focus-visible:outline-none focus-visible:shadow-ring"
+                  >
+                    {body}
+                  </a>
+                ) : (
+                  <div key={d.id}>{body}</div>
+                );
+              })}
             </div>
           )}
         </Section>

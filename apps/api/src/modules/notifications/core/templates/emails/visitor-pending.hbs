@@ -1,0 +1,7 @@
+Subject: Visitor awaiting approval — {{visitorName}}
+<h1>Visitor awaiting approval</h1>
+<p>{{t "greeting"}} {{residentName}},</p>
+<p><strong>{{hostName}}</strong>{{#if unitNumber}} (Unit {{unitNumber}}){{/if}} has invited <strong>{{visitorName}}</strong>{{#if visitorMobile}} ({{visitorMobile}}){{/if}} to {{communityName}}.</p>
+{{#if expectedAt}}<p class="muted">Expected {{expectedAt}}</p>{{/if}}
+<p>Gate pass code: <strong style="letter-spacing:3px;">{{passCode}}</strong></p>
+{{#if actionUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{actionUrl}}">Approve or reject</a></p>{{/if}}

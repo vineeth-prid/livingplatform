@@ -6,6 +6,7 @@ import { NotificationEvent } from '@prisma/client';
 import type { AppConfig } from '../../../config/configuration';
 import { DomainEventName, type DomainEvent } from '../../events/domain-events';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PERMISSIONS } from '../../rbac/rbac.constants';
 import { NotificationPreferenceService } from '../preferences/notification-preference.service';
 import { NOTIFICATION_TEMPLATES } from '../notification.constants';
 import type { NotificationChannelName } from './notification-channel.interface';
@@ -31,6 +32,14 @@ interface EventBinding {
   event: NotificationEvent;
   /** Platform default template (also the name a community override replaces). */
   template: string;
+}
+
+/** One addressed message. An event may produce several (different audiences). */
+interface RoutedMessage {
+  recipient: RecipientRef;
+  variables: Record<string, unknown>;
+  /** Overrides the binding's default template for this audience only. */
+  template?: string;
 }
 
 const EVENT_MAP: Partial<Record<string, EventBinding>> = {
@@ -128,13 +137,15 @@ export class NotificationRouterService {
     const routing = await this.preferences.resolve(event.communityId, binding.event);
     if (!routing.enabled) return;
 
-    const context = await this.contextFor(event);
-    if (!context) return;
+    const messages = await this.contextFor(event);
+    if (!messages?.length) return;
 
-    for (const channel of routing.channels) {
-      const address = await this.recipients.resolve(channel, context.recipient);
-      if (!address) continue;
-      await this.send(channel, binding, address, context.variables, event);
+    for (const message of messages) {
+      for (const channel of routing.channels) {
+        const address = await this.recipients.resolve(channel, message.recipient);
+        if (!address) continue;
+        await this.send(channel, binding, address, message.variables, event, message.template);
+      }
     }
   }
 
@@ -142,6 +153,10 @@ export class NotificationRouterService {
    * Send on one channel, preferring the community's own template body over the
    * platform default. Text-only channels (WhatsApp) get the plain-text render
    * of the same template, so one event → one message, any channel.
+   *
+   * `template` overrides the binding's default — used when one event addresses
+   * two audiences that need to read different things (a visitor pass for the
+   * resident, an approval request for the gate desk).
    */
   private async send(
     channel: NotificationChannelName,
@@ -149,6 +164,7 @@ export class NotificationRouterService {
     to: string,
     variables: Record<string, unknown>,
     event: DomainEvent,
+    template?: string,
   ): Promise<void> {
     const ctx = {
       tenantId: event.tenantId,
@@ -156,7 +172,11 @@ export class NotificationRouterService {
       metadata: { domainEvent: event.name, entityId: event.entityId },
     };
 
-    const override = await this.preferences.templateFor(event.communityId, binding.event, channel);
+    // A community's custom body replaces the event's DEFAULT message only — it
+    // was never written for the secondary audience.
+    const override = template
+      ? null
+      : await this.preferences.templateFor(event.communityId, binding.event, channel);
     if (override) {
       const rendered = this.templates.renderRaw(override.body, variables, {
         subject: override.subject ?? undefined,
@@ -175,7 +195,13 @@ export class NotificationRouterService {
       return;
     }
 
-    await this.dispatcher.dispatchTemplate(channel, binding.template, to, variables, { ctx });
+    await this.dispatcher.dispatchTemplate(
+      channel,
+      template ?? binding.template,
+      to,
+      variables,
+      { ctx },
+    );
   }
 
   /**
@@ -183,9 +209,7 @@ export class NotificationRouterService {
    * variables are obvious and a missing row silently skips the notification
    * rather than throwing inside an event handler.
    */
-  private async contextFor(
-    event: DomainEvent,
-  ): Promise<{ recipient: RecipientRef; variables: Record<string, unknown> } | null> {
+  private async contextFor(event: DomainEvent): Promise<RoutedMessage[] | null> {
     const communityId = event.communityId ?? undefined;
 
     switch (event.name) {
@@ -201,7 +225,7 @@ export class NotificationRouterService {
           include: { invoice: { select: { invoiceNumber: true } } },
         });
         if (!payment?.residentId) return null;
-        return {
+        return [{
           recipient: { residentId: payment.residentId, communityId },
           variables: {
             amount: Number(payment.amount).toFixed(2),
@@ -212,23 +236,59 @@ export class NotificationRouterService {
             residentName: '',
             actionUrl: `${this.webAppUrl}/payments/${payment.id}`,
           },
-        };
+        }];
       }
 
       case DomainEventName.VisitorCreated:
       case DomainEventName.VisitorApproved: {
-        const visitor = await this.prisma.visitor.findUnique({ where: { id: event.entityId } });
-        if (!visitor?.residentId) return null;
-        return {
-          recipient: { residentId: visitor.residentId, communityId },
-          variables: {
-            visitorName: visitor.visitorName,
-            passCode: visitor.passCode,
-            expectedAt: visitor.expectedArrival.toLocaleString(),
-            communityName: await this.communityName(communityId),
-            residentName: '',
+        const visitor = await this.prisma.visitor.findUnique({
+          where: { id: event.entityId },
+          include: {
+            resident: {
+              select: {
+                firstName: true,
+                lastName: true,
+                unitAssignment: { select: { unit: { select: { unitNumber: true } } } },
+              },
+            },
           },
+        });
+        if (!visitor?.residentId) return null;
+        const variables = {
+          visitorName: visitor.visitorName,
+          passCode: visitor.passCode,
+          expectedAt: visitor.expectedArrival.toLocaleString(),
+          communityName: await this.communityName(communityId),
+          residentName: '',
         };
+        const messages: RoutedMessage[] = [
+          { recipient: { residentId: visitor.residentId, communityId }, variables },
+        ];
+
+        // A PENDING visit is useless until someone with the authority to approve
+        // it knows it exists — the resident already has their pass, the gate desk
+        // has nothing. Fan out to the community's approvers.
+        if (event.name === DomainEventName.VisitorCreated && communityId) {
+          const host = visitor.resident
+            ? `${visitor.resident.firstName} ${visitor.resident.lastName}`.trim()
+            : 'a resident';
+          const unitNumber = visitor.resident?.unitAssignment?.unit?.unitNumber ?? null;
+          for (const approver of await this.approversFor(communityId)) {
+            messages.push({
+              recipient: { userId: approver.id, email: approver.email, name: approver.firstName },
+              variables: {
+                ...variables,
+                residentName: approver.firstName,
+                hostName: host,
+                unitNumber,
+                visitorMobile: visitor.mobileNumber,
+                actionUrl: `${this.webAppUrl}/visitors/${visitor.id}`,
+              },
+              template: NOTIFICATION_TEMPLATES.VISITOR_PENDING,
+            });
+          }
+        }
+        return messages;
       }
 
       case DomainEventName.BookingCreated: {
@@ -237,14 +297,14 @@ export class NotificationRouterService {
           include: { amenity: { select: { name: true } } },
         });
         if (!booking?.residentId) return null;
-        return {
+        return [{
           recipient: { residentId: booking.residentId, communityId },
           variables: {
             amenityName: booking.amenity?.name ?? 'Amenity',
             slotLabel: `${booking.startTime.toLocaleString()} – ${booking.endTime.toLocaleTimeString()}`,
             residentName: '',
           },
-        };
+        }];
       }
 
       case DomainEventName.ResidentCreated: {
@@ -253,7 +313,7 @@ export class NotificationRouterService {
           select: { id: true, firstName: true, mobile: true, email: true },
         });
         if (!resident) return null;
-        return {
+        return [{
           recipient: { residentId: resident.id, communityId },
           variables: {
             residentName: resident.firstName,
@@ -261,7 +321,7 @@ export class NotificationRouterService {
             communityName: await this.communityName(communityId),
             actionUrl: this.webAppUrl,
           },
-        };
+        }];
       }
 
       default:
@@ -270,6 +330,27 @@ export class NotificationRouterService {
         // so they stay bound for *preference* purposes only.
         return null;
     }
+  }
+
+  /**
+   * Active users who may approve visitors in this community — the gate desk and
+   * whoever manages it. Resolved from role grants rather than a hardcoded role
+   * key, so a custom role holding `visitor:approve` is alerted too.
+   */
+  private async approversFor(communityId: string) {
+    const grants = await this.prisma.userRole.findMany({
+      where: {
+        communityId,
+        role: {
+          permissions: { some: { permission: { key: PERMISSIONS.VISITOR_APPROVE } } },
+        },
+        user: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { user: { select: { id: true, email: true, firstName: true } } },
+      take: 25,
+    });
+    // One person can hold several qualifying roles — send once.
+    return [...new Map(grants.map((g) => [g.user.id, g.user])).values()];
   }
 
   private async communityName(communityId: string | undefined): Promise<string> {

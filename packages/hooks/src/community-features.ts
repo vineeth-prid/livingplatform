@@ -7,6 +7,9 @@ import { useLiving } from './sdk-context';
 const DEFAULTS: CommunityFeatures = {
   maintenanceBilling: true,
   servicePackages: true,
+  gateManagement: true,
+  gateApproval: true,
+  gateSound: true,
 };
 
 export interface CommunityFeatureState extends CommunityFeatures {

@@ -387,6 +387,27 @@ export class EnvironmentVariables {
   @IsOptional()
   STORAGE_SIGNED_URL_TTL = 900;
 
+  // ── Web Push / VAPID (Gate Management, Sprint 13) ──
+  // All optional. Leave unset and the push channel simply reports unhealthy and
+  // sends nothing — in-app, WhatsApp and email are unaffected. Generate with:
+  //   npx web-push generate-vapid-keys
+  @IsString()
+  @IsOptional()
+  VAPID_PUBLIC_KEY = '';
+
+  @IsString()
+  @IsOptional()
+  VAPID_PRIVATE_KEY = '';
+
+  @IsString()
+  @IsOptional()
+  VAPID_SUBJECT = 'mailto:support@living.local';
+
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  PUSH_TTL = 900;
+
   // ── S3 / MinIO (required only when STORAGE_DRIVER=s3; validated + fail-fast) ──
   /** MinIO/S3 host WITHOUT scheme, e.g. "minio" (compose) or "s3.example.com". */
   @ValidateIf((e: EnvironmentVariables) => e.STORAGE_DRIVER === 's3')

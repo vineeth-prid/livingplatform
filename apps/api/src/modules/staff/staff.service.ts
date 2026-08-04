@@ -66,6 +66,15 @@ export class StaffService {
         updatedById: actor.id,
       },
     });
+    // Gate duty follows the job title the admin picked. Security staff get the
+    // SECURITY role in addition to STAFF; everyone else gets nothing extra.
+    await this.accounts.syncSecurityRole(
+      staff.userId,
+      communityId,
+      AccountProvisioningService.isSecurityJobRole(staff.role),
+      actor.id,
+    );
+
     this.events.publish({
       name: DomainEventName.StaffCreated,
       ...this.events.from(actor, communityId),
@@ -142,15 +151,34 @@ export class StaffService {
         updatedById: actor.id,
       },
     });
+
+    // Moving someone on or off the gate takes effect here. Without this the
+    // grant would be frozen at whatever they were first provisioned as, so a
+    // demoted guard would keep gate access indefinitely.
+    await this.accounts.syncSecurityRole(
+      staff.userId,
+      staff.communityId,
+      AccountProvisioningService.isSecurityJobRole(staff.role),
+      actor.id,
+    );
+
     return this.present(staff);
   }
 
   async remove(id: string, actor: AuthenticatedUser) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     await this.prisma.staff.update({
       where: { id },
       data: { deletedAt: new Date(), updatedById: actor.id },
     });
+    // A removed staff member must lose gate access immediately, not at their
+    // next token refresh with a still-valid grant behind it.
+    await this.accounts.syncSecurityRole(
+      existing.userId,
+      existing.communityId,
+      false,
+      actor.id,
+    );
     return { id, deleted: true };
   }
 

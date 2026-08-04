@@ -47,6 +47,12 @@ export class RecipientResolver {
         return ref.email?.trim() || null;
       case 'whatsapp':
         return this.toE164(ref.phone);
+      // Realtime and push address a *person*, not an inbox — the Living user id
+      // is the address. A recipient with no login account simply cannot be
+      // reached on these channels, which is the correct outcome.
+      case 'inapp':
+      case 'push':
+        return ref.userId ?? null;
       default:
         return null;
     }
@@ -59,6 +65,8 @@ export class RecipientResolver {
   }
 
   private async hydrate(ref: RecipientRef): Promise<RecipientRef> {
+    // An explicitly-addressed ref is used verbatim — unchanged behaviour, and
+    // it keeps a caller-supplied address from being overwritten by a lookup.
     if (ref.email || ref.phone) return ref;
     // Community-scoped people (resident/staff/vendor) MUST be resolved within a
     // known community, or one community could address another's people by id.
@@ -69,12 +77,13 @@ export class RecipientResolver {
     }
     try {
       if (ref.residentId) {
-        const r = await this.prisma.resident.findFirst({ where: { id: ref.residentId, communityId: ref.communityId }, select: { email: true, mobile: true, firstName: true } });
-        if (r) return { ...ref, email: r.email, phone: r.mobile, name: r.firstName };
+        // `userId` is selected so realtime/push can address the person's login.
+        const r = await this.prisma.resident.findFirst({ where: { id: ref.residentId, communityId: ref.communityId }, select: { email: true, mobile: true, firstName: true, userId: true } });
+        if (r) return { ...ref, email: r.email, phone: r.mobile, name: r.firstName, userId: ref.userId ?? r.userId ?? undefined };
       }
       if (ref.staffId) {
-        const s = await this.prisma.staff.findFirst({ where: { id: ref.staffId, communityId: ref.communityId }, select: { email: true, phone: true, firstName: true } });
-        if (s) return { ...ref, email: s.email, phone: s.phone, name: s.firstName };
+        const s = await this.prisma.staff.findFirst({ where: { id: ref.staffId, communityId: ref.communityId }, select: { email: true, phone: true, firstName: true, userId: true } });
+        if (s) return { ...ref, email: s.email, phone: s.phone, name: s.firstName, userId: ref.userId ?? s.userId ?? undefined };
       }
       if (ref.vendorId) {
         // Vendors span communities via communityIds[]; scope to the caller's community.

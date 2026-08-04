@@ -7,6 +7,9 @@ import { NOTIFICATION_DLQ, NOTIFICATION_QUEUE } from './notification.constants';
 import { NotificationController } from './admin/notification.controller';
 import { EmailChannel } from './channels/email/email.channel';
 import { EmailProviderRegistry } from './channels/email/email-provider.registry';
+import { InAppChannel } from './channels/inapp/inapp.channel';
+import { PushChannel } from './channels/push/push.channel';
+import { PushSubscriptionController } from './channels/push/push-subscription.controller';
 import { WhatsAppChannel } from './channels/whatsapp/whatsapp.channel';
 import { WhatsAppSessionService } from './channels/whatsapp/whatsapp-session.service';
 import { ChannelRouter } from './core/channel-router';
@@ -65,19 +68,28 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
     OpenWaWebhookController,
     NotificationPreferenceController,
     NotificationTemplateController,
+    PushSubscriptionController,
   ],
   providers: [
     // Channels + their reused provider stacks
     EmailProviderRegistry,
     EmailChannel,
     WhatsAppChannel,
+    // Sprint 13 — realtime + background transports for Gate Management.
+    InAppChannel,
+    PushChannel,
     // OpenWA connection manager (QR pairing, reconnect, health watchdog)
     WhatsAppSessionService,
     // The single place enumerating channels (the channel factory)
     {
       provide: NOTIFICATION_CHANNEL_LIST,
-      inject: [EmailChannel, WhatsAppChannel],
-      useFactory: (email: EmailChannel, whatsapp: WhatsAppChannel) => [email, whatsapp],
+      inject: [EmailChannel, WhatsAppChannel, InAppChannel, PushChannel],
+      useFactory: (
+        email: EmailChannel,
+        whatsapp: WhatsAppChannel,
+        inapp: InAppChannel,
+        push: PushChannel,
+      ) => [email, whatsapp, inapp, push],
     },
     // Channel-agnostic core
     ChannelRouter,

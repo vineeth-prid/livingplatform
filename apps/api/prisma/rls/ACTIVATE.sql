@@ -25,7 +25,9 @@ DECLARE
     'communities','vendors','catalog_options','asset_categories','assets',
     'maintenance_plans','amc_contracts','visitors','amenity_bookings','announcements',
     'phases','blocks','floors','units','amenities','community_settings',
-    'community_documents','residents','staff','tickets','service_requests','work_orders'
+    'community_documents','residents','staff','tickets','service_requests','work_orders',
+    -- Sprint 13 — Gate Management
+    'gates','gate_entries'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP

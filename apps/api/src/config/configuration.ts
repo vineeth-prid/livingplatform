@@ -133,6 +133,23 @@ export function configuration() {
       ttl: Number(env.THROTTLE_TTL ?? 60),
       limit: Number(env.THROTTLE_LIMIT ?? 120),
     },
+    /**
+     * Web Push (VAPID, RFC 8292) — used by the push notification channel.
+     *
+     * Keys are OPTIONAL by design: with none set the push channel reports
+     * unhealthy and declines to send, and every other channel is unaffected.
+     * That keeps this sprint deployable without a key-generation step, and
+     * makes enabling push a config change rather than a code change.
+     * Generate a pair with:  npx web-push generate-vapid-keys
+     */
+    push: {
+      publicKey: env.VAPID_PUBLIC_KEY ?? '',
+      privateKey: env.VAPID_PRIVATE_KEY ?? '',
+      /** `mailto:` or https URL identifying the sender to the push service. */
+      subject: env.VAPID_SUBJECT ?? 'mailto:support@living.local',
+      /** Seconds a push service should hold an undelivered message. */
+      ttl: Number(env.PUSH_TTL ?? 900),
+    },
     storage: {
       driver: env.STORAGE_DRIVER ?? 'local',
       bucket: env.STORAGE_BUCKET ?? 'living-local',

@@ -6,6 +6,7 @@ import { useAuth } from '@living/hooks';
 import { LoadingState } from '@living/ui';
 import { cn } from '@living/utils';
 
+import { GateAlerts } from './gate/gate-alerts';
 import { InstallBanner } from './pwa/install';
 
 const TABS = [
@@ -34,6 +35,9 @@ export function MobileShell() {
       </main>
       {/* Sits above the tab bar; renders nothing unless the app is installable. */}
       <InstallBanner />
+      {/* Mounted once, outside the routed area: a delivery at the gate must
+          interrupt the resident wherever they are in the app. */}
+      <GateAlerts />
       <BottomNav pathname={pathname} />
     </div>
   );

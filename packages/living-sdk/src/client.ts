@@ -6,6 +6,7 @@ import { AssetCategoryResource, AssetResource } from './resources/assets';
 import { AuthResource } from './resources/auth';
 import { CatalogResource } from './resources/catalog';
 import { CommunityResource } from './resources/community';
+import { GateResource } from './resources/gate';
 import {
   AmenitiesResource, AnnouncementsResource, BookingsResource, DocumentsResource, VisitorsResource,
 } from './resources/community-ops';
@@ -17,6 +18,7 @@ import {
 import { InsightsResource, PackagesResource } from './resources/packages';
 import { PeopleResource } from './resources/people';
 import { PlatformResource } from './resources/platform';
+import { PushResource } from './resources/push';
 import { ServiceRequestResource } from './resources/service-requests';
 import { TicketResource } from './resources/tickets';
 import { WorkOrderResource } from './resources/work-orders';
@@ -72,6 +74,9 @@ export class LivingClient {
   // Service Packages + business intelligence (Sprint 12).
   readonly packages: PackagesResource;
   readonly insights: InsightsResource;
+  // Gate Management + Web Push device registration (Sprint 13).
+  readonly gate: GateResource;
+  readonly push: PushResource;
 
   constructor(config: LivingClientConfig) {
     this.tokenStore = config.tokenStore ?? createLocalStorageTokenStore();
@@ -104,6 +109,8 @@ export class LivingClient {
     this.billing = new BillingResource(this.http);
     this.packages = new PackagesResource(this.http);
     this.insights = new InsightsResource(this.http);
+    this.gate = new GateResource(this.http);
+    this.push = new PushResource(this.http);
   }
 
   /** Decoded access-token payload (roles/permissions/expiry) or null. */

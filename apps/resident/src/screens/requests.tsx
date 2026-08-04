@@ -61,8 +61,19 @@ export function RequestsScreen() {
 
   return (
     <div>
+      {/* "New" raises a complaint. Under the Services or Visitors filter that is
+          the wrong action — those are booked from their own screens — so it is
+          disabled rather than quietly opening the complaint sheet. */}
       <ScreenHeader title="My requests" subtitle="Living"
-        right={<Button size="sm" onClick={() => setComplaint(true)}><Plus className="h-4 w-4" /> New</Button>} />
+        right={
+          <Button
+            size="sm"
+            disabled={filter === 'service' || filter === 'visitor'}
+            onClick={() => setComplaint(true)}
+          >
+            <Plus className="h-4 w-4" /> New
+          </Button>
+        } />
 
       <div className="flex flex-col gap-3 px-4">
         <SearchInput value={q} onValueChange={setQ} placeholder="Search your requests…" />

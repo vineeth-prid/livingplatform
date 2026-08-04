@@ -36,6 +36,12 @@ export class HttpClient {
     this.onUnauthorized = opts.onUnauthorized;
   }
 
+  /** The API root, e.g. http://localhost:4000/api/v1. Exposed because the SSE
+   *  client streams with raw `fetch` and needs to build its own URL. */
+  get apiBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   get<T>(path: string, query?: Record<string, unknown>) {
     return this.request<T>('GET', path, { query });
   }

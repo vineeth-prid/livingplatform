@@ -1,0 +1,12 @@
+Subject: {{vendorName}} is at {{gateName}} for {{unitNumber}}
+<h1>Delivery at {{gateName}}</h1>
+<p>{{t "greeting"}} {{residentName}},</p>
+<p>Your delivery has arrived at the gate.</p>
+<table role="presentation" style="margin:16px 0;font-size:14px;">
+  <tr><td style="padding:2px 16px 2px 0;color:#6b7280;">Vendor</td><td><strong>{{vendorName}}</strong></td></tr>
+  <tr><td style="padding:2px 16px 2px 0;color:#6b7280;">Apartment</td><td><strong>{{unitNumber}}</strong></td></tr>
+  <tr><td style="padding:2px 16px 2px 0;color:#6b7280;">Delivery person</td><td>{{personName}}{{#if mobileNumber}} · {{mobileNumber}}{{/if}}</td></tr>
+  <tr><td style="padding:2px 16px 2px 0;color:#6b7280;">Time</td><td>{{arrivedAt}}</td></tr>
+</table>
+{{#if actionUrl}}<p style="margin: 20px 0;"><a class="btn" href="{{actionUrl}}">Approve or reject</a></p>{{/if}}
+<p class="muted">Reference {{entryNumber}}. If you do not respond, security will hold the delivery at the gate.</p>

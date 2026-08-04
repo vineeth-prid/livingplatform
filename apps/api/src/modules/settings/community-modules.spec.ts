@@ -4,7 +4,19 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityModulesService } from './community-modules.service';
 
-type Row = { maintenanceBillingEnabled: boolean; servicePackagesEnabled: boolean } | null;
+type Row =
+  | {
+      maintenanceBillingEnabled: boolean;
+      servicePackagesEnabled: boolean;
+      // Gate Management (Sprint 13) — part of the same features document.
+      gateManagementEnabled?: boolean;
+      gateApprovalEnabled?: boolean;
+      gateSoundEnabled?: boolean;
+    }
+  | null;
+
+/** The gate half of the features contract, which defaults ON like the rest. */
+const GATE_ON = { gateManagement: true, gateApproval: true, gateSound: true };
 
 const prismaWith = (
   row: Row,
@@ -22,7 +34,13 @@ const makeService = (
   many?: Array<{ communityId: string; maintenanceBillingEnabled: boolean }>,
 ) => new CommunityModulesService(prismaWith(row, many));
 
-const BOTH_ON = { maintenanceBillingEnabled: true, servicePackagesEnabled: true };
+const BOTH_ON = {
+  maintenanceBillingEnabled: true,
+  servicePackagesEnabled: true,
+  gateManagementEnabled: true,
+  gateApprovalEnabled: true,
+  gateSoundEnabled: true,
+};
 
 describe('CommunityModulesService', () => {
   /**
@@ -46,6 +64,7 @@ describe('CommunityModulesService', () => {
     await expect(makeService(BOTH_ON).features('c1')).resolves.toEqual({
       maintenanceBilling: true,
       servicePackages: true,
+      ...GATE_ON,
     });
   });
 
@@ -63,6 +82,7 @@ describe('CommunityModulesService', () => {
     await expect(makeService(null).features('c1')).resolves.toEqual({
       maintenanceBilling: true,
       servicePackages: true,
+      ...GATE_ON,
     });
   });
 

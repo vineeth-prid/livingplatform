@@ -29,14 +29,19 @@ export const NOTIFICATION_TEMPLATES = {
   MAINTENANCE_DUE: 'maintenance-due',
   PAYMENT_SUCCESS: 'payment-success',
   VISITOR_PASS: 'visitor-pass',
+  /** Sent to the community's approvers when a resident requests a visitor. */
+  VISITOR_PENDING: 'visitor-pending',
   VISITOR_APPROVED: 'visitor-approved',
   BOOKING_CONFIRMED: 'booking-confirmed',
   ANNOUNCEMENT: 'announcement',
   WELCOME: 'welcome',
+  // Sprint 13 — Gate Management. Used for the email/WhatsApp renderings of a
+  // gate arrival; in-app and push carry a structured payload instead.
+  GATE_ENTRY_ARRIVED: 'gate-entry-arrived',
 } as const;
 
 export type NotificationTemplateName =
   (typeof NOTIFICATION_TEMPLATES)[keyof typeof NOTIFICATION_TEMPLATES];
 
 /** Channels the engine can route to (extend as channels are added). */
-export const NOTIFICATION_CHANNELS = ['email', 'whatsapp'] as const;
+export const NOTIFICATION_CHANNELS = ['email', 'whatsapp', 'inapp', 'push'] as const;

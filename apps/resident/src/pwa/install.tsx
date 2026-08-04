@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Check, Download, Share, SquarePlus, X } from 'lucide-react';
+import { Check, Download, MoreVertical, Share, SquarePlus, X } from 'lucide-react';
 import { Button, Card, Dialog, DialogContent } from '@living/ui';
 
 import { useInstallPrompt, type InstallPrompt } from './use-install-prompt';
@@ -71,7 +71,7 @@ export function InstallBanner() {
 /** The explicit control in Profile. Always honest about the current state. */
 export function InstallButton({ className }: { className?: string }) {
   const install = useInstallPrompt();
-  const [showIosHelp, setShowIosHelp] = useState(false);
+  const [showManualHelp, setShowManualHelp] = useState(false);
 
   if (install.state === 'installed') {
     return (
@@ -82,9 +82,6 @@ export function InstallButton({ className }: { className?: string }) {
     );
   }
 
-  // 'pending' means Chromium has not (yet) judged the app installable — usually
-  // the very first visit. Offer the button anyway; it becomes live on the
-  // second visit rather than showing an error.
   if (install.state === 'unsupported') {
     return (
       <Card variant="elevated" className={`${className ?? ''}`}>
@@ -97,6 +94,12 @@ export function InstallButton({ className }: { className?: string }) {
     );
   }
 
+  // 'pending' = Chromium has not fired `beforeinstallprompt` yet (first visit,
+  // or the engagement heuristic has not tripped). Android users hit this most
+  // often, and a disabled button is a dead end — so the button stays live and
+  // falls back to the browser's own menu steps, which always work.
+  const manual = install.state === 'manual-ios' || install.state === 'pending';
+
   return (
     <>
       <Button
@@ -104,14 +107,51 @@ export function InstallButton({ className }: { className?: string }) {
         block
         size="lg"
         className={className}
-        disabled={install.state === 'pending'}
-        onClick={() => (install.state === 'manual-ios' ? setShowIosHelp(true) : void install.install())}
+        onClick={() => (manual ? setShowManualHelp(true) : void install.install())}
       >
         <Download className="h-4 w-4" />
-        {install.state === 'pending' ? 'Install Living (not yet available)' : 'Install Living'}
+        Add to Home Screen
       </Button>
-      <IosInstructions open={showIosHelp} onClose={() => setShowIosHelp(false)} />
+      {install.state === 'manual-ios' ? (
+        <IosInstructions open={showManualHelp} onClose={() => setShowManualHelp(false)} />
+      ) : (
+        <AndroidInstructions open={showManualHelp} onClose={() => setShowManualHelp(false)} />
+      )}
     </>
+  );
+}
+
+/** Chromium before `beforeinstallprompt` fires — the browser menu still works. */
+function AndroidInstructions({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent open={open} title="Add Living to your Home Screen" className="max-w-md">
+        <ol className="space-y-3 text-sm text-body">
+          <li className="flex items-start gap-3">
+            <MoreVertical className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
+            <span>
+              Tap the <strong>menu</strong> (⋮) in your browser&apos;s toolbar.
+            </span>
+          </li>
+          <li className="flex items-start gap-3">
+            <SquarePlus className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
+            <span>
+              Choose <strong>Add to Home screen</strong> (or <strong>Install app</strong>).
+            </span>
+          </li>
+          <li className="flex items-start gap-3">
+            <Check className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
+            <span>
+              Confirm. Living opens full screen from your home screen.
+            </span>
+          </li>
+        </ol>
+        <p className="mt-4 text-xs text-subtle">
+          Living can also offer a one-tap install once you have used it a couple of times — this
+          menu route always works in the meantime.
+        </p>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -119,7 +159,7 @@ export function InstallButton({ className }: { className?: string }) {
 function IosInstructions({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent open={open} title="Add Living to your Home Screen">
+      <DialogContent open={open} title="Add Living to your Home Screen" className="max-w-md">
         <ol className="space-y-3 text-sm text-body">
           <li className="flex items-start gap-3">
             <Share className="mt-0.5 h-5 w-5 shrink-0 text-brand" />

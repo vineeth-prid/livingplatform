@@ -6,12 +6,12 @@ import { Button, EmptyState, Input, Sheet, SheetContent, Skeleton, toast } from 
 import type { Amenity } from '@living/types';
 
 import { useResidentCommunity } from '../community';
-import { useBookableAmenities, useBookingMutations, useMyResidentId } from '../community-ops';
+import { useBookableAmenities, useBookingMutations, useMyResident } from '../community-ops';
 import { ScreenHeader } from '../shell';
 
 export function AmenitiesScreen() {
   const { data, isLoading } = useBookableAmenities();
-  const { residentId } = useMyResidentId();
+  const { residentId } = useMyResident();
   const [booking, setBooking] = useState<Amenity | null>(null);
   const amenities = data?.items ?? [];
 

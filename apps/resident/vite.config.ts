@@ -41,6 +41,13 @@ export default defineConfig({
         // App shell + assets precached; API calls stay network-first via Query.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
+        // Web Push handlers (Gate Management). Imported into the generated
+        // worker rather than switching to injectManifest, so the precaching
+        // behaviour above is untouched. `push-sw.js` ships from public/.
+        importScripts: ['push-sw.js'],
+        // The worker imports push-sw.js directly, so precaching it as a page
+        // asset would only download the same file twice.
+        globIgnores: ['push-sw.js'],
       },
       devOptions: {
         // Lets the install prompt and service worker be exercised in `vite dev`.

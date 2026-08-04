@@ -7,7 +7,14 @@ import type { Readable } from 'node:stream';
  * on a concrete provider.
  */
 
-export type NotificationChannelName = 'email' | 'whatsapp';
+/**
+ * Registered channels. Widening this union is the sanctioned way to add a
+ * transport — the dispatcher, queue, retry and tracking are channel-agnostic and
+ * need no change. `inapp` and `push` were added for Gate Management (Sprint 13);
+ * for those two the address in `NotificationMessage.to` is a Living **user id**,
+ * not an email or phone number, and the payload rides in `channelData`.
+ */
+export type NotificationChannelName = 'email' | 'whatsapp' | 'inapp' | 'push';
 
 /** Attachment / media, sourced from buffer, stream, file path, or a remote URL. */
 export interface NotificationAttachment {

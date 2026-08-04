@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GripVertical, Image, Plus, Receipt, Sparkles, Trash2 } from 'lucide-react';
+import {
+  BellRing, GripVertical, Image, Mail, MessageCircle, PhoneCall, Plus, Receipt, ShieldCheck,
+  Sparkles, Trash2, Truck, Volume2,
+} from 'lucide-react';
 import { useAuth } from '@living/hooks';
 import {
   Button, Card, Input, LoadingState, PageContainer, PageHeader, toast, useConfirm,
@@ -20,10 +23,25 @@ interface HomeBanner {
   sortOrder?: number;
 }
 
+/** Matches the API's EmergencyContactDto and the resident app's reader. */
+interface EmergencyContact {
+  name: string;
+  role?: string;
+  phone: string;
+}
+
 interface SettingsDocument {
   maintenanceBillingEnabled: boolean;
   servicePackagesEnabled: boolean;
   homeBanners: HomeBanner[] | null;
+  // Gate Management (Sprint 13). Optional so a settings document written before
+  // this sprint still parses; the defaults below mirror the schema defaults.
+  gateManagementEnabled?: boolean;
+  gateApprovalEnabled?: boolean;
+  gatePushEnabled?: boolean;
+  gateWhatsappEnabled?: boolean;
+  gateEmailEnabled?: boolean;
+  gateSoundEnabled?: boolean;
 }
 
 /**
@@ -73,6 +91,15 @@ export function CommunitySettingsPage() {
         onChange={(input) => save.mutate(input)}
       />
 
+      <GateSettings
+        settings={settings.data}
+        canEdit={canEdit}
+        saving={save.isPending}
+        onChange={(input) => save.mutate(input)}
+      />
+
+      <EmergencyContactsEditor />
+
       <BannerEditor
         banners={settings.data.homeBanners ?? []}
         canEdit={canEdit}
@@ -80,6 +107,249 @@ export function CommunitySettingsPage() {
         onSave={(homeBanners) => save.mutate({ homeBanners })}
       />
     </PageContainer>
+  );
+}
+
+/**
+ * Gate Management configuration.
+ *
+ * The channel switches NARROW what the Notification Engine already allows —
+ * they never widen it. In-app is not listed because it is not optional: it is
+ * the popup the resident approves from, and turning it off would leave the
+ * approval step unreachable.
+ */
+function GateSettings({
+  settings,
+  canEdit,
+  saving,
+  onChange,
+}: {
+  settings: SettingsDocument;
+  canEdit: boolean;
+  saving: boolean;
+  onChange: (input: Record<string, unknown>) => void;
+}) {
+  const confirm = useConfirm();
+  // Absent = a document written before this sprint; use the schema defaults.
+  const on = (value: boolean | undefined, fallback: boolean) => value ?? fallback;
+  const moduleOn = on(settings.gateManagementEnabled, true);
+
+  async function toggleModule(next: boolean) {
+    if (!next) {
+      const ok = await confirm({
+        title: 'Turn off Gate Management?',
+        description:
+          'Security can no longer record deliveries and residents stop receiving gate ' +
+          'notifications. Existing entries and their history are kept.',
+        confirmLabel: 'Turn off',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    onChange({ gateManagementEnabled: next });
+  }
+
+  return (
+    <Card variant="elevated" className="mb-6">
+      <h2 className="mb-1 font-display text-h4 tracking-tight text-strong">Gate Management</h2>
+      <p className="mb-4 text-sm text-muted">
+        Deliveries recorded at the gate, and how residents hear about them.
+      </p>
+
+      <ModuleRow
+        icon={Truck}
+        title="Gate Management"
+        description="Security records arrivals in the Workforce app; residents are notified instantly."
+        enabled={moduleOn}
+        disabled={!canEdit || saving}
+        onChange={toggleModule}
+      />
+      <ModuleRow
+        icon={ShieldCheck}
+        title="Require resident approval"
+        description="Deliveries wait for Approve or Reject. Off means residents are told, but security does not hold the delivery."
+        enabled={on(settings.gateApprovalEnabled, true)}
+        disabled={!canEdit || saving || !moduleOn}
+        onChange={(next) => onChange({ gateApprovalEnabled: next })}
+      />
+      <ModuleRow
+        icon={BellRing}
+        title="Push notifications"
+        description="Reaches residents when the app is closed. Requires push to be configured for the platform."
+        enabled={on(settings.gatePushEnabled, true)}
+        disabled={!canEdit || saving || !moduleOn}
+        onChange={(next) => onChange({ gatePushEnabled: next })}
+      />
+      <ModuleRow
+        icon={Volume2}
+        title="Notification sound"
+        description="Plays a chime and vibrates when the popup appears in the resident app."
+        enabled={on(settings.gateSoundEnabled, true)}
+        disabled={!canEdit || saving || !moduleOn}
+        onChange={(next) => onChange({ gateSoundEnabled: next })}
+      />
+      <ModuleRow
+        icon={MessageCircle}
+        title="WhatsApp"
+        description="Also send a WhatsApp message. Off by default — every message has a cost."
+        enabled={on(settings.gateWhatsappEnabled, false)}
+        disabled={!canEdit || saving || !moduleOn}
+        onChange={(next) => onChange({ gateWhatsappEnabled: next })}
+      />
+      <ModuleRow
+        icon={Mail}
+        title="Email"
+        description="Also send an email. Rarely useful for something happening right now."
+        enabled={on(settings.gateEmailEnabled, false)}
+        disabled={!canEdit || saving || !moduleOn}
+        onChange={(next) => onChange({ gateEmailEnabled: next })}
+      />
+    </Card>
+  );
+}
+
+/**
+ * The numbers residents tap in an emergency. They live on the community record
+ * (not the settings document) and had no editor anywhere — which is why the
+ * resident app's Emergency contacts section was always empty.
+ */
+function EmergencyContactsEditor() {
+  const { communityId, community } = useCommunity();
+  const { hasPermission } = useAuth();
+  const qc = useQueryClient();
+  const canEdit = hasPermission('community:update');
+
+  const saved = (community?.emergencyContacts as EmergencyContact[] | undefined) ?? [];
+  const [draft, setDraft] = useState<EmergencyContact[]>(saved);
+  const [dirty, setDirty] = useState(false);
+
+  // `saved` is a fresh array on every render, so key the re-sync off its value.
+  const savedJson = JSON.stringify(saved);
+  useEffect(() => {
+    if (!dirty) setDraft(JSON.parse(savedJson) as EmergencyContact[]);
+  }, [savedJson, dirty]);
+
+  const save = useMutation({
+    mutationFn: (emergencyContacts: EmergencyContact[]) =>
+      living.community.update(communityId!, { emergencyContacts }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['community', communityId] });
+      void qc.invalidateQueries({ queryKey: ['communities'] });
+      setDirty(false);
+      toast.success('Emergency contacts saved');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const update = (index: number, patch: Partial<EmergencyContact>) => {
+    setDirty(true);
+    setDraft((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+  const add = () => {
+    setDirty(true);
+    setDraft((rows) => [...rows, { name: '', role: '', phone: '' }]);
+  };
+  const remove = (index: number) => {
+    setDirty(true);
+    setDraft((rows) => rows.filter((_, i) => i !== index));
+  };
+
+  const valid = draft.every((c) => c.name.trim() && c.phone.trim());
+
+  return (
+    <Card variant="elevated" className="mb-6">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-h4 tracking-tight text-strong">Emergency contacts</h2>
+          <p className="mt-0.5 text-sm text-muted">
+            Security desk, plumber, ambulance — residents tap these to dial straight from the
+            Community tab.
+          </p>
+        </div>
+        {canEdit && (
+          <Button size="sm" variant="secondary" onClick={add}>
+            <Plus className="h-4 w-4" /> Add contact
+          </Button>
+        )}
+      </div>
+
+      {draft.length === 0 ? (
+        <p className="rounded-control bg-sunken px-4 py-6 text-center text-sm text-muted">
+          No contacts yet. Residents see an empty Emergency contacts section until you add one.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {draft.map((contact, index) => (
+            <div key={index} className="rounded-control border border-border-subtle p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-xs uppercase tracking-wider text-subtle">
+                  <PhoneCall className="h-3.5 w-3.5" /> Contact {index + 1}
+                </span>
+                {canEdit && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remove contact ${index + 1}`}
+                    onClick={() => remove(index)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <FormGrid>
+                <Input
+                  label="Name"
+                  value={contact.name}
+                  onChange={(e) => update(index, { name: e.target.value })}
+                  placeholder="Security desk"
+                  disabled={!canEdit}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  type="tel"
+                  value={contact.phone}
+                  onChange={(e) => update(index, { phone: e.target.value })}
+                  placeholder="+91 98765 43210"
+                  disabled={!canEdit}
+                  required
+                />
+                <FullWidth>
+                  <Input
+                    label="Role"
+                    value={contact.role ?? ''}
+                    onChange={(e) => update(index, { role: e.target.value })}
+                    placeholder="Security"
+                    hint="Shown under the name in the resident app"
+                    disabled={!canEdit}
+                  />
+                </FullWidth>
+              </FormGrid>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="mt-4 flex justify-end">
+          <Button
+            loading={save.isPending}
+            disabled={!valid || !dirty}
+            onClick={() =>
+              save.mutate(
+                draft.map((c) => ({
+                  name: c.name.trim(),
+                  phone: c.phone.trim(),
+                  ...(c.role?.trim() ? { role: c.role.trim() } : {}),
+                })),
+              )
+            }
+          >
+            Save contacts
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }
 

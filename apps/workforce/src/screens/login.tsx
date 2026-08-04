@@ -4,11 +4,20 @@ import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import { Button, Input, toast } from '@living/ui';
 
-/** Worker sign-in — plain, high-contrast, big touch targets. */
+/**
+ * Worker sign-in — plain, high-contrast, big touch targets.
+ *
+ * Staff and vendors are provisioned with their MOBILE NUMBER as the username
+ * (AccountProvisioningService), exactly like residents. This field previously
+ * carried `type="email"`, so a guard typing "9876543210" tripped the browser's
+ * native email validation and the form silently refused to submit — the API had
+ * always accepted it. Keep this an untyped text input with a tel inputMode: the
+ * same field still accepts an email for managers and admins.
+ */
 export function LoginScreen() {
   const { login, status } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -18,7 +27,9 @@ export function LoginScreen() {
     e.preventDefault();
     setBusy(true);
     try {
-      await login({ email, password, rememberMe: true });
+      // The API's `email` field is really an identifier — it matches on email
+      // OR on the digits-only username.
+      await login({ email: identifier.trim(), password, rememberMe: true });
       navigate({ to: '/' });
     } catch (err) {
       toast.error(err instanceof LivingApiError ? err.message : 'Unable to sign in');
@@ -38,11 +49,15 @@ export function LoginScreen() {
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <Input label="Email" type="email" inputMode="email" autoComplete="email"
-          placeholder="you@living.local" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <Input label="Mobile number" inputMode="tel" autoComplete="username"
+          placeholder="9876543210" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required
+          hint="Your registered mobile number is your username." />
         <Input label="Password" type="password" autoComplete="current-password"
           placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Button type="submit" size="lg" block loading={busy} className="mt-2">Sign in</Button>
+        {/* No self-service recovery here yet — the resident app's OTP dialog is
+            bound to its own SDK client, so sharing it needs a lift into a
+            package rather than a copy. Admins reset workforce passwords today. */}
         <p className="text-center text-xs text-subtle">Life Happens Here.</p>
       </form>
     </div>

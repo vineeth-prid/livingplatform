@@ -85,6 +85,31 @@ export class UpdateCommunitySettingsDto {
   @ApiPropertyOptional({ description: 'Whether residents can browse and buy Service Packages.' })
   @IsOptional() @IsBoolean() servicePackagesEnabled?: boolean;
 
+  // ── Gate Management (Sprint 13) ──
+  @ApiPropertyOptional({
+    description:
+      'Master switch for Gate Management. OFF stops delivery entries and gate notifications; ' +
+      'existing entries and their history are kept.',
+  })
+  @IsOptional() @IsBoolean() gateManagementEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Whether a gate entry waits for the resident to Approve or Reject.',
+  })
+  @IsOptional() @IsBoolean() gateApprovalEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Send gate notifications as Web Push.' })
+  @IsOptional() @IsBoolean() gatePushEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Also send gate notifications over WhatsApp.' })
+  @IsOptional() @IsBoolean() gateWhatsappEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Also send gate notifications by email.' })
+  @IsOptional() @IsBoolean() gateEmailEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Play a chime and vibrate for the resident gate popup.' })
+  @IsOptional() @IsBoolean() gateSoundEnabled?: boolean;
+
   @ApiPropertyOptional({
     description:
       'Rotating hero banners on the resident home. Each: { id, title, subtitle?, ' +

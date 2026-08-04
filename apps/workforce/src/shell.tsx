@@ -8,13 +8,31 @@ import { cn } from '@living/utils';
 
 import { useOnlineStatus } from './offline';
 
+/**
+ * `permission` gates the tab. Gate duty belongs to the SECURITY role, so an
+ * electrician or housekeeper never sees the tab at all — rather than seeing one
+ * that tells them they have no access, which is both noise and a hint that
+ * something is there to find.
+ */
 const TABS = [
   { to: '/', label: 'Today', icon: CalendarCheck, match: (p: string) => p === '/' },
   { to: '/jobs', label: 'Jobs', icon: ListChecks, match: (p: string) => p.startsWith('/jobs') },
-  { to: '/gate', label: 'Gate', icon: ShieldCheck, match: (p: string) => p.startsWith('/gate') },
+  {
+    to: '/gate',
+    label: 'Gate',
+    icon: ShieldCheck,
+    match: (p: string) => p.startsWith('/gate'),
+    permission: 'gate:entry:view',
+  },
   { to: '/activity', label: 'Activity', icon: Activity, match: (p: string) => p.startsWith('/activity') },
   { to: '/profile', label: 'Profile', icon: User, match: (p: string) => p.startsWith('/profile') },
-] as const;
+] as const satisfies ReadonlyArray<{
+  to: string;
+  label: string;
+  icon: typeof Activity;
+  match: (p: string) => boolean;
+  permission?: string;
+}>;
 
 /** The mobile field shell: a scrollable page over a fixed bottom tab bar,
  *  centred and framed on tablet/desktop. */
@@ -69,6 +87,9 @@ function PageFade({ children }: { children: ReactNode }) {
 }
 
 function BottomNav({ pathname }: { pathname: string }) {
+  const { hasPermission } = useAuth();
+  const tabs = TABS.filter((t) => !('permission' in t) || hasPermission(t.permission));
+
   return (
     <nav
       aria-label="Primary"
@@ -76,7 +97,7 @@ function BottomNav({ pathname }: { pathname: string }) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-around">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const active = t.match(pathname);
           return (
             <li key={t.to} className="flex-1">

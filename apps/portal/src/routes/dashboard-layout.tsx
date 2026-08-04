@@ -3,8 +3,8 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import {
   Activity, BellRing, Boxes, Building2, CalendarCheck, CalendarClock, CreditCard, DoorOpen,
   FileSignature, FileText, Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, MessageCircle,
-  Package, Receipt, Server, Settings, ShieldCheck, Sparkles, Store, TrendingUp, UserRound, Users,
-  Wallet, Wrench,
+  Package, Receipt, Server, Settings, ShieldCheck, Sparkles, Store, TrendingUp, Truck, UserRound,
+  Users, Wallet, Wrench,
 } from 'lucide-react';
 import { useAuth, useCommunityFeatures } from '@living/hooks';
 import {
@@ -67,6 +67,8 @@ const sections: NavSection[] = [
     title: 'Community ops',
     items: [
       { label: 'Visitors', icon: UserRound, href: '/visitors' },
+      { label: 'Gate', icon: Truck, href: '/gate' },
+      { label: 'Gate analytics', icon: TrendingUp, href: '/gate/analytics' },
       { label: 'Amenities', icon: Sparkles, href: '/amenities' },
       { label: 'Bookings', icon: CalendarCheck, href: '/bookings' },
       { label: 'Documents', icon: FileText, href: '/documents' },

@@ -105,6 +105,27 @@ export class QueryResidentDto extends ListQueryDto {
   @IsOptional() @IsEnum(ResidentRole) role?: ResidentRole;
 }
 
+/**
+ * A household member a resident adds themselves. Deliberately tiny — the unit
+ * and community come from the caller's own record, and the login account is
+ * provisioned from the mobile number like every other resident.
+ */
+export class CreateFamilyMemberDto {
+  @ApiProperty({ example: 'Aisha' })
+  @IsString() @MinLength(1) @MaxLength(80)
+  firstName!: string;
+
+  @ApiPropertyOptional({ example: 'Khan' })
+  @IsOptional() @IsString() @MaxLength(80)
+  lastName?: string;
+
+  @ApiProperty({ example: '+91 98765 43210', description: 'Becomes their login username' })
+  @IsString() @MinLength(4) @MaxLength(40)
+  mobile!: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;
+}
+
 export class AssignUnitDto {
   @ApiProperty()
   @IsString() @MinLength(1)

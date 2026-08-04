@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { CalendarPlus, LayoutGrid, Plus, UserRound, Wallet } from 'lucide-react';
+import { CalendarPlus, LayoutGrid, PackageOpen, Plus, UserRound, Wallet } from 'lucide-react';
 import { useAuth, useCommunityFeatures } from '@living/hooks';
 import { formatDate } from '@living/utils';
 import { EmptyState, Skeleton } from '@living/ui';
@@ -71,6 +71,7 @@ export function HomeScreen() {
           <QuickAction icon={LayoutGrid} label="Book a service" to="/services" />
           <QuickAction icon={UserRound} label="Invite a visitor" to="/visitors" />
           <QuickAction icon={CalendarPlus} label="Book an amenity" to="/amenities" />
+          <QuickAction icon={PackageOpen} label="At the gate" to="/gate" />
         </div>
       </Section>
 

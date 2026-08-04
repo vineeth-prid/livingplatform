@@ -12,6 +12,12 @@ type Body = Record<string, unknown>;
 export interface CommunityFeatures {
   maintenanceBilling: boolean;
   servicePackages: boolean;
+  /** Gate Management (Sprint 13) — delivery entries and gate notifications. */
+  gateManagement: boolean;
+  /** Whether a gate entry waits for the resident's Approve/Reject. */
+  gateApproval: boolean;
+  /** Whether the resident popup plays a chime and vibrates. */
+  gateSound: boolean;
 }
 
 /** Community Foundation: communities, property hierarchy, units, amenities,

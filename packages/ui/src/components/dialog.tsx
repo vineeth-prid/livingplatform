@@ -52,6 +52,8 @@ export function DialogContent({
             exit="exit"
             className={cn(
               'fixed left-1/2 top-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2',
+              // Tall content must scroll inside the dialog, never off the screen.
+              'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
               'rounded-xl border border-border-subtle bg-card p-6 shadow-floating',
               'focus:outline-none',
               className,

@@ -25,6 +25,7 @@ import { AuditInterceptor } from './modules/audit/audit.interceptor';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { GateModule } from './modules/gate/gate.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
@@ -40,6 +41,7 @@ import { PeopleModule } from './modules/people/people.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { RbacModule } from './modules/rbac/rbac.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { ResidentModule } from './modules/resident/resident.module';
 import { SearchModule } from './modules/search/search.module';
@@ -91,6 +93,9 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     CryptoModule,
     PrismaModule,
     RedisModule,
+    // Realtime (SSE) is declared BEFORE the Notification Engine: the in-app
+    // channel injects the hub, and Nest resolves global providers in order.
+    RealtimeModule,
     NotificationModule,
     MailModule,
     StorageModule,
@@ -149,6 +154,10 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
 
     // Service Packages (Sprint 12) — merchandising over the Service catalog
     PackagesModule,
+
+    // Gate Management (Sprint 13) — delivery entry + resident approval, and the
+    // realtime transport its instant updates ride on.
+    GateModule,
 
     // Platform-Admin control plane (community provisioning)
     AdminModule,

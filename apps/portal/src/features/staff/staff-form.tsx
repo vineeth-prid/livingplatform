@@ -10,9 +10,19 @@ const fields: FieldDef[] = [
   { name: 'firstName', label: 'First name', required: true, half: true },
   { name: 'lastName', label: 'Last name', required: true, half: true },
   {
+    // The role is load-bearing, not a label: picking "Security" is what grants
+    // gate duty (deliveries + the visitor register). Say so, because an admin
+    // choosing from a dropdown has no other way to know.
     name: 'role', label: 'Role', type: 'custom', required: true, half: true,
     render: (value, set, error) => (
-      <CatalogSelect kind="STAFF_ROLE" label="Role" required value={value} onChange={set} error={error} />
+      <div>
+        <CatalogSelect kind="STAFF_ROLE" label="Role" required value={value} onChange={set} error={error} />
+        <p className="mt-1.5 text-xs text-subtle">
+          {String(value ?? '').toUpperCase() === 'SECURITY'
+            ? 'Grants gate access: record deliveries and run the visitor register in the Workforce app.'
+            : 'Choose Security to grant gate access (deliveries and the visitor register).'}
+        </p>
+      </div>
     ),
   },
   { name: 'department', label: 'Department', half: true },

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
   AssignUnitDto,
   BulkResidentUploadDto,
+  CreateFamilyMemberDto,
   CreateResidentDto,
   QueryResidentDto,
   UpdateResidentDto,
@@ -176,6 +178,93 @@ export class ResidentService {
       this.prisma.resident.count({ where }),
     ]);
     return paginate(items.map((r) => this.present(r)), total, query);
+  }
+
+  /**
+   * The caller's OWN resident record(s) plus the rest of their household.
+   *
+   * Self-service, so it carries no RBAC permission — a plain resident holds no
+   * `resident:read` and must still be able to see which unit they live in, who
+   * shares it, and (for visitors/bookings) their own residentId. Everything is
+   * scoped by `userId = caller`, so there is nothing to leak.
+   */
+  async findMine(user: AuthenticatedUser) {
+    const residents = await this.prisma.resident.findMany({
+      where: { userId: user.id, deletedAt: null },
+      include: UNIT_ASSIGNMENT_INCLUDE,
+    });
+
+    const unitIds = residents
+      .map((r) => r.unitAssignment?.unitId)
+      .filter((id): id is string => !!id);
+
+    // Household = everyone else assigned to the same unit(s).
+    const family = unitIds.length
+      ? await this.prisma.resident.findMany({
+          where: {
+            deletedAt: null,
+            id: { notIn: residents.map((r) => r.id) },
+            unitAssignment: { unitId: { in: unitIds } },
+          },
+          include: UNIT_ASSIGNMENT_INCLUDE,
+        })
+      : [];
+
+    return {
+      residents: residents.map((r) => this.present(r)),
+      family: family.map((r) => this.present(r)),
+    };
+  }
+
+  /**
+   * Add a household member to the caller's own unit. Reuses `create`, so they
+   * get the same phone-as-username login (one-time password, forced change)
+   * every other resident gets — that is the whole point of the feature.
+   */
+  async addFamilyMember(dto: CreateFamilyMemberDto, actor: AuthenticatedUser) {
+    const me = await this.myUnitOrThrow(actor);
+    return this.create(
+      me.communityId,
+      {
+        firstName: dto.firstName,
+        lastName: dto.lastName?.trim() || dto.firstName,
+        mobile: dto.mobile,
+        email: dto.email,
+        unitId: me.unitId,
+        occupiedBy: 'SECONDARY',
+      },
+      actor,
+    );
+  }
+
+  /** Remove a household member — only someone sharing the caller's unit. */
+  async removeFamilyMember(id: string, actor: AuthenticatedUser) {
+    const me = await this.myUnitOrThrow(actor);
+    const target = await this.prisma.resident.findFirst({
+      where: { id, deletedAt: null },
+      include: { unitAssignment: { select: { unitId: true } } },
+    });
+    if (!target || target.unitAssignment?.unitId !== me.unitId) {
+      throw new ForbiddenException('That person is not in your household');
+    }
+    if (target.userId === actor.id) {
+      throw new BadRequestException('You cannot remove yourself from your own unit');
+    }
+    return this.remove(id, actor);
+  }
+
+  /** The caller's own resident row — must exist and be assigned to a unit. */
+  private async myUnitOrThrow(actor: AuthenticatedUser) {
+    const me = await this.prisma.resident.findFirst({
+      where: { userId: actor.id, deletedAt: null, unitAssignment: { isNot: null } },
+      include: { unitAssignment: { select: { unitId: true } } },
+    });
+    if (!me?.unitAssignment) {
+      throw new BadRequestException(
+        'Your account is not linked to a unit yet — ask management to link it first',
+      );
+    }
+    return { communityId: me.communityId, unitId: me.unitAssignment.unitId };
   }
 
   async findOne(id: string) {

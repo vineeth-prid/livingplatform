@@ -487,6 +487,10 @@ model Community {
   servicePackages  ServicePackage[]
   packagePurchases ServicePackagePurchase[]
 
+  // Gate Management (Sprint 13)
+  gates      Gate[]
+  gateEntries GateEntry[]
+
   // Payments & Maintenance Billing (Sprint 11)
   paymentConfigs          CommunityPaymentConfig[]
   maintenanceCharges      MaintenanceCharge[]
@@ -541,6 +545,8 @@ model User {
   residentProfile    Resident?
   vendorProfile      Vendor?
   staffProfile       Staff?
+  /// Web Push devices (Gate Management, Sprint 13).
+  pushSubscriptions  PushSubscription[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -932,6 +938,20 @@ model CommunitySettings {
   maintenanceBillingEnabled Boolean @default(true)
   /// Whether residents can browse and buy Service Packages.
   servicePackagesEnabled    Boolean @default(true)
+
+  // ── Gate Management (Sprint 13) ──
+  /// Master switch for the Gate Management module (delivery entries etc.).
+  gateManagementEnabled Boolean @default(true)
+  /// When ON a delivery waits for the resident's Approve/Reject. When OFF the
+  /// resident is still notified, but the entry is informational only.
+  gateApprovalEnabled   Boolean @default(true)
+  /// Per-channel switches for gate notifications. These narrow the community's
+  /// existing notification preferences; they never widen them.
+  gatePushEnabled       Boolean @default(true)
+  gateWhatsappEnabled   Boolean @default(false)
+  gateEmailEnabled      Boolean @default(false)
+  /// Whether the resident app plays a sound + vibrates for a gate popup.
+  gateSoundEnabled      Boolean @default(true)
 
   /// Rotating hero banners on the resident home. Array of
   /// { id, title, subtitle?, imageKey?, actionUrl?, kind: 'announcement'|'ad', sortOrder? }.
@@ -2233,6 +2253,10 @@ enum NotificationEvent {
   WORK_ORDER_UPDATE
   PASSWORD_RESET
   WELCOME
+  /// Sprint 13 — a delivery/visitor is waiting at the gate for the resident.
+  GATE_ENTRY_ARRIVED
+  /// Sprint 13 — the resident's decision, echoed back to the gate.
+  GATE_ENTRY_DECIDED
 }
 
 /// One Razorpay account per (community, purpose). Community-specific and never
@@ -2627,4 +2651,205 @@ model ServicePackagePurchase {
   @@index([residentId])
   @@index([paymentId])
   @@map("service_package_purchases")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 13 — Gate Management
+//
+// A single `GateEntry` table models EVERY kind of arrival at a gate — delivery,
+// visitor, service personnel, vehicle — discriminated by `entryType`. Delivery
+// is the first type implemented; the others already have their enum member and
+// their columns are nullable, so adding them is service logic, not a migration.
+//
+// Deliberately NOT merged into the existing `Visitor` table: visitors are an
+// invitation flow owned by residents (pass codes, expected arrival), whereas a
+// gate entry is an *observation* recorded by security at the moment of arrival.
+// The two lifecycles differ, and Visitor is load-bearing for the existing gate
+// pass feature — extending it would have been a breaking change.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum GateEntryType {
+  DELIVERY
+  VISITOR
+  SERVICE_PERSONNEL
+  VEHICLE
+}
+
+enum GateEntryStatus {
+  CREATED
+  NOTIFIED
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+/// How a gate entry reached its current state — used by the timeline and audit.
+enum GateEntryAction {
+  CREATED
+  NOTIFICATION_SENT
+  NOTIFICATION_FAILED
+  VIEWED
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+  NOTE
+}
+
+/// A physical gate. Optional on an entry: communities that never name their
+/// gates keep working, and `Main Gate` is the implied default.
+model Gate {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  name      String
+  code      String?
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  entries GateEntry[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, name])
+  @@index([communityId])
+  @@map("gates")
+}
+
+model GateEntry {
+  id          String    @id @default(cuid())
+  tenantId    String
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  gateId String?
+  gate   Gate?   @relation(fields: [gateId], references: [id], onDelete: SetNull)
+
+  entryType GateEntryType   @default(DELIVERY)
+  status    GateEntryStatus @default(CREATED)
+
+  /// Human-readable reference shown at the gate, e.g. GE-000123.
+  entryNumber String
+
+  // Who it is for. unitId is required (an arrival is always for a flat);
+  // residentId is resolved at creation when the unit has a primary resident.
+  unitId     String
+  residentId String?
+
+  // The arrival itself. `vendorName` is a free string (Swiggy, Amazon, …) —
+  // deliberately not a FK to the Vendor engine, which models contracted service
+  // vendors, not consumer delivery brands.
+  vendorName        String?
+  deliveryType      String?
+  personName        String
+  mobileNumber      String?
+  vehicleNumber     String?
+  remarks           String?
+  /// Storage key of the gate photo (StorageService), null when none taken.
+  photoKey          String?
+
+  // Decision trail
+  notifiedAt   DateTime?
+  viewedAt     DateTime?
+  decidedAt    DateTime?
+  decidedById  String?
+  decisionNote String?
+  completedAt  DateTime?
+
+  /// Set when the Notification Engine could not reach the resident on any
+  /// channel — security sees this and falls back to a phone call.
+  notificationFailed Boolean @default(false)
+
+  metadata Json?
+
+  timeline    GateEntryTimeline[]
+  attachments GateEntryAttachment[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, entryNumber])
+  @@index([communityId, status])
+  @@index([communityId, entryType, createdAt])
+  @@index([communityId, createdAt])
+  @@index([unitId])
+  @@index([residentId, status])
+  @@index([mobileNumber])
+  @@map("gate_entries")
+}
+
+/// Append-only audit trail for one gate entry. Never updated, never deleted —
+/// the entry's status is a projection of the latest meaningful row here.
+model GateEntryTimeline {
+  id      String    @id @default(cuid())
+  entryId String
+  entry   GateEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  action GateEntryAction
+  /// Status after this action, when it changed one.
+  status GateEntryStatus?
+  note   String?
+  /// Who did it: a user id, or null for engine-generated rows.
+  actorId   String?
+  actorName String?
+  /// Channel for NOTIFICATION_SENT / NOTIFICATION_FAILED rows.
+  channel   String?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entryId, createdAt])
+  @@map("gate_entry_timeline")
+}
+
+/// Photos taken at the gate. Bytes live in object storage; only keys here.
+model GateEntryAttachment {
+  id      String    @id @default(cuid())
+  entryId String
+  entry   GateEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  storageKey String
+  fileName   String?
+  mimeType   String?
+  fileSize   Int?
+  kind       String  @default("PHOTO")
+
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  @@index([entryId])
+  @@map("gate_entry_attachments")
+}
+
+/// A browser Web Push subscription (RFC 8292 VAPID). One row per device per
+/// user; `endpoint` is globally unique and is what the push service addresses.
+/// Rows are deleted when the push service reports 404/410 (subscription gone).
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint String @unique
+  /// Client public key + auth secret from PushSubscription.getKey().
+  p256dh   String
+  auth     String
+
+  userAgent String?
+  /// Bumped on every successful send so stale devices can be pruned.
+  lastSeenAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

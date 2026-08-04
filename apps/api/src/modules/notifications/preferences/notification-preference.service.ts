@@ -4,10 +4,23 @@ import { NotificationEvent } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunityAccessService } from '../../tenancy/community-access.service';
+import type { NotificationChannelName } from '../core/notification-channel.interface';
 import type {
   UpdateNotificationPreferenceDto,
   UpsertNotificationTemplateDto,
 } from './dto/notification-preference.dto';
+
+/**
+ * Events whose channel set is decided by the Gate Management settings rather
+ * than the generic email/WhatsApp preference. Gate notifications are
+ * time-critical and interactive, so in-app + push lead and email/WhatsApp are
+ * opt-in — the inverse of every other event, which is why they are special-cased
+ * here instead of bending the generic defaults.
+ */
+const GATE_EVENTS = new Set<NotificationEvent>([
+  NotificationEvent.GATE_ENTRY_ARRIVED,
+  NotificationEvent.GATE_ENTRY_DECIDED,
+]);
 
 export interface PreferenceView {
   event: NotificationEvent;
@@ -21,7 +34,7 @@ export interface PreferenceView {
 /** Whether an event may be delivered on a channel for a community. */
 export interface ResolvedRouting {
   enabled: boolean;
-  channels: Array<'email' | 'whatsapp'>;
+  channels: NotificationChannelName[];
 }
 
 /**
@@ -104,17 +117,59 @@ export class NotificationPreferenceService {
       }),
       this.prisma.communitySettings.findUnique({
         where: { communityId },
-        select: { emailEnabled: true, whatsappEnabled: true },
+        select: {
+          emailEnabled: true,
+          whatsappEnabled: true,
+          gateManagementEnabled: true,
+          gatePushEnabled: true,
+          gateWhatsappEnabled: true,
+          gateEmailEnabled: true,
+        },
       }),
     ]);
 
     if (row && !row.enabled) return { enabled: false, channels: [] };
+
+    if (GATE_EVENTS.has(event)) {
+      return this.resolveGate(row, settings);
+    }
+
     const email = row?.emailEnabled ?? settings?.emailEnabled ?? true;
     const whatsapp = row?.whatsappEnabled ?? settings?.whatsappEnabled ?? false;
-    const channels: Array<'email' | 'whatsapp'> = [];
+    const channels: NotificationChannelName[] = [];
     if (email) channels.push('email');
     if (whatsapp) channels.push('whatsapp');
     return { enabled: channels.length > 0, channels };
+  }
+
+  /**
+   * Channel set for a gate event. In-app is ALWAYS on — it is the popup the
+   * whole feature exists for, and it costs nothing to attempt. The rest follow
+   * the community's gate settings, with the generic per-event overrides still
+   * able to switch email/WhatsApp off.
+   */
+  private resolveGate(
+    row: { emailEnabled: boolean; whatsappEnabled: boolean } | null,
+    settings: {
+      gateManagementEnabled: boolean;
+      gatePushEnabled: boolean;
+      gateWhatsappEnabled: boolean;
+      gateEmailEnabled: boolean;
+    } | null,
+  ): ResolvedRouting {
+    // No settings row yet = a community that predates this sprint. Schema
+    // defaults apply, which is module ON.
+    if (settings && !settings.gateManagementEnabled) return { enabled: false, channels: [] };
+
+    const channels: NotificationChannelName[] = ['inapp'];
+    if (settings?.gatePushEnabled ?? true) channels.push('push');
+    if ((settings?.gateWhatsappEnabled ?? false) && (row?.whatsappEnabled ?? true)) {
+      channels.push('whatsapp');
+    }
+    if ((settings?.gateEmailEnabled ?? false) && (row?.emailEnabled ?? true)) {
+      channels.push('email');
+    }
+    return { enabled: true, channels };
   }
 
   // ── Templates ──────────────────────────────────────────────────────────────
