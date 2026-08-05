@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { StaffAutoAssignService } from '../staff/staff-auto-assign.service';
 import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
   AssignTicketDto,
@@ -47,6 +48,7 @@ export class TicketService {
     private readonly storage: StorageService,
     private readonly events: DomainEventsService,
     private readonly autoAssign: VendorAutoAssignService,
+    private readonly staffAutoAssign: StaffAutoAssignService,
   ) {}
 
   async create(communityId: string, dto: CreateTicketDto, actor: AuthenticatedUser) {
@@ -99,9 +101,17 @@ export class TicketService {
   }
 
   /**
-   * Auto-assign a freshly created ticket to the least-loaded matching vendor.
+   * Auto-assign a freshly created ticket to the least-loaded match.
+   *
+   * IN-HOUSE STAFF FIRST, then vendors. A community that has allocated
+   * categories to its own people expects those people to get the work; falling
+   * through to a vendor only when nobody in-house covers the category preserves
+   * the previous behaviour for communities that have not set staff categories
+   * up yet (the column defaults to empty, so they match nothing and go straight
+   * to the vendor path).
+   *
    * Returns the updated row, or null when nothing matched or anything went
-   * wrong. Never throws.
+   * wrong. Never throws — a failed lookup loses the assignment, never the ticket.
    */
   private async tryAutoAssign(
     ticket: { id: string; communityId: string; categoryId: string; status: TicketStatus },
@@ -115,10 +125,28 @@ export class TicketService {
       });
       if (!category) return null;
 
+      const categories = [category.key, category.name];
+
+      const staffPick = await this.staffAutoAssign.pick({
+        communityId: ticket.communityId,
+        categories,
+      });
+      this.staffAutoAssign.logOutcome('ticket', ticket.id, staffPick);
+      if (staffPick) {
+        return this.applyAutoAssignment(ticket, actor, {
+          assignedStaffId: staffPick.staffId,
+          timelineMetadata: {
+            staffId: staffPick.staffId,
+            auto: true,
+            workload: staffPick.openWorkload,
+          },
+        });
+      }
+
       const picked = await this.autoAssign.pick({
         tenantId,
         communityId: ticket.communityId,
-        categories: [category.key, category.name],
+        categories,
       });
       this.autoAssign.logOutcome('ticket', ticket.id, picked);
       if (!picked) return null;
@@ -150,6 +178,46 @@ export class TicketService {
       this.logger.warn(`Auto-assignment failed for ticket ${ticket.id}: ${(err as Error).message}`);
       return null;
     }
+  }
+
+  /**
+   * Persist an auto-assignment to a STAFF member, with its timeline row and
+   * domain event. Assignment is Staff XOR Vendor, so the vendor column is
+   * explicitly cleared rather than left to chance.
+   */
+  private async applyAutoAssignment(
+    ticket: { id: string; communityId: string; status: TicketStatus },
+    actor: AuthenticatedUser,
+    input: { assignedStaffId: string; timelineMetadata: Prisma.InputJsonValue },
+  ) {
+    const updated = await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        assignedStaffId: input.assignedStaffId,
+        assignedVendorId: null,
+        assignedAt: new Date(),
+        autoAssigned: true,
+        // assignedById stays null: no person made this call.
+        status: ticket.status === TicketStatus.OPEN ? TicketStatus.ASSIGNED : ticket.status,
+      },
+    });
+    await this.timeline.record({
+      ticketId: ticket.id,
+      type: TicketEventType.ASSIGNED,
+      actorId: actor.id,
+      metadata: input.timelineMetadata,
+    });
+    this.events.publish({
+      name: DomainEventName.TicketAssigned,
+      ...this.events.from(actor, ticket.communityId),
+      entityId: ticket.id,
+      data: {
+        ticketNumber: formatTicketNumber(updated.number),
+        assigneeType: 'staff',
+        auto: true,
+      },
+    });
+    return updated;
   }
 
   async findMany(communityId: string, query: QueryTicketDto): Promise<Paginated<unknown>> {

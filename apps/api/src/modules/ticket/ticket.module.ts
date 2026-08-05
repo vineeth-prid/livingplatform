@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { StaffModule } from '../staff/staff.module';
 import { VendorModule } from '../vendor/vendor.module';
 
 import {
@@ -23,7 +24,7 @@ import { TicketTimelineService } from './ticket-timeline.service';
  * future notification modules to consume.
  */
 @Module({
-  imports: [VendorModule],
+  imports: [VendorModule, StaffModule],
   controllers: [
     TicketController,
     TicketCommentController,
