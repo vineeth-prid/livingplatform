@@ -55,16 +55,26 @@ export class NotificationProcessor extends WorkerHost {
     } catch (err) {
       const durationMs = Date.now() - start;
       const maxAttempts = job.opts.attempts ?? 1;
-      const dead = attempt >= maxAttempts;
+      // A 4xx from a channel is a statement about the MESSAGE, not about the
+      // transport: "no push device registered", "VAPID keys not configured",
+      // "invalid recipient". Retrying those on the shared 1m → 5m → 15m → 1h
+      // backoff cannot change the outcome, and it holds a worker slot for an
+      // hour per message while genuinely retryable work queues behind it.
+      const dead = attempt >= maxAttempts || isPermanent(err);
       await this.tracking.markAttemptFailed(job.data.deliveryId, {
         error: (err as Error).message, retryCount: attempt, durationMs, dead,
       });
       if (dead) await this.deadLetter(job, (err as Error).message);
       this.logger.warn({
-        event: 'notification', status: dead ? 'dead-letter' : 'retry-scheduled',
+        event: 'notification',
+        status: dead ? (isPermanent(err) ? 'failed-permanently' : 'dead-letter') : 'retry-scheduled',
         channel: job.data.channel, deliveryId: job.data.deliveryId, jobId: job.id, attempt, maxAttempts,
         error: (err as Error).message,
       });
+      // Swallowing a permanent failure tells BullMQ the job SUCCEEDED, which is
+      // what stops it being rescheduled. It is already recorded as failed on the
+      // delivery row and copied to the DLQ, so nothing is lost.
+      if (isPermanent(err)) return { messageId: null };
       throw err;
     }
   }
@@ -76,4 +86,18 @@ export class NotificationProcessor extends WorkerHost {
       this.logger.error(`Failed to move job ${job.id} to DLQ: ${(e as Error).message}`);
     }
   }
+}
+
+/**
+ * A 4xx from a channel describes the MESSAGE, not the transport — no push
+ * device registered, VAPID keys unset, invalid recipient. None of those change
+ * on a retry, so they are failed permanently instead of occupying a worker slot
+ * through the full 1m → 5m → 15m → 1h backoff.
+ *
+ * Anything else (network blip, provider 5xx, Redis hiccup) stays retryable.
+ */
+function isPermanent(err: unknown): boolean {
+  const status = (err as { status?: number; statusCode?: number })?.status
+    ?? (err as { statusCode?: number })?.statusCode;
+  return typeof status === 'number' && status >= 400 && status < 500;
 }
