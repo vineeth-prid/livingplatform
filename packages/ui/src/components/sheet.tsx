@@ -18,7 +18,14 @@ type Side = 'left' | 'right' | 'bottom';
 const sidePos: Record<Side, string> = {
   left: 'inset-y-0 left-0 h-full w-[min(90vw,420px)] border-r rounded-r-xl',
   right: 'inset-y-0 right-0 h-full w-[min(90vw,420px)] border-l rounded-l-xl',
-  bottom: 'inset-x-0 bottom-0 max-h-[85vh] w-full border-t rounded-t-2xl',
+  // `dvh`, not `vh`: on mobile browsers `vh` counts the area behind the URL bar,
+  // so 85vh is taller than what the user can actually see and the sheet's
+  // buttons end up off-screen.
+  //
+  // `mx-auto max-w-md` matches the phone frame the resident and workforce apps
+  // render inside — a viewport-width sheet visibly overflows that frame on
+  // tablet and desktop. Bottom sheets are used only by those two apps.
+  bottom: 'inset-x-0 bottom-0 mx-auto w-full max-w-md max-h-[85dvh] border-t rounded-t-2xl',
 };
 
 /** Slide-in panel (drawer). Reuses Radix Dialog for focus trap + a11y. */
@@ -80,7 +87,20 @@ export function SheetContent({
                 <X className="h-4 w-4" />
               </DialogPrimitive.Close>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 pb-6">{children}</div>
+            {/* min-h-0 lets this flex child actually shrink so overflow-y-auto
+                engages — without it a tall form pushes the sheet past its own
+                max height instead of scrolling inside it. The safe-area padding
+                keeps the last control clear of the iOS home indicator. */}
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6"
+              style={
+                side === 'bottom'
+                  ? { paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }
+                  : undefined
+              }
+            >
+              {children}
+            </div>
           </MotionContent>
         </DialogPrimitive.Portal>
       )}

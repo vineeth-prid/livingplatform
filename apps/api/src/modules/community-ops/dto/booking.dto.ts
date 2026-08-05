@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsDate, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
@@ -18,11 +18,14 @@ export class CreateBookingDto {
   @IsString() @MinLength(1)
   residentId!: string;
 
+  // @IsDate is required for the field to survive the global ValidationPipe's
+  // whitelist — without it both were stripped and rejected as "should not
+  // exist", so no resident could ever book an amenity. See visitor.dto.ts.
   @ApiProperty({ type: String, format: 'date-time', description: 'Slot start (absolute)' })
-  @Type(() => Date) startTime!: Date;
+  @Type(() => Date) @IsDate() startTime!: Date;
 
   @ApiProperty({ type: String, format: 'date-time', description: 'Slot end (absolute)' })
-  @Type(() => Date) endTime!: Date;
+  @Type(() => Date) @IsDate() endTime!: Date;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) remarks?: string;
 }

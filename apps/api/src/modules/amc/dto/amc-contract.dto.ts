@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AMCStatus, CoverageType, PaymentFrequency } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean, IsEmail, IsEnum, IsInt, IsNumber, IsOptional, IsString, Length,
+  IsBoolean, IsDate, IsEmail, IsEnum, IsInt, IsNumber, IsOptional, IsString, Length,
   MaxLength, Min, MinLength,
 } from 'class-validator';
 
@@ -30,11 +30,14 @@ export class CreateAMCContractDto {
   @ApiPropertyOptional({ enum: AMCStatus, default: AMCStatus.DRAFT })
   @IsOptional() @IsEnum(AMCStatus) status?: AMCStatus;
 
+  // @IsDate is what keeps these past the global ValidationPipe whitelist —
+  // without it both were rejected as "should not exist" and no AMC contract
+  // could be created at all. See visitor.dto.ts for the full explanation.
   @ApiProperty({ type: String, format: 'date-time' })
-  @Type(() => Date) startDate!: Date;
+  @Type(() => Date) @IsDate() startDate!: Date;
 
   @ApiProperty({ type: String, format: 'date-time' })
-  @Type(() => Date) endDate!: Date;
+  @Type(() => Date) @IsDate() endDate!: Date;
 
   @ApiPropertyOptional({ default: 30 })
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) renewalReminderDays?: number;
@@ -80,7 +83,7 @@ export class UpdateAMCContractDto {
 
 export class RenewAMCContractDto {
   @ApiProperty({ type: String, format: 'date-time', description: 'New contract end date' })
-  @Type(() => Date) endDate!: Date;
+  @Type(() => Date) @IsDate() endDate!: Date;
 
   @ApiPropertyOptional({ type: String, format: 'date-time', description: 'New start (defaults to the old end date)' })
   @IsOptional() @Type(() => Date) startDate?: Date;

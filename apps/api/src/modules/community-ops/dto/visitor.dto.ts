@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { VisitorStatus, VisitorType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsDate, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
@@ -30,8 +30,14 @@ export class CreateVisitorDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) purpose?: string;
 
+  // @IsDate is load-bearing, not decoration: the global ValidationPipe runs
+  // `whitelist: true, forbidNonWhitelisted: true`, and class-validator only
+  // whitelists properties carrying a *validation* decorator. @Type and
+  // @ApiProperty are transformer/swagger decorators, so without @IsDate this
+  // field was stripped and then rejected with "property expectedArrival should
+  // not exist" — making it impossible to invite any visitor.
   @ApiProperty({ type: String, format: 'date-time' })
-  @Type(() => Date) expectedArrival!: Date;
+  @Type(() => Date) @IsDate() expectedArrival!: Date;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }

@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MaintenanceFrequency, TicketPriority } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength,
+  IsBoolean, IsDate, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength,
 } from 'class-validator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
@@ -34,8 +34,12 @@ export class CreateMaintenancePlanDto {
   @IsOptional() @IsString() @MaxLength(120)
   cronExpression?: string;
 
+  // @IsDate keeps this past the global ValidationPipe whitelist — without it
+  // the field was rejected as "should not exist" and no maintenance plan could
+  // be created. See visitor.dto.ts for the full explanation.
   @ApiProperty({ type: String, format: 'date-time' })
   @Type(() => Date)
+  @IsDate()
   startDate!: Date;
 
   @ApiPropertyOptional({ type: String, format: 'date-time' })

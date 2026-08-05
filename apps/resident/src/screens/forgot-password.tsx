@@ -61,6 +61,7 @@ export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose
     <Dialog open={open} onOpenChange={(next) => !next && reset()}>
       <DialogContent
         open={open}
+        className="max-w-md"
         title="Reset your password"
         description={
           step === 'identify'

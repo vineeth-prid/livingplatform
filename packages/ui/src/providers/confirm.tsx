@@ -56,10 +56,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={value}>
       {children}
       <Dialog open={!!pending} onOpenChange={(o) => !o && close(false)}>
+        {/* A confirm is a sentence and two buttons — the 560px default is wider
+            than it ever needs to be, and wider than the phone frame the resident
+            and workforce apps render inside, which is what made the sign-out
+            prompt look broken there. */}
         <DialogContent
           open={!!pending}
           title={pending?.title}
           description={pending?.description}
+          className="max-w-md"
         >
           <DialogFooter>
             <Button variant="secondary" onClick={() => close(false)}>
