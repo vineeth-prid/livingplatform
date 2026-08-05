@@ -79,6 +79,20 @@ export class GateDecisionDto {
 }
 
 export class QueryGateEntryDto extends ListQueryDto {
+  /**
+   * MUST live on the DTO, not as a separate `@Query('communityId')` parameter.
+   *
+   * The global ValidationPipe runs `forbidNonWhitelisted: true` against the
+   * whole query object, so any parameter absent from this class is rejected
+   * outright — `GET /gate/deliveries?communityId=…` 400'd with "property
+   * communityId should not exist" on every single call, leaving the gate
+   * register permanently empty while creation quietly succeeded.
+   *
+   * Optional here because `/gate/deliveries/mine` is self-scoped and sends none.
+   */
+  @ApiPropertyOptional({ description: 'Community to list entries for' })
+  @IsOptional() @IsString() communityId?: string;
+
   @ApiPropertyOptional({ enum: GateEntryType })
   @IsOptional() @IsEnum(GateEntryType) entryType?: GateEntryType;
 
@@ -100,6 +114,11 @@ export class QueryGateEntryDto extends ListQueryDto {
   @ApiPropertyOptional({ description: 'Filter by delivery brand' })
   @IsOptional() @IsString() @MaxLength(120) vendorName?: string;
 
+  /** The portal's Delivery history offers this filter; without it the whole
+   *  request was rejected the moment an admin used the Type dropdown. */
+  @ApiPropertyOptional({ description: 'Filter by delivery type (FOOD, COURIER, …)' })
+  @IsOptional() @IsString() @MaxLength(60) deliveryType?: string;
+
   @ApiPropertyOptional({ type: String, format: 'date-time' })
   @IsOptional() @Type(() => Date) dateFrom?: Date;
 
@@ -116,6 +135,10 @@ export class QueryGateEntryDto extends ListQueryDto {
 }
 
 export class GateStatisticsQueryDto {
+  /** Same reason as QueryGateEntryDto — see the note there. */
+  @ApiPropertyOptional({ description: 'Community to report on' })
+  @IsOptional() @IsString() communityId?: string;
+
   @ApiPropertyOptional({
     description: 'Window in days for the trend and vendor/peak breakdowns',
     default: 30,

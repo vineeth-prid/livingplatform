@@ -501,6 +501,9 @@ export class GateEntryService {
       ...(query.vendorName
         ? { vendorName: { equals: query.vendorName, mode: 'insensitive' } }
         : {}),
+      ...(query.deliveryType
+        ? { deliveryType: { equals: query.deliveryType, mode: 'insensitive' } }
+        : {}),
       ...(query.todayOnly ? { createdAt: { gte: startOfToday } } : {}),
       ...(!query.todayOnly && (query.dateFrom || query.dateTo)
         ? {

@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, Param, Patch, Post, Query,
+  BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query,
 } from '@nestjs/common';
 import { GateEntryType } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -60,12 +60,14 @@ export class GateDeliveryController {
   @Get()
   @RequirePermissions(PERMISSIONS.GATE_ENTRY_VIEW)
   @ApiOperation({ summary: 'The gate register (filter, search, paginate)' })
-  list(
-    @Query('communityId') communityId: string,
-    @Query() query: QueryGateEntryDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.entries.findMany(communityId, query, user);
+  list(@Query() query: QueryGateEntryDto, @CurrentUser() user: AuthenticatedUser) {
+    // Read from the DTO, not a second @Query('communityId') parameter: the
+    // ValidationPipe whitelists the WHOLE query object, so anything not
+    // declared on the DTO is rejected. One source of truth avoids that trap.
+    if (!query.communityId) {
+      throw new BadRequestException('communityId is required');
+    }
+    return this.entries.findMany(query.communityId, query, user);
   }
 
   /**
@@ -104,11 +106,11 @@ export class GateDeliveryController {
   @Get('statistics')
   @RequirePermissions(PERMISSIONS.GATE_ANALYTICS_READ)
   @ApiOperation({ summary: 'Delivery analytics: volumes, approval time, top vendors, peak hours' })
-  statistics(
-    @Query('communityId') communityId: string,
-    @Query() query: GateStatisticsQueryDto,
-  ) {
-    return this.analytics.statistics(communityId, query.days ?? 30);
+  statistics(@Query() query: GateStatisticsQueryDto) {
+    if (!query.communityId) {
+      throw new BadRequestException('communityId is required');
+    }
+    return this.analytics.statistics(query.communityId, query.days ?? 30);
   }
 
   @Get(':id')
