@@ -86,6 +86,12 @@ function AmenityDrawer({ communityId, amenity, open, onClose, onSaved }: {
   const init = hoursOf(amenity);
   const [openTime, setOpenTime] = useState(init.open);
   const [closeTime, setCloseTime] = useState(init.close);
+  const [maxMinutes, setMaxMinutes] = useState(
+    amenity?.maxBookingMinutes != null ? String(amenity.maxBookingMinutes) : '',
+  );
+  const [windowDays, setWindowDays] = useState(
+    amenity?.bookingWindowDays != null ? String(amenity.bookingWindowDays) : '',
+  );
 
   const save = useMutation({
     mutationFn: (body: Record<string, unknown>) => editing ? living.amenities.update(amenity!.id, body) : living.amenities.create(communityId, body),
@@ -100,6 +106,10 @@ function AmenityDrawer({ communityId, amenity, open, onClose, onSaved }: {
       capacity: capacity ? Number(capacity) : undefined, description: description.trim() || undefined,
       isBookable, status,
       operatingHours: openTime && closeTime ? { openingTime: openTime, closingTime: closeTime } : undefined,
+      // Blank means "no limit" / "server default" — send undefined rather than 0,
+      // which the API would read as a real (impossible) ceiling.
+      maxBookingMinutes: maxMinutes ? Number(maxMinutes) : undefined,
+      bookingWindowDays: windowDays ? Number(windowDays) : undefined,
     });
   };
 
@@ -118,15 +128,37 @@ function AmenityDrawer({ communityId, amenity, open, onClose, onSaved }: {
             </FormGrid>
           </FormSection>
 
-          <FormSection title="Booking" description="Bookable amenities appear in the resident booking flow. Booking window and slot length are configured server-side.">
+          <FormSection
+            title="Booking"
+            description="Bookable amenities appear in the resident booking flow. Residents see these hours and limits before they pick a slot."
+          >
             <FormGrid>
               <FullWidth><CheckboxField label="Bookable" checked={isBookable} onChange={setIsBookable} hint="Allow residents to reserve slots." /></FullWidth>
               <Input label="Opens at" type="time" value={openTime} onChange={(e) => setOpenTime(e.target.value)} />
               <Input label="Closes at" type="time" value={closeTime} onChange={(e) => setCloseTime(e.target.value)} />
+              <Input
+                label="Max booking length (minutes)"
+                type="number"
+                min={15}
+                value={maxMinutes}
+                onChange={(e) => setMaxMinutes(e.target.value)}
+                placeholder="No limit"
+                hint="Longest single booking one resident may hold."
+              />
+              <Input
+                label="Book up to (days ahead)"
+                type="number"
+                min={1}
+                value={windowDays}
+                onChange={(e) => setWindowDays(e.target.value)}
+                placeholder="30"
+              />
             </FormGrid>
           </FormSection>
 
-          <div className="flex items-center gap-2 text-xs text-subtle"><CalendarCheck className="h-4 w-4" /> Booking window {amenity?.bookingWindowDays ?? 30} days · slots {amenity?.slotDurationMinutes ?? 60} min</div>
+          <div className="flex items-center gap-2 text-xs text-subtle">
+            <CalendarCheck className="h-4 w-4" /> Slots {amenity?.slotDurationMinutes ?? 60} min
+          </div>
 
           <FormFooter submitLabel={editing ? 'Save changes' : 'Create amenity'} submitting={save.isPending} onSubmit={submit} onCancel={onClose} />
         </div>

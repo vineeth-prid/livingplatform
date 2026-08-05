@@ -68,6 +68,8 @@ export interface Amenity extends AuditFields {
   sortOrder: number; status: HierarchyStatus;
   /** Booking configuration (Sprint 10) — read by the Amenity Booking engine. */
   bookingWindowDays?: number; slotDurationMinutes?: number;
+  /** Longest single booking one resident may hold. Null/absent = no limit. */
+  maxBookingMinutes?: number | null;
 }
 export interface CommunityDocument extends AuditFields {
   id: ID; communityId: ID; title: string; description?: string | null;

@@ -12,7 +12,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
-  assertFutureWithinWindow, assertValidTimeRange, assertWithinOperatingHours, type OperatingHours,
+  assertFutureWithinWindow, assertValidTimeRange, assertWithinMaxDuration,
+  assertWithinOperatingHours, type OperatingHours,
 } from './booking.util';
 import { CancelBookingDto, CreateBookingDto, QueryBookingDto } from './dto/booking.dto';
 import { assertResidentOwnership, myResidentIds } from './resident-access';
@@ -37,7 +38,10 @@ export class BookingService {
 
     const amenity = await this.prisma.amenity.findFirst({
       where: { id: dto.amenityId, communityId: dto.communityId, deletedAt: null },
-      select: { id: true, isBookable: true, status: true, capacity: true, operatingHours: true, bookingWindowDays: true },
+      select: {
+        id: true, isBookable: true, status: true, capacity: true, operatingHours: true,
+        bookingWindowDays: true, maxBookingMinutes: true,
+      },
     });
     if (!amenity) throw new BadRequestException('Amenity does not belong to this community');
     if (amenity.status !== 'ACTIVE' || !amenity.isBookable) {
@@ -47,6 +51,7 @@ export class BookingService {
     assertValidTimeRange(dto.startTime, dto.endTime);
     assertFutureWithinWindow(dto.startTime, amenity.bookingWindowDays, new Date());
     assertWithinOperatingHours(dto.startTime, dto.endTime, amenity.operatingHours as unknown as OperatingHours | null);
+    assertWithinMaxDuration(dto.startTime, dto.endTime, amenity.maxBookingMinutes);
 
     // Capacity: how many active bookings already overlap this slot?
     const overlapping = await this.prisma.amenityBooking.count({

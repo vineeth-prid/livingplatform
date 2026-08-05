@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -58,6 +59,18 @@ export class CreateAmenityDto {
   @ApiPropertyOptional({ enum: HierarchyStatus })
   @IsOptional() @IsEnum(HierarchyStatus)
   status?: HierarchyStatus;
+
+  /**
+   * Longest single booking a resident may make. Omit (or null) for no limit,
+   * which is what every existing amenity does today.
+   */
+  @ApiPropertyOptional({ example: 120, description: 'Max booking length in minutes' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(15) @Max(1440)
+  maxBookingMinutes?: number;
+
+  @ApiPropertyOptional({ example: 30, description: 'How far ahead a resident may book' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(365)
+  bookingWindowDays?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

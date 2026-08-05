@@ -899,6 +899,10 @@ model Amenity {
   // Booking configuration (Sprint 10 — read by the Amenity Booking engine).
   bookingWindowDays   Int @default(30)
   slotDurationMinutes Int @default(60)
+  /// Longest single booking a resident may make, in minutes. Null = no limit.
+  /// Distinct from slotDurationMinutes, which is the granularity offered, not a
+  /// ceiling — without this one resident could reserve a facility all day.
+  maxBookingMinutes   Int?
 
   bookings AmenityBooking[]
 
