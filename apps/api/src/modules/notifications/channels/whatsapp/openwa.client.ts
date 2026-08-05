@@ -107,8 +107,8 @@ export class OpenWaClient {
 
   // ── Messaging ──────────────────────────────────────────────────────────────
 
-  async sendText(to: string, text: string, previewUrl = false): Promise<{ id: string | null; raw: unknown }> {
-    const res = await this.send('send-text', { chatId: this.toChatId(to), text, previewUrl });
+  async sendText(to: string, text: string, _previewUrl = false): Promise<{ id: string | null; raw: unknown }> {
+    const res = await this.send('send-text', { chatId: this.toChatId(to), text });
     return res;
   }
 
