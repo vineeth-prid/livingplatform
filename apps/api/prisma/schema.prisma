@@ -2583,6 +2583,10 @@ model ServicePackage {
   listPrice     Decimal? @db.Decimal(14, 2)
   /// How long the entitlements stay redeemable after purchase.
   durationDays  Int      @default(90)
+  /// Days after payment before the first visit can be booked. A bundle is a
+  /// scheduling commitment rather than an on-demand call-out, so operations
+  /// need lead time. 0 means bookable immediately.
+  activationDelayDays Int @default(2)
   /// Property types this package is offered to (empty = every type).
   propertyTypes String[]
 

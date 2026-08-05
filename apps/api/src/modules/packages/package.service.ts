@@ -103,19 +103,43 @@ export class PackageService {
   async listForResident(communityId: string, propertyType?: string | null): Promise<PackageView[]> {
     await this.access.assert(communityId);
     const rows = await this.prisma.servicePackage.findMany({
+      // NOTE: `propertyType` must be resolved from the CALLER's own unit by the
+      // controller, never taken from a query parameter alone. It was optional
+      // and the resident app sent nothing, so the filter was skipped entirely
+      // and a 1BHK-only package appeared in every resident's app.
       where: {
         communityId,
         deletedAt: null,
         status: ServicePackageStatus.ACTIVE,
+        // The filter is ALWAYS applied. Skipping it when the type is unknown is
+        // what let a 1BHK-only bundle reach every resident: an unresolvable
+        // property type must fall back to "unrestricted packages only", never
+        // to "everything".
         ...(propertyType
           ? { OR: [{ propertyTypes: { isEmpty: true } }, { propertyTypes: { has: propertyType } }] }
-          : {}),
+          : { propertyTypes: { isEmpty: true } }),
       },
       include: PACKAGE_INCLUDE,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
     // A package whose every service has since been deactivated is not bookable.
     return rows.filter((r) => r.items.some((i) => i.service.isActive)).map(toView);
+  }
+
+  /**
+   * The property type of the caller's own unit, e.g. "2BHK".
+   *
+   * Derived server-side rather than trusted from a query parameter: a resident
+   * omitting it would otherwise see every package in the community, which is
+   * exactly how a 1BHK-only bundle ended up in everyone's app.
+   */
+  async propertyTypeForResident(actor: AuthenticatedUser): Promise<string | null> {
+    const assignment = await this.prisma.residentUnit.findFirst({
+      where: { resident: { userId: actor.id, deletedAt: null } },
+      orderBy: { createdAt: 'asc' },
+      select: { unit: { select: { type: true } } },
+    });
+    return assignment?.unit?.type?.trim() || null;
   }
 
   async findOne(communityId: string, id: string): Promise<PackageView> {

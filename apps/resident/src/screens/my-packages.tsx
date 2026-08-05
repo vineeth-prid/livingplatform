@@ -86,7 +86,9 @@ function PurchaseCard({
     onSettled: () => setRedeeming(null),
   });
 
-  const spendable = purchase.status === 'ACTIVE';
+  // Paid for, but the lead time has not elapsed. Offering a Book button that
+  // the API then refuses is worse than saying plainly when it opens.
+  const spendable = purchase.status === 'ACTIVE' && !purchase.bookableFrom;
 
   return (
     <Card variant="elevated">
@@ -112,6 +114,14 @@ function PurchaseCard({
       {purchase.status === 'PENDING' && (
         <p className="mb-3 rounded-control bg-warning-bg px-3 py-2 text-xs text-warning-fg">
           Awaiting payment — your visits unlock once the payment settles.
+        </p>
+      )}
+
+      {purchase.bookableFrom && (
+        <p className="mb-3 flex items-center gap-1.5 rounded-control bg-sunken px-3 py-2 text-xs text-muted">
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+          Bookable from {new Date(purchase.bookableFrom).toLocaleDateString()} — we schedule your
+          first visit a couple of days ahead.
         </p>
       )}
 

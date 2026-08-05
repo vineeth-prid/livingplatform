@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Package, Sparkles, Wrench } from 'lucide-react';
+import {
+  AirVent, Bug, Car, Check, Droplets, Hammer, Leaf, Package, PaintRoller, ShieldCheck, Shirt,
+  Sparkles, Wrench, Zap, type LucideIcon,
+} from 'lucide-react';
 import type { ServicePackage } from '@living/living-sdk';
 import type { Service } from '@living/types';
 import { useCommunityFeatures } from '@living/hooks';
@@ -15,6 +18,53 @@ import { ScreenHeader } from '../shell';
 
 const inr = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
+/**
+ * An icon that means something for the service in front of you.
+ *
+ * Matched on the service key/name because the catalog is admin-managed free
+ * text — there is no enum to switch on. Falls back to a neutral sparkle rather
+ * than a spanner, which is what made every service look like a plumbing job.
+ */
+const ICON_RULES: [RegExp, LucideIcon][] = [
+  [/clean|housekeep|maid|sweep/i, Sparkles],
+  [/plumb|tap|leak|pipe|water/i, Droplets],
+  [/electric|wiring|light|fan|power/i, Zap],
+  [/pest|termite|cockroach|mosquito/i, Bug],
+  [/paint/i, PaintRoller],
+  [/carpent|furnitur|wood/i, Hammer],
+  [/car|vehicle|wash|park/i, Car],
+  [/garden|plant|landscap/i, Leaf],
+  [/appliance|ac |air.?con|fridge|geyser/i, AirVent],
+  [/security|guard|cctv/i, ShieldCheck],
+  [/laundry|iron|dryclean/i, Shirt],
+];
+
+function serviceIcon(service: Service): LucideIcon {
+  const haystack = `${service.key} ${service.name}`;
+  return ICON_RULES.find(([pattern]) => pattern.test(haystack))?.[1] ?? Sparkles;
+}
+
+/**
+ * One consistent subtitle for every service tile: duration first (every service
+ * has one), price appended when the community has set a list price.
+ */
+function serviceMeta(service: Service): string {
+  const parts: string[] = [];
+  if (service.estimatedDurationMinutes != null) {
+    parts.push(formatDuration(service.estimatedDurationMinutes));
+  }
+  if (service.basePrice != null) parts.push(inr(Number(service.basePrice)));
+  return parts.join(' · ') || 'Tap to request';
+}
+
+/** "1h 30m" / "45 min" — "~90 min" stops being readable past an hour. */
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
 
 /**
  * Browse and book. Packages come FIRST — a bundle is the better deal and the
@@ -82,6 +132,10 @@ export function ServicesScreen() {
                   className="rounded-card text-left focus-visible:outline-none focus-visible:shadow-ring"
                 >
                   <Card variant="elevated" className="flex h-full flex-col gap-2 transition-shadow active:shadow-md">
+                    {/* The icon follows the service, not a single hardcoded
+                        spanner — every service looking like a plumbing job told
+                        a resident nothing and actively misled on cleaning,
+                        pest control and the rest. */}
                     <span
                       className="flex h-10 w-10 items-center justify-center rounded-full text-brand"
                       style={
@@ -93,17 +147,19 @@ export function ServicesScreen() {
                           : undefined
                       }
                     >
-                      <Wrench className="h-5 w-5" />
+                      {(() => {
+                        const Icon = serviceIcon(s);
+                        return <Icon className="h-5 w-5" />;
+                      })()}
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-strong">{s.name}</p>
-                      {s.basePrice != null ? (
-                        <p className="text-xs text-muted">{inr(Number(s.basePrice))}</p>
-                      ) : (
-                        s.estimatedDurationMinutes != null && (
-                          <p className="text-xs text-subtle">~{s.estimatedDurationMinutes} min</p>
-                        )
-                      )}
+                      {/* Duration AND price, in that order, on every card.
+                          Showing price only when set and duration only when it
+                          was not meant one tile read "₹500" while its neighbour
+                          read "~45 min" — two different questions answered at
+                          random. Duration is the one every service has. */}
+                      <p className="text-xs text-muted">{serviceMeta(s)}</p>
                     </div>
                   </Card>
                 </button>

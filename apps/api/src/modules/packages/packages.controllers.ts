@@ -57,11 +57,16 @@ export class PackageController {
   @ApiOperation({
     summary: 'Active packages a resident may buy, filtered to their property type',
   })
-  available(
+  async available(
     @Param('communityId') communityId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('propertyType') propertyType?: string,
   ) {
-    return this.packages.listForResident(communityId, propertyType);
+    // The caller's OWN unit type wins. The query parameter is only a preview
+    // lever for an admin browsing what a given property type would see — a
+    // resident cannot widen their own view by omitting or forging it.
+    const own = await this.packages.propertyTypeForResident(user);
+    return this.packages.listForResident(communityId, own ?? propertyType ?? null);
   }
 
   @Get(':id')

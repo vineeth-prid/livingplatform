@@ -63,6 +63,8 @@ export interface PurchaseView {
   validFrom: Date | null;
   validUntil: Date | null;
   daysRemaining: number | null;
+  /** Set while the activation lead time is still running; null once bookable. */
+  bookableFrom: Date | null;
   entitlements: EntitlementView[];
   createdAt: Date;
 }
@@ -161,22 +163,32 @@ export class PackagePurchaseService {
     try {
       const purchase = await this.prisma.servicePackagePurchase.findFirst({
         where: { paymentId: event.entityId, status: PackagePurchaseStatus.PENDING, deletedAt: null },
-        include: { package: { select: { durationDays: true } } },
+        include: { package: { select: { durationDays: true, activationDelayDays: true } } },
       });
       if (!purchase) return;
 
       const now = new Date();
-      const validUntil = new Date(now.getTime() + purchase.package.durationDays * 86_400_000);
+      // The window runs from the ACTIVATION date, not the purchase date: a
+      // package with a two-day lead time would otherwise silently lose two days
+      // of the validity the resident paid for.
+      const validFrom = new Date(
+        now.getTime() + purchase.package.activationDelayDays * 86_400_000,
+      );
+      const validUntil = new Date(
+        validFrom.getTime() + purchase.package.durationDays * 86_400_000,
+      );
       await this.prisma.servicePackagePurchase.update({
         where: { id: purchase.id },
         data: {
           status: PackagePurchaseStatus.ACTIVE,
           purchasedAt: now,
-          validFrom: now,
+          validFrom,
           validUntil,
         },
       });
-      this.logger.log(`Package purchase ${purchase.id} activated until ${validUntil.toISOString()}`);
+      this.logger.log(
+        `Package purchase ${purchase.id} activated — bookable ${validFrom.toISOString()} → ${validUntil.toISOString()}`,
+      );
     } catch (err) {
       this.logger.error(
         `Failed to activate a package purchase for payment ${event.entityId}`,
@@ -207,6 +219,14 @@ export class PackagePurchaseService {
         purchase.status === PackagePurchaseStatus.PENDING
           ? 'This package has not been paid for yet'
           : `This package is ${purchase.status.toLowerCase()}`,
+      );
+    }
+    // The window is a range, not just an expiry. A package bought today with a
+    // two-day lead time is ACTIVE and paid for, but not yet bookable — saying
+    // exactly when it opens is the difference between a rule and a dead end.
+    if (purchase.validFrom && purchase.validFrom.getTime() > Date.now()) {
+      throw new BadRequestException(
+        `This package can be booked from ${purchase.validFrom.toDateString()}`,
       );
     }
     if (purchase.validUntil && purchase.validUntil.getTime() < Date.now()) {
@@ -363,6 +383,9 @@ export class PackagePurchaseService {
       daysRemaining: row.validUntil
         ? Math.max(0, Math.ceil((row.validUntil.getTime() - Date.now()) / 86_400_000))
         : null,
+      // Paid for, but the lead time has not elapsed. The app needs to say
+      // "bookable from the 8th" rather than offering a Book button that fails.
+      bookableFrom: row.validFrom && row.validFrom.getTime() > Date.now() ? row.validFrom : null,
       entitlements: await this.entitlements(row.id, row.packageId),
       createdAt: row.createdAt,
     };

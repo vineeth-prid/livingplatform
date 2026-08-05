@@ -65,6 +65,8 @@ export interface PackagePurchase {
   validFrom: string | null;
   validUntil: string | null;
   daysRemaining: number | null;
+  /** Set while the activation lead time is still running; null once bookable. */
+  bookableFrom: string | null;
   entitlements: PackageEntitlement[];
   createdAt: string;
 }
