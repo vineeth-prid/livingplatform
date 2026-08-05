@@ -90,6 +90,20 @@ export class VendorService {
     return vendor;
   }
 
+  /**
+   * The caller's OWN vendor record(s). Self-service and permission-free for the
+   * same reason as `/staff/me`: the VENDOR role holds no `vendor:read`, yet a
+   * vendor must be able to resolve their own profile to see their assigned
+   * work. Scoped by `userId = caller`.
+   */
+  async findMine(user: AuthenticatedUser) {
+    const vendors = await this.prisma.vendor.findMany({
+      where: { userId: user.id, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { items: vendors };
+  }
+
   async findMany(query: QueryVendorDto): Promise<Paginated<unknown>> {
     const where: Prisma.VendorWhereInput = {
       deletedAt: null,

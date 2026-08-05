@@ -41,6 +41,13 @@ export class VendorController {
     return this.vendors.create(dto, user);
   }
 
+  // Declared BEFORE `:id` so "me" is not swallowed by the param route.
+  @Get('me')
+  @ApiOperation({ summary: 'My own vendor profile(s) — no permission required' })
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.vendors.findMine(user);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.VENDOR_READ)
   findOne(@Param('id') id: string) {

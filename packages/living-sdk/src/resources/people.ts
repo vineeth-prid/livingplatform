@@ -62,6 +62,15 @@ export class PeopleResource {
   listVendors(params?: Query): Promise<Paginated<Vendor>> {
     return this.http.get('/vendors', params);
   }
+
+  /**
+   * The signed-in vendor's OWN record(s). Needs no `vendor:read` — which is why
+   * it exists: a vendor holds none, so scanning the vendor list to find
+   * themselves 403s and leaves the Workforce app unable to identify them.
+   */
+  myVendor(): Promise<{ items: Vendor[] }> {
+    return this.http.get('/vendors/me');
+  }
   createVendor(input: Body): Promise<Vendor> {
     return this.http.post('/vendors', input);
   }
@@ -76,6 +85,16 @@ export class PeopleResource {
   }
 
   // ── Staff (community-scoped) ──
+
+  /**
+   * The signed-in staff member's OWN record(s). Needs no `staff:read` — the
+   * STAFF role holds none, so scanning the community's staff list to find
+   * themselves 403s and the Workforce app cannot identify them.
+   */
+  myStaff(): Promise<{ items: Staff[] }> {
+    return this.http.get('/staff/me');
+  }
+
   listStaff(communityId: string, params?: Query): Promise<Paginated<Staff>> {
     return this.http.get(`/communities/${communityId}/staff`, params);
   }

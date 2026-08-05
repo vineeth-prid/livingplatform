@@ -45,6 +45,13 @@ export class StaffController {
     return this.staff.create(communityId, dto, user);
   }
 
+  // Declared BEFORE `staff/:id` so "me" is not swallowed by the param route.
+  @Get('staff/me')
+  @ApiOperation({ summary: 'My own staff profile(s) — no permission required' })
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.staff.findMine(user);
+  }
+
   @Get('staff/:id')
   @RequirePermissions(PERMISSIONS.STAFF_READ)
   findOne(@Param('id') id: string) {

@@ -84,6 +84,23 @@ export class StaffService {
     return this.present(staff);
   }
 
+  /**
+   * The caller's OWN staff record(s).
+   *
+   * Self-service, so it carries no RBAC permission — the STAFF role holds no
+   * `staff:read`, and a staff member must still be able to discover which
+   * profile and community they belong to in order to see their own work. Scoped
+   * entirely by `userId = caller`, so there is nothing to leak. Mirrors
+   * `/residents/me`.
+   */
+  async findMine(user: AuthenticatedUser) {
+    const staff = await this.prisma.staff.findMany({
+      where: { userId: user.id, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { items: staff.map((s) => this.present(s)) };
+  }
+
   async findMany(communityId: string, query: QueryStaffDto): Promise<Paginated<unknown>> {
     await this.access.assert(communityId);
     const where: Prisma.StaffWhereInput = {

@@ -10,16 +10,22 @@ import { living } from './lib/living';
  * their staff/vendor profile id — because jobs are assigned to a Staff or Vendor
  * (assignedStaffId / assignedVendorId), never directly to a User.
  *
- * There is no "my assignments" endpoint and no `assignedToMe` list filter, so we
- * resolve identity by matching the linked `userId` on the community's staff and
- * the tenant's vendors. If nothing matches (account not linked, or no read
- * grant), `isLinked` is false and the UI shows a "profile not linked" state
- * instead of silently showing an empty queue.
+ * Identity comes from the self-scoped `/staff/me` and `/vendors/me` endpoints.
  *
- * ponytail: O(n) scan of staff/vendor lists (limit 200) + single active
- * community. Replace with a `/me/assignments` endpoint (or an `assignedToMe`
- * filter) and multi-community support when the backend grows them — this
- * provider is the only thing that changes.
+ * This used to scan the community's staff list and the tenant's vendor list for
+ * a matching `userId` — but those lists require `staff:read` / `vendor:read`,
+ * which the STAFF and VENDOR roles deliberately do NOT hold. Every request
+ * 403'd, nothing matched, and every worker was met with "we couldn't match your
+ * login to a staff or vendor profile" no matter how correctly their account was
+ * set up. The `me` endpoints need no permission because they are scoped to the
+ * caller's own user id.
+ *
+ * The community is taken from the staff record itself where possible, so a
+ * staff member in a community that is not the tenant's first is resolved
+ * correctly rather than silently mismatched.
+ *
+ * ponytail: still no "my assignments" endpoint, so jobs are filtered client-side
+ * by staffId/vendorId. Vendors remain tenant-scoped (they span communities).
  */
 interface WorkerValue {
   community: Community | null;
@@ -44,43 +50,46 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
     queryFn: () => living.community.list({ limit: 20, sortDir: 'asc', sortBy: 'name' }),
     enabled: isAuthenticated,
   });
-  const community = useMemo(() => {
-    const items = communityQ.data?.items ?? [];
-    return items.find((c) => c.status === 'ACTIVE') ?? items[0] ?? null;
-  }, [communityQ.data]);
-  const communityId = community?.id ?? null;
 
   const [staffQ, vendorQ] = useQueries({
     queries: [
       {
-        queryKey: ['my', 'staff', communityId],
-        queryFn: () => living.people.listStaff(communityId!, { limit: 200 }),
-        enabled: !!communityId && !!uid,
+        queryKey: ['my', 'staff'],
+        queryFn: () => living.people.myStaff(),
+        enabled: isAuthenticated && !!uid,
       },
       {
         queryKey: ['my', 'vendor'],
-        queryFn: () => living.people.listVendors({ limit: 200 }),
+        queryFn: () => living.people.myVendor(),
         enabled: isAuthenticated && !!uid,
       },
     ],
   });
 
   const value = useMemo<WorkerValue>(() => {
-    const staff = (staffQ.data?.items ?? []).find((s) => s.userId === uid) ?? null;
-    const vendor = (vendorQ.data?.items ?? []).find((v) => v.userId === uid) ?? null;
-    const isLoading =
-      communityQ.isLoading || staffQ.isLoading || vendorQ.isLoading;
+    const staff = staffQ.data?.items?.[0] ?? null;
+    const vendor = vendorQ.data?.items?.[0] ?? null;
+    const communities = communityQ.data?.items ?? [];
+
+    // Prefer the staff member's OWN community; fall back to the tenant's first
+    // active one for vendors, who span communities and pin none.
+    const community =
+      (staff && communities.find((c) => c.id === staff.communityId)) ??
+      communities.find((c) => c.status === 'ACTIVE') ??
+      communities[0] ??
+      null;
+
     return {
       community,
-      communityId,
+      communityId: community?.id ?? null,
       staff,
       vendor,
       staffId: staff?.id ?? null,
       vendorId: vendor?.id ?? null,
       isLinked: !!staff || !!vendor,
-      isLoading,
+      isLoading: communityQ.isLoading || staffQ.isLoading || vendorQ.isLoading,
     };
-  }, [community, communityId, staffQ.data, vendorQ.data, staffQ.isLoading, vendorQ.isLoading, communityQ.isLoading, uid]);
+  }, [communityQ.data, communityQ.isLoading, staffQ.data, staffQ.isLoading, vendorQ.data, vendorQ.isLoading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
