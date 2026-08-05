@@ -1,6 +1,6 @@
 import { Link, useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Send } from 'lucide-react';
 import { useState } from 'react';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
@@ -24,8 +24,23 @@ interface RequestDetail {
   status: string;
   ticketNumber?: string;
   requestNumber?: string;
+  dueDate?: string | null;
   comments?: TicketCommentLite[];
   timeline?: TimelineEvent[];
+}
+
+/** "Due tomorrow" / "Due 12 Aug" / "Overdue by 3 days" — a date alone makes the
+ *  resident do the arithmetic, and overdue is the part they care about. */
+export function dueLabel(due: string): { text: string; overdue: boolean } {
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((midnight(new Date(due)) - midnight(new Date())) / 86_400_000);
+  if (days < 0) return { text: `Overdue by ${-days} day${days === -1 ? '' : 's'}`, overdue: true };
+  if (days === 0) return { text: 'Due today', overdue: false };
+  if (days === 1) return { text: 'Due tomorrow', overdue: false };
+  return {
+    text: `Due ${new Date(due).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`,
+    overdue: false,
+  };
 }
 
 /** One detail screen for both a resident's ticket and service request. */
@@ -57,9 +72,22 @@ export function RequestDetailScreen() {
             <div className="flex items-center gap-2">
               <h1 className="font-display text-h2 leading-tight tracking-tight text-strong">{data.title}</h1>
             </div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusPill status={data.status} size="md" />
               <span className="font-mono text-xs text-subtle">{data.ticketNumber ?? data.requestNumber}</span>
+              {/* The date the admin committed to. Staff have always seen it;
+                  the resident who raised the request had no idea when to
+                  expect anything. */}
+              {data.dueDate && (
+                <span
+                  className={`inline-flex items-center gap-1 text-xs ${
+                    dueLabel(data.dueDate).overdue ? 'text-danger-fg' : 'text-muted'
+                  }`}
+                >
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  {dueLabel(data.dueDate).text}
+                </span>
+              )}
             </div>
           </div>
 
