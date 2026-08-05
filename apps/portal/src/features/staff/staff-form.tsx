@@ -5,6 +5,7 @@ import { living } from '../../lib/living';
 import { FormDrawer, type FieldDef } from '../master-data';
 import { opt, PERSON_STATUS } from '../master-data/options';
 import { CatalogSelect } from '../shared/catalog-select';
+import { TicketCategoryMultiSelect } from '../shared/ticket-category-multi-select';
 
 const fields: FieldDef[] = [
   { name: 'firstName', label: 'First name', required: true, half: true },
@@ -26,6 +27,17 @@ const fields: FieldDef[] = [
     ),
   },
   { name: 'department', label: 'Department', half: true },
+  {
+    // Moved here from the vendor form. On a vendor it duplicated the service
+    // list; on a staff member it is what routes a request to the right person.
+    name: 'categories', label: 'Categories handled', type: 'custom',
+    render: (value, set) => (
+      <TicketCategoryMultiSelect
+        values={value ? value.split(',').filter(Boolean) : []}
+        onChange={(vals: string[]) => set(vals.join(','))}
+      />
+    ),
+  },
   { name: 'phone', label: 'Phone (login username)', type: 'tel', required: true, half: true },
   { name: 'email', label: 'Email', type: 'email', half: true },
   { name: 'status', label: 'Status', type: 'select', options: opt(PERSON_STATUS), half: true },

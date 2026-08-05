@@ -28,11 +28,26 @@ export class CreateVendorDto {
   @ApiPropertyOptional({ example: 'BrightSpark Electricals' })
   @IsOptional() @IsString() @MaxLength(160) companyName?: string;
 
-  @ApiProperty({ example: 'ELECTRICAL', description: 'Free string — managed via catalog options' })
-  @IsString() @MinLength(1) @MaxLength(60)
-  category!: string;
+  /**
+   * Kept for backward compatibility and reporting, but no longer collected in
+   * the vendor form: the primary category duplicated `serviceCategories` and
+   * bound to the same option list, which is why every field showed identical
+   * choices. When omitted it is derived from the first service the vendor
+   * covers. Speciality now lives on STAFF, where auto-assignment needs it.
+   */
+  @ApiPropertyOptional({
+    example: 'ELECTRICAL',
+    description: 'Derived from the first entry of `serviceCategories` when omitted',
+  })
+  @IsOptional() @IsString() @MaxLength(60)
+  category?: string;
 
-  @ApiPropertyOptional({ type: [String], description: 'Additional categories this vendor covers' })
+  /**
+   * The SERVICE KEYS this vendor delivers, taken from the community's active
+   * services catalog — not a separate free-text list. This is what lets a
+   * service request be auto-assigned to a vendor who actually offers it.
+   */
+  @ApiPropertyOptional({ type: [String], description: 'Service keys this vendor delivers' })
   @IsOptional() @IsArray() @IsString({ each: true })
   serviceCategories?: string[];
 

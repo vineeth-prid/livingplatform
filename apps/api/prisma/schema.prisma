@@ -1170,6 +1170,10 @@ model Staff {
   // Free string (admin-managed via CatalogOption), not a hard enum.
   role       String
   department String?
+  /// Ticket-category KEYS this staff member handles (e.g. PLUMBING, ELECTRICAL).
+  /// Drives auto-assignment: a request in a matching category goes to them.
+  /// Empty means "no speciality" — they are only ever assigned manually.
+  categories String[]
   phone      String
   email      String?
   photoKey   String?

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { PersonStatus } from '@prisma/client';
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -30,6 +31,15 @@ export class CreateStaffDto {
 
   @ApiPropertyOptional({ example: 'Maintenance' })
   @IsOptional() @IsString() @MaxLength(80) department?: string;
+
+  /**
+   * Ticket-category keys this staff member handles. Drives auto-assignment —
+   * a request in a matching category is routed to them instead of sitting in
+   * one undifferentiated queue. Empty means manual assignment only.
+   */
+  @ApiPropertyOptional({ type: [String], example: ['PLUMBING', 'ELECTRICAL'] })
+  @IsOptional() @IsArray() @IsString({ each: true })
+  categories?: string[];
 
   @ApiProperty({ example: '+91 90000 22222' })
   @IsString() @MinLength(4) @MaxLength(40)

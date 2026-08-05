@@ -4,23 +4,27 @@ import type { Vendor } from '@living/types';
 import { living } from '../../lib/living';
 import { FormDrawer, type FieldDef } from '../master-data';
 import { opt, PERSON_STATUS } from '../master-data/options';
-import { CatalogMultiSelect, CatalogSelect } from '../shared/catalog-select';
+import { ServicesMultiSelect } from '../shared/services-multi-select';
 
+/**
+ * "Primary category" has moved to the STAFF form.
+ *
+ * It bound to the same VENDOR_CATEGORY option list as "Service categories", so
+ * both fields always showed identical choices and the primary one carried no
+ * extra information. Speciality matters for STAFF (it routes a request to the
+ * right person); for a vendor what matters is which SERVICES they deliver, and
+ * those now come from the community's own services catalog rather than a
+ * parallel free-text list. The API derives the stored `category` from the first
+ * service selected, so reporting is unchanged.
+ */
 const fields: FieldDef[] = [
   { name: 'name', label: 'Contact name', required: true, half: true },
   { name: 'companyName', label: 'Company', half: true },
-  {
-    name: 'category', label: 'Primary category', type: 'custom', required: true, half: true,
-    render: (value, set, error) => (
-      <CatalogSelect kind="VENDOR_CATEGORY" label="Primary category" required value={value} onChange={set} error={error} />
-    ),
-  },
   { name: 'status', label: 'Status', type: 'select', options: opt(PERSON_STATUS), half: true },
   {
-    name: 'serviceCategories', label: 'Service categories', type: 'custom',
+    name: 'serviceCategories', label: 'Services delivered', type: 'custom',
     render: (value, set) => (
-      <CatalogMultiSelect
-        kind="VENDOR_CATEGORY" label="Service categories"
+      <ServicesMultiSelect
         values={value ? value.split(',').filter(Boolean) : []}
         onChange={(vals) => set(vals.join(','))}
       />

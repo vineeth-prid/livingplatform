@@ -67,7 +67,9 @@ export class VendorService {
         code,
         name: dto.name,
         companyName: dto.companyName,
-        category: dto.category,
+        // Derived when the form no longer collects it — a vendor's primary
+        // category is simply the first service they cover.
+        category: dto.category ?? dto.serviceCategories?.[0] ?? 'GENERAL',
         serviceCategories: dto.serviceCategories ?? [],
         phone: dto.phone,
         email: dto.email,

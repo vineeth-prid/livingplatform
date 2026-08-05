@@ -58,6 +58,7 @@ const NotificationPreferencesPage = lazy(() => import('./features/billing/notifi
 // Community configuration, service catalog and packages (Sprint 12).
 const CommunitySettingsPage = lazy(() => import('./features/settings/community-settings').then((m) => ({ default: m.CommunitySettingsPage })));
 const ServicesPage = lazy(() => import('./features/services/services-page').then((m) => ({ default: m.ServicesPage })));
+const CategoriesPage = lazy(() => import('./features/categories/categories-page').then((m) => ({ default: m.CategoriesPage })));
 const PackagesPage = lazy(() => import('./features/packages/packages-page').then((m) => ({ default: m.PackagesPage })));
 const PlatformBusinessPage = lazy(() => import('./features/platform-admin/platform-business').then((m) => ({ default: m.PlatformBusinessPage })));
 
@@ -175,6 +176,7 @@ const routeTree = rootRoute.addChildren([
     // Community configuration, catalog and packages (Sprint 12)
     createRoute({ getParentRoute: () => dashboardRoute, path: '/settings', component: CommunitySettingsPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/services', component: ServicesPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/categories', component: CategoriesPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/packages', component: PackagesPage }),
 
     // Operations execution
