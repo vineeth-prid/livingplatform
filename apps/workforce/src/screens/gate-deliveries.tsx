@@ -84,9 +84,21 @@ export function GateDeliveriesScreen() {
   }, [query.data, q]);
 
   if (!canView) {
+    // Name the requirement rather than saying a flat "no access". Gate duty is
+    // granted by the SECURITY role, which is assigned from the staff member's
+    // job title — so this is nearly always "your role is not set to Security"
+    // or "the roles have not been reseeded since Gate Management shipped",
+    // both of which an admin can fix in a minute if they know to look.
     return (
       <div className="px-4 pt-6">
-        <EmptyState icon={Truck} title="No gate access" description="Your role doesn’t include gate management." />
+        <EmptyState
+          icon={Truck}
+          title="No gate access"
+          description={
+            'Gate duty is granted by the Security role. Ask your facility manager to set your ' +
+            'staff role to Security, then sign out and back in.'
+          }
+        />
       </div>
     );
   }

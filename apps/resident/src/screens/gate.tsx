@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { Package } from 'lucide-react';
+import { BellRing, Package } from 'lucide-react';
 import type { GateEntry } from '@living/living-sdk';
 import { formatDateTime } from '@living/utils';
-import { Badge, type BadgeProps, Card, EmptyState, Skeleton } from '@living/ui';
+import { Badge, type BadgeProps, Button, Card, EmptyState, Skeleton } from '@living/ui';
 import { cn } from '@living/utils';
 
 import { living } from '../lib/living';
 import { GateDecisionDialog } from '../gate/gate-alerts';
+import { usePush } from '../pwa/use-push';
 import { ScreenHeader } from '../shell';
 
 type Tone = NonNullable<BadgeProps['tone']>;
@@ -18,6 +19,41 @@ const TONE: Record<string, Tone> = {
 };
 const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
 const isPending = (e: GateEntry) => e.status === 'CREATED' || e.status === 'NOTIFIED';
+
+/**
+ * Offers background alerts where a resident is actually thinking about
+ * deliveries.
+ *
+ * Push has to be opted into explicitly — browsers permanently penalise a site
+ * that asks unprompted — but the only control lived in Profile, which is not
+ * somewhere anyone goes looking. That is why "the popup only arrives when the
+ * app is open": most residents never subscribed at all. Shown once, dismissible,
+ * and never rendered when push is already on or unavailable.
+ */
+function EnablePushPrompt() {
+  const { state, subscribe, busy } = usePush();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed || state !== 'available') return null;
+
+  return (
+    <Card variant="elevated" className="mb-3 flex items-start gap-3 py-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-tint text-brand">
+        <BellRing className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium leading-tight text-strong">Get alerted when Living is closed</p>
+        <p className="mt-0.5 text-xs leading-tight text-muted">
+          Right now a delivery only reaches you while the app is open.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <Button size="sm" loading={busy} onClick={() => void subscribe()}>Turn on</Button>
+          <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>Not now</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 /** Everything that has arrived at the gate for this resident. */
 export function GateHistoryScreen() {
@@ -37,6 +73,7 @@ export function GateHistoryScreen() {
   return (
     <div>
       <ScreenHeader title="At the gate" subtitle="Deliveries" />
+      <div className="px-4"><EnablePushPrompt /></div>
       <div className="flex gap-1.5 px-4">
         {([['all', 'All'], ['pending', 'Waiting for you']] as const).map(([v, label]) => (
           <button

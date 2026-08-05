@@ -14,6 +14,10 @@ const STATUS_TONE: Record<string, Tone> = {
   DRAFT: 'neutral', OPEN: 'info', REQUESTED: 'info', ASSIGNED: 'brand', ACCEPTED: 'brand',
   SCHEDULED: 'info', IN_PROGRESS: 'warning', ON_HOLD: 'neutral', COMPLETED: 'success',
   VERIFIED: 'success', RESOLVED: 'success', CLOSED: 'neutral', CANCELLED: 'neutral', REJECTED: 'danger',
+  // Work-order approval lane. Without these two they fell through to the
+  // 'neutral' default — rendering a job WAITING on a manager identically to a
+  // cancelled one, which is the opposite of what a worker needs to know.
+  PENDING_APPROVAL: 'warning', APPROVED: 'brand',
 };
 const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
 
@@ -78,9 +82,13 @@ export function JobCard({ job, emphasis }: { job: Job; emphasis?: boolean }) {
             <span className="font-mono">{job.number}</span>
             {job.unitLabel && <> · Unit {job.unitLabel}</>} · {label} · {timeAgo(job.updatedAt)}
           </p>
+          {/* Status AND priority on every card. Showing the priority pill only
+              on high/critical jobs meant cards had different shapes depending on
+              their contents — the eye reads that as a layout glitch rather than
+              as information, and a worker still has to know a job is LOW. */}
           <div className="mt-2 flex items-center gap-1.5">
             <StatusPill status={job.status} />
-            {critical && <PriorityPill priority={job.priority} />}
+            <PriorityPill priority={job.priority} />
           </div>
         </div>
         <ChevronRight className="h-5 w-5 shrink-0 text-subtle" />
