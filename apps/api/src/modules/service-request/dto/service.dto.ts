@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNumber,
@@ -9,6 +11,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 
 export class CreateServiceDto {
@@ -62,4 +65,34 @@ export class QueryServiceDto {
   @ApiPropertyOptional({ description: 'Free-text search on name/key' })
   @IsOptional() @IsString() @MaxLength(120)
   search?: string;
+}
+
+/** One priced option within a service. `id` present = update, absent = create. */
+export class ServiceVariantInputDto {
+  @ApiPropertyOptional({ description: 'Omit to create a new option' })
+  @IsOptional() @IsString() id?: string;
+
+  @ApiProperty({ example: 'SUV' })
+  @IsString() @MinLength(1) @MaxLength(60)
+  name!: string;
+
+  @ApiProperty({ example: 500, description: 'Price for ONE unit of this option' })
+  @Type(() => Number) @IsNumber() @Min(0)
+  price!: number;
+
+  @ApiPropertyOptional({ example: 45, description: 'Overrides the service estimate' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  durationMinutes?: number;
+}
+
+/**
+ * The complete set of options for a service. Sending fewer than exist
+ * DEACTIVATES the missing ones — they are never hard-deleted, because a booked
+ * request must keep resolving the option and price it was made under.
+ */
+export class SetServiceVariantsDto {
+  @ApiProperty({ type: [ServiceVariantInputDto] })
+  @IsArray() @ArrayMaxSize(20)
+  @ValidateNested({ each: true }) @Type(() => ServiceVariantInputDto)
+  variants!: ServiceVariantInputDto[];
 }

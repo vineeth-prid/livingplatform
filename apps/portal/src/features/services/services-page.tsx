@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Wrench } from 'lucide-react';
-import type { Service } from '@living/types';
+import type { Service, ServiceVariant } from '@living/types';
 import { useAuth } from '@living/hooks';
 import {
   Badge, Button, Card, DataTable, EmptyState, Input, LoadingState, PageContainer, PageHeader,
@@ -360,6 +360,18 @@ function ServiceDrawer({
             </FormGrid>
           </FormSection>
 
+          <FormSection
+            title="Priced options"
+            description="Car type, flat size — anything that changes the price. Leave empty to charge the list price for everyone."
+          >
+            <VariantEditor
+              // Options are saved against a service that must already exist,
+              // so they are only editable once it has been created.
+              serviceId={service?.id ?? null}
+              initial={service?.variants ?? []}
+            />
+          </FormSection>
+
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={onClose}>
               Cancel
@@ -376,4 +388,137 @@ function ServiceDrawer({
       </SheetContent>
     </Sheet>
   );
+}
+
+/**
+ * The priced options for a service, edited as a set.
+ *
+ * Saved separately from the service itself, and only once the service exists —
+ * an option needs something to belong to. Removing one here deactivates it
+ * rather than deleting it, so a request booked as "SUV · ₹500" still resolves
+ * that name and price months later.
+ */
+function VariantEditor({
+  serviceId,
+  initial,
+}: {
+  serviceId: string | null;
+  initial: ServiceVariant[];
+}) {
+  const qc = useQueryClient();
+  const [rows, setRows] = useState<VariantRow[]>(() =>
+    initial.map((v) => ({
+      id: v.id,
+      name: v.name,
+      price: String(v.price ?? ''),
+      durationMinutes: v.durationMinutes != null ? String(v.durationMinutes) : '',
+    })),
+  );
+
+  const save = useMutation({
+    mutationFn: () =>
+      living.serviceRequest.setServiceVariants(
+        serviceId!,
+        rows.map((r) => ({
+          id: r.id,
+          name: r.name.trim(),
+          price: Number(r.price),
+          durationMinutes: r.durationMinutes ? Number(r.durationMinutes) : null,
+        })),
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['services'] });
+      toast.success('Options saved');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  if (!serviceId) {
+    return (
+      <p className="rounded-control bg-sunken px-4 py-3 text-sm text-muted">
+        Create the service first, then reopen it to add priced options.
+      </p>
+    );
+  }
+
+  const valid = rows.every((r) => r.name.trim() && Number.isFinite(Number(r.price)));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {rows.length === 0 ? (
+        <p className="rounded-control bg-sunken px-4 py-3 text-sm text-muted">
+          No options — every resident pays the list price above.
+        </p>
+      ) : (
+        rows.map((row, index) => (
+          <div key={row.id ?? `new-${index}`} className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input
+                label={index === 0 ? 'Option' : undefined}
+                value={row.name}
+                placeholder="SUV"
+                onChange={(e) =>
+                  setRows((rs) => rs.map((r, i) => (i === index ? { ...r, name: e.target.value } : r)))
+                }
+              />
+            </div>
+            <div className="w-28">
+              <Input
+                label={index === 0 ? 'Price (₹)' : undefined}
+                type="number"
+                inputMode="decimal"
+                value={row.price}
+                onChange={(e) =>
+                  setRows((rs) => rs.map((r, i) => (i === index ? { ...r, price: e.target.value } : r)))
+                }
+              />
+            </div>
+            <div className="w-28">
+              <Input
+                label={index === 0 ? 'Minutes' : undefined}
+                type="number"
+                inputMode="numeric"
+                placeholder="—"
+                value={row.durationMinutes}
+                onChange={(e) =>
+                  setRows((rs) =>
+                    rs.map((r, i) => (i === index ? { ...r, durationMinutes: e.target.value } : r)),
+                  )
+                }
+              />
+            </div>
+            <Button
+              variant="ghost"
+              aria-label={`Remove ${row.name || 'option'}`}
+              onClick={() => setRows((rs) => rs.filter((_, i) => i !== index))}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ))
+      )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() =>
+            setRows((rs) => [...rs, { name: '', price: '', durationMinutes: '' }])
+          }
+        >
+          <Plus className="h-4 w-4" /> Add option
+        </Button>
+        <Button size="sm" loading={save.isPending} disabled={!valid} onClick={() => save.mutate()}>
+          Save options
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface VariantRow {
+  id?: string;
+  name: string;
+  price: string;
+  durationMinutes: string;
 }

@@ -26,7 +26,28 @@ export function ResetPasswordButton({
   const [busy, setBusy] = useState(false);
   const [temporary, setTemporary] = useState<string | null>(null);
 
-  if (!userId || !hasPermission('user:update')) return null;
+  // No permission → the control genuinely does not belong to this admin.
+  if (!hasPermission('user:update')) return null;
+
+  // No linked login → the button used to vanish silently, so an admin clicking
+  // where they expected it saw nothing happen and reasonably called it broken.
+  // Say what is actually wrong instead: this person has no account to reset.
+  //
+  // It happens when the phone was already registered to another user at the
+  // time the profile was created — provisioning links the existing account to
+  // the first profile only and leaves later ones unlinked.
+  if (!userId) {
+    return (
+      <Button
+        variant="ghost"
+        disabled
+        aria-label="No login account linked"
+        title={`${personName} has no login account, so there is no password to reset. Re-save them with a unique mobile number to provision one.`}
+      >
+        <KeyRound className="h-4 w-4 opacity-40" />
+      </Button>
+    );
+  }
 
   async function onReset() {
     const ok = await confirm({

@@ -20,6 +20,7 @@ import {
   CreateServiceDto,
   QueryServiceDto,
   SetServiceStatusDto,
+  SetServiceVariantsDto,
   UpdateServiceDto,
 } from './dto/service.dto';
 import {
@@ -200,6 +201,15 @@ export class ServiceCatalogController {
   @ApiOperation({ summary: 'Activate or deactivate a service (never deletes it)' })
   setStatus(@Param('id') id: string, @Body() dto: SetServiceStatusDto) {
     return this.catalog.setStatus(id, dto.isActive);
+  }
+
+  @Put(':id/variants')
+  @RequirePermissions(PERMISSIONS.SERVICE_CATALOG_MANAGE)
+  @ApiOperation({
+    summary: 'Replace a service’s priced options (car type, flat size). Removed ones deactivate.',
+  })
+  setVariants(@Param('id') id: string, @Body() dto: SetServiceVariantsDto) {
+    return this.catalog.setVariants(id, dto.variants);
   }
 
   @Get(':id/usage')

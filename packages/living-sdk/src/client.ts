@@ -18,6 +18,7 @@ import {
 import { InsightsResource, PackagesResource } from './resources/packages';
 import { PeopleResource } from './resources/people';
 import { PlatformResource } from './resources/platform';
+import { ProfileResource } from './resources/profile';
 import { PushResource } from './resources/push';
 import { ServiceRequestResource } from './resources/service-requests';
 import { TicketResource } from './resources/tickets';
@@ -77,6 +78,7 @@ export class LivingClient {
   // Gate Management + Web Push device registration (Sprint 13).
   readonly gate: GateResource;
   readonly push: PushResource;
+  readonly profile: ProfileResource;
 
   constructor(config: LivingClientConfig) {
     this.tokenStore = config.tokenStore ?? createLocalStorageTokenStore();
@@ -111,6 +113,7 @@ export class LivingClient {
     this.insights = new InsightsResource(this.http);
     this.gate = new GateResource(this.http);
     this.push = new PushResource(this.http);
+    this.profile = new ProfileResource(this.http);
   }
 
   /** Decoded access-token payload (roles/permissions/expiry) or null. */

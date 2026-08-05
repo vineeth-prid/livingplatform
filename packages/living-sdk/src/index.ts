@@ -63,3 +63,7 @@ export {
   RealtimeClient,
   type RealtimeEvent, type RealtimeEventTypeName, type RealtimeOptions,
 } from './realtime';
+export {
+  ProfileResource,
+  type MyProfile, type UserProfileDocument, type UpdateProfileInput,
+} from './resources/profile';

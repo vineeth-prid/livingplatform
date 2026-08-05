@@ -4,11 +4,11 @@ import {
   Activity, BellRing, Boxes, Building2, CalendarCheck, CalendarClock, CreditCard, DoorOpen,
   FileSignature, FileText, Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, MessageCircle,
   Package, Receipt, Server, Settings, ShieldCheck, Sparkles, Store, Tags, TrendingUp, Truck,
-  UserRound, Users, Wallet, Wrench,
+  User, UserRound, Users, Wallet, Wrench,
 } from 'lucide-react';
 import { useAuth, useCommunityFeatures } from '@living/hooks';
 import {
-  AppShell, LoadingState, ProfileMenu, ThemeSwitch, WorkspaceSwitcher,
+  AppShell, DropdownMenuItem, LoadingState, ProfileMenu, ThemeSwitch, WorkspaceSwitcher,
   useCommandPalette, type NavSection,
 } from '@living/ui';
 
@@ -201,6 +201,13 @@ export function DashboardLayout() {
             <ProfileMenu
               name={fullName}
               email={user?.email ?? ''}
+              // The default "Profile" item is an inert placeholder with no
+              // handler — supplying our own is what makes it actually open.
+              extraItems={
+                <DropdownMenuItem onSelect={() => void navigate({ to: '/profile' })}>
+                  <User className="h-4 w-4" /> My profile
+                </DropdownMenuItem>
+              }
               onSignOut={() => {
                 void logout().then(() => navigate({ to: '/login' }));
               }}

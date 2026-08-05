@@ -1,5 +1,5 @@
 import type {
-  ListParams, Paginated, Service, ServiceFeedback, ServiceRequest,
+  ListParams, Paginated, Service, ServiceFeedback, ServiceRequest, ServiceVariant,
 } from '@living/types';
 
 import type { HttpClient } from '../http';
@@ -73,6 +73,18 @@ export class ServiceRequestResource {
   }
 
   /** Open requests + packages still referencing a service (shown before disabling). */
+  /**
+   * Replace a service's priced options. Sending fewer than exist DEACTIVATES
+   * the missing ones — never hard-deletes, so booked requests keep resolving
+   * the option and price they were made under.
+   */
+  setServiceVariants(
+    id: string,
+    variants: { id?: string; name: string; price: number; durationMinutes?: number | null }[],
+  ): Promise<ServiceVariant[]> {
+    return this.http.put(`/services/${id}/variants`, { variants });
+  }
+
   serviceUsage(id: string): Promise<{ openRequests: number; packages: number }> {
     return this.http.get(`/services/${id}/usage`);
   }

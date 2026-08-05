@@ -191,6 +191,68 @@ export class ServiceCatalogService {
     });
   }
 
+  /**
+   * Replace a service's priced options in one call.
+   *
+   * A whole-list replace rather than per-variant CRUD: an admin edits them as a
+   * set ("Hatchback / Sedan / SUV"), and three endpoints to express one intent
+   * would be worse for both sides.
+   *
+   * Removed variants are DEACTIVATED, never hard-deleted — an existing request
+   * must keep resolving the option name and price it was booked under.
+   */
+  async setVariants(
+    id: string,
+    variants: { id?: string; name: string; price: number; durationMinutes?: number | null }[],
+  ) {
+    await this.load(id);
+
+    const existing = await this.prisma.serviceVariant.findMany({
+      where: { serviceId: id, deletedAt: null },
+      select: { id: true },
+    });
+    const keep = new Set(variants.map((v) => v.id).filter((v): v is string => !!v));
+    const dropped = existing.filter((v) => !keep.has(v.id)).map((v) => v.id);
+
+    await this.prisma.$transaction([
+      ...(dropped.length
+        ? [
+            this.prisma.serviceVariant.updateMany({
+              where: { id: { in: dropped } },
+              data: { isActive: false, deletedAt: new Date() },
+            }),
+          ]
+        : []),
+      ...variants.map((v, index) =>
+        v.id
+          ? this.prisma.serviceVariant.update({
+              where: { id: v.id },
+              data: {
+                name: v.name.trim(),
+                price: v.price,
+                durationMinutes: v.durationMinutes ?? null,
+                sortOrder: index,
+                isActive: true,
+              },
+            })
+          : this.prisma.serviceVariant.create({
+              data: {
+                serviceId: id,
+                name: v.name.trim(),
+                price: v.price,
+                durationMinutes: v.durationMinutes ?? null,
+                sortOrder: index,
+              },
+            }),
+      ),
+    ]);
+
+    return this.prisma.serviceVariant.findMany({
+      where: { serviceId: id, deletedAt: null, isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
   async remove(id: string) {
     await this.load(id);
     await this.prisma.service.update({
