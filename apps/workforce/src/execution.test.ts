@@ -74,3 +74,35 @@ describe('isActive', () => {
     expect(isActive('ticket', 'RESOLVED')).toBe(false);
   });
 });
+
+/**
+ * Terminal states are terminal for a WORKER.
+ *
+ * The map used to offer IN_PROGRESS from COMPLETED / VERIFIED / CLOSED, which
+ * rendered a "Start work" button on finished jobs. The API then refused the
+ * transition, so the only thing the button produced was an error message.
+ * Reopening is a manager decision made in the portal.
+ */
+describe('finished jobs offer a worker nothing', () => {
+  const all = ['workorder:start', 'workorder:complete', 'workorder:update',
+    'ticket:resolve', 'ticket:update', 'service:complete', 'service:update'];
+
+  it('offers no action on a completed or verified work order', () => {
+    expect(workerActions('work-order', 'COMPLETED', all)).toEqual([]);
+    expect(workerActions('work-order', 'VERIFIED', all)).toEqual([]);
+    expect(workerActions('work-order', 'CLOSED', all)).toEqual([]);
+  });
+
+  it('offers no action on a resolved or closed ticket', () => {
+    expect(workerActions('ticket', 'RESOLVED', all)).toEqual([]);
+    expect(workerActions('ticket', 'CLOSED', all)).toEqual([]);
+  });
+
+  /** In-flight work is unaffected — the worker can still act on it. */
+  it('still offers the normal moves on live work', () => {
+    expect(workerActions('work-order', 'IN_PROGRESS', all).map((a) => a.intent))
+      .toContain('complete');
+    expect(workerActions('ticket', 'IN_PROGRESS', all).map((a) => a.intent))
+      .toContain('resolve');
+  });
+});

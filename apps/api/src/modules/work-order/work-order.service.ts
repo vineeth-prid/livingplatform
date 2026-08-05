@@ -209,10 +209,14 @@ export class WorkOrderService {
       ...this.present(workOrder),
       assignee: await this.resolveAssignee(workOrder),
       updates: workOrder.updates.filter((u) => canSeeInternal || !u.isInternal),
-      attachments: workOrder.attachments.map((a) => ({
-        ...a,
-        downloadUrl: this.storage.resolveUrl(a.storageKey),
-      })),
+      // Signed, not public: the bucket is private, so a public URL 403s and the
+      // attachment appears broken in the portal.
+      attachments: await Promise.all(
+        workOrder.attachments.map(async (a) => ({
+          ...a,
+          downloadUrl: (await this.storage.signDownload(a.storageKey)).url,
+        })),
+      ),
     };
   }
 

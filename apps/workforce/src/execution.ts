@@ -35,8 +35,12 @@ const TRANSITIONS: Record<JobKind, Record<string, string[]>> = {
     ACCEPTED: ['IN_PROGRESS', 'ON_HOLD', 'CANCELLED'],
     IN_PROGRESS: ['ON_HOLD', 'COMPLETED', 'CANCELLED'],
     ON_HOLD: ['IN_PROGRESS', 'CANCELLED'],
-    COMPLETED: ['VERIFIED', 'IN_PROGRESS', 'CANCELLED'],
-    VERIFIED: ['CLOSED', 'IN_PROGRESS'],
+    // Once a worker has completed a job it leaves their hands. Reopening is a
+    // MANAGER decision made in the portal — offering "Start work" on a
+    // completed or verified order put a button in front of staff that the API
+    // then refused, so the only thing it produced was an error.
+    COMPLETED: ['VERIFIED', 'CANCELLED'],
+    VERIFIED: ['CLOSED'],
     CLOSED: [],
     CANCELLED: [],
   },
@@ -55,8 +59,10 @@ const TRANSITIONS: Record<JobKind, Record<string, string[]>> = {
     ASSIGNED: ['IN_PROGRESS', 'ON_HOLD', 'OPEN', 'CANCELLED'],
     IN_PROGRESS: ['ON_HOLD', 'RESOLVED', 'CANCELLED'],
     ON_HOLD: ['IN_PROGRESS', 'CANCELLED'],
-    RESOLVED: ['CLOSED', 'IN_PROGRESS'],
-    CLOSED: ['IN_PROGRESS'],
+    // Same rule as work orders: reopening a resolved or closed ticket is an
+    // admin decision, not a worker verb. CLOSED is terminal server-side.
+    RESOLVED: ['CLOSED'],
+    CLOSED: [],
     CANCELLED: [],
   },
 };

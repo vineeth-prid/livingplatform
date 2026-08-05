@@ -49,11 +49,14 @@ export class WorkOrderAttachmentService {
       where: { workOrderId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
-    return items.map((a) => this.present(a));
+    return Promise.all(items.map((a) => this.present(a)));
   }
 
-  private present<T extends { storageKey: string }>(attachment: T) {
-    return { ...attachment, downloadUrl: this.storage.resolveUrl(attachment.storageKey) };
+  /** Signed, not public — a private bucket 403s a public URL. See
+   *  ticket-attachment.service.ts for the full explanation. */
+  private async present<T extends { storageKey: string }>(attachment: T) {
+    const signed = await this.storage.signDownload(attachment.storageKey);
+    return { ...attachment, downloadUrl: signed.url };
   }
 
   private async assertAccess(workOrderId: string) {

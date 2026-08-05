@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useAuth } from '@living/hooks';
 import type { ServiceRequest, Ticket } from '@living/types';
 
 import { useResidentCommunity } from './community';
+import { useMyResident } from './community-ops';
 import { living } from './lib/living';
 
 export type RequestKind = 'ticket' | 'service' | 'visitor';
@@ -29,8 +31,10 @@ const ACTIVE_SERVICE = new Set(['REQUESTED', 'ASSIGNED', 'ACCEPTED', 'SCHEDULED'
 export function useMyRequests() {
   const { session } = useAuth();
   const { communityId } = useResidentCommunity();
+  const { residents } = useMyResident();
   const uid = session?.user.id;
   const enabled = !!communityId && !!uid;
+  const residentIds = useMemo(() => new Set(residents.map((r) => r.id)), [residents]);
 
   const [tickets, services] = useQueries({
     queries: [
@@ -47,8 +51,19 @@ export function useMyRequests() {
     ],
   });
 
-  const mineT = (tickets.data?.items ?? []).filter((t: Ticket) => t.reportedById === uid);
-  const mineS = (services.data?.items ?? []).filter((s: ServiceRequest) => s.requestedById === uid);
+  // "Mine" is anything raised BY me or FOR me.
+  //
+  // Filtering on reportedById/requestedById alone meant a request the community
+  // admin raised on a resident's behalf was invisible to that resident — the
+  // admin's user id is the one recorded, so it never matched. Matching the
+  // resident record as well is what makes an admin-raised request show up in
+  // the app of the person it is actually for.
+  const mineT = (tickets.data?.items ?? []).filter(
+    (t: Ticket) => t.reportedById === uid || (t.residentId && residentIds.has(t.residentId)),
+  );
+  const mineS = (services.data?.items ?? []).filter(
+    (s: ServiceRequest) => s.requestedById === uid || (s.residentId && residentIds.has(s.residentId)),
+  );
 
   const items: MyRequest[] = [
     ...mineT.map((t) => ({

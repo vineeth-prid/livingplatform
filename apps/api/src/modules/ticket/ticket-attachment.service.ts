@@ -64,11 +64,18 @@ export class TicketAttachmentService {
       where: { ticketId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
-    return items.map((a) => this.present(a));
+    return Promise.all(items.map((a) => this.present(a)));
   }
 
-  private present<T extends { storageKey: string }>(attachment: T) {
-    return { ...attachment, downloadUrl: this.storage.resolveUrl(attachment.storageKey) };
+  /**
+   * Attach a *signed* download URL, not a public one. The bucket is private, so
+   * `resolveUrl` produces a link that 403s — which is why an attachment a
+   * technician uploaded on site could never be opened from the portal. Signing
+   * is local crypto (no round-trip), so doing it per row is cheap.
+   */
+  private async present<T extends { storageKey: string }>(attachment: T) {
+    const signed = await this.storage.signDownload(attachment.storageKey);
+    return { ...attachment, downloadUrl: signed.url };
   }
 
   private async assertTicketAccess(ticketId: string) {

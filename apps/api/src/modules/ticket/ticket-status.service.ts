@@ -38,9 +38,14 @@ export class TicketStatusService {
       TicketStatus.CLOSED,
       TicketStatus.IN_PROGRESS, // reopen
     ],
-    [TicketStatus.CLOSED]: [
-      TicketStatus.IN_PROGRESS, // reopen (privileged)
-    ],
+    // CLOSED is TERMINAL, matching work orders.
+    //
+    // It was reopenable — commented "privileged" but gated by nothing — so a
+    // closed ticket could be restarted from the portal and from the staff app
+    // alike, and closure meant nothing. If work genuinely resurfaces, the
+    // honest record is a new ticket referencing the old one, not a closed one
+    // quietly coming back to life with its resolution timestamps intact.
+    [TicketStatus.CLOSED]: [],
     [TicketStatus.CANCELLED]: [], // terminal
   };
 

@@ -14,9 +14,24 @@ describe('TicketStatusService (transitions)', () => {
     expect(svc.canTransition(TicketStatus.RESOLVED, TicketStatus.CLOSED)).toBe(true);
   });
 
-  it('allows reopening a resolved or closed ticket to in-progress', () => {
+  it('allows reopening a RESOLVED ticket — it has not been closed out yet', () => {
     expect(svc.canTransition(TicketStatus.RESOLVED, TicketStatus.IN_PROGRESS)).toBe(true);
-    expect(svc.canTransition(TicketStatus.CLOSED, TicketStatus.IN_PROGRESS)).toBe(true);
+  });
+
+  /**
+   * CLOSED is terminal, matching work orders.
+   *
+   * It used to be reopenable — commented "privileged" but gated by nothing — so
+   * a closed ticket could be restarted from the portal and the staff app alike
+   * and closure meant nothing. Work that resurfaces belongs in a NEW ticket
+   * referencing the old one, not in a closed one coming back to life with its
+   * resolution timestamps still attached.
+   */
+  it('treats CLOSED as terminal — no reopening from anywhere', () => {
+    expect(svc.canTransition(TicketStatus.CLOSED, TicketStatus.IN_PROGRESS)).toBe(false);
+    expect(svc.canTransition(TicketStatus.CLOSED, TicketStatus.OPEN)).toBe(false);
+    expect(svc.canTransition(TicketStatus.CLOSED, TicketStatus.ASSIGNED)).toBe(false);
+    expect(svc.canTransition(TicketStatus.CLOSED, TicketStatus.RESOLVED)).toBe(false);
   });
 
   it('rejects illegal jumps', () => {
