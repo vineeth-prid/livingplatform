@@ -151,6 +151,13 @@ export interface Service {
   isActive: boolean; isSystem: boolean; sortOrder: number;
   /** List price for one delivery. Prices packages and shows the saving. */
   basePrice?: number | null;
+  /** Priced options within this service (car type, flat size). Empty when the
+   *  service has one price for everyone. */
+  variants?: ServiceVariant[];
+}
+export interface ServiceVariant {
+  id: ID; serviceId: ID; name: string; price: number;
+  durationMinutes?: number | null; isActive: boolean; sortOrder: number;
 }
 export interface ServiceRequest extends AuditFields {
   id: ID; number: number; requestNumber: string; communityId: ID; unitId: ID; serviceId: ID;

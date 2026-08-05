@@ -3,9 +3,12 @@ import { ServiceRequestStatus, TicketPriority } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -33,6 +36,18 @@ export class CreateServiceRequestDto {
 
   @ApiPropertyOptional({ description: 'Resident the request is for (optional)' })
   @IsOptional() @IsString() residentId?: string;
+
+  /**
+   * Which priced option, when the service offers them (car type, flat size).
+   * Required by the pricing rule if the service HAS active variants — omitting
+   * it would otherwise quote a hatchback price for an SUV.
+   */
+  @ApiPropertyOptional({ description: 'Service variant (required when the service has options)' })
+  @IsOptional() @IsString() variantId?: string;
+
+  @ApiPropertyOptional({ default: 1, description: 'How many (e.g. two bathrooms)' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(20)
+  quantity?: number;
 
   @ApiPropertyOptional({ type: String, format: 'date-time' })
   @IsOptional() @Type(() => Date) preferredDate?: Date;

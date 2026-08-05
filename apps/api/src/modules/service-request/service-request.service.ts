@@ -27,6 +27,7 @@ import {
   ScheduleServiceRequestDto,
   UpdateServiceRequestDto,
 } from './dto/service-request.dto';
+import { priceServiceRequest } from './service-pricing';
 import { ServiceCatalogService } from './service-catalog.service';
 import { ServiceRequestStatusService } from './service-request-status.service';
 
@@ -67,11 +68,36 @@ export class ServiceRequestService {
     await this.catalog.assertUsable(dto.serviceId, community.tenantId);
     if (dto.residentId) await this.assertResidentInCommunity(dto.residentId, communityId);
 
+    // Price the request ONCE, here, and freeze the result onto the row. A later
+    // catalogue edit must never rewrite what the resident was quoted.
+    const service = await this.prisma.service.findUniqueOrThrow({
+      where: { id: dto.serviceId },
+      select: {
+        basePrice: true,
+        estimatedDurationMinutes: true,
+        variants: {
+          where: { deletedAt: null },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+          select: { id: true, name: true, price: true, durationMinutes: true, isActive: true },
+        },
+      },
+    });
+    const priced = priceServiceRequest({
+      service,
+      variants: service.variants,
+      variantId: dto.variantId,
+      quantity: dto.quantity,
+    });
+
     const request = await this.prisma.serviceRequest.create({
       data: {
         communityId,
         unitId: dto.unitId,
         serviceId: dto.serviceId,
+        variantId: priced.variantId,
+        quantity: priced.quantity,
+        unitPrice: priced.unitPrice,
+        totalPrice: priced.totalPrice,
         residentId: dto.residentId,
         packagePurchaseId: internal?.packagePurchaseId ?? null,
         title: dto.title,

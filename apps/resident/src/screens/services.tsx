@@ -175,6 +175,7 @@ export function ServicesScreen() {
           if (!o) setPicked(null);
         }}
         mode="service"
+        service={picked ?? undefined}
         serviceId={picked?.id}
         serviceName={picked?.name}
       />

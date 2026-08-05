@@ -1,14 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Minus, Plus } from 'lucide-react';
 import { LivingApiError } from '@living/living-sdk';
+import type { Service } from '@living/types';
+import { cn } from '@living/utils';
 import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 
 import { useResidentCommunity } from './community';
 import { useMyResident } from './community-ops';
 import { living } from './lib/living';
+
+const inr = (n: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
 const schema = z.object({
   unitId: z.string().min(1, 'Choose your unit'),
@@ -28,19 +34,42 @@ type FormValues = z.infer<typeof schema>;
  * single unit (the normal case) it is preselected and the field is read-only.
  */
 export function CreateRequestSheet({
-  open, onOpenChange, mode, serviceId, serviceName, onCreated,
+  open, onOpenChange, mode, serviceId, serviceName, service, onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: 'complaint' | 'service';
   serviceId?: string;
   serviceName?: string;
+  /** The full catalogue row, when the caller has it — carries priced options. */
+  service?: Service;
   onCreated?: () => void;
 }) {
   const { communityId } = useResidentCommunity();
   const qc = useQueryClient();
 
   const { units, isLoading: unitsLoading } = useMyResident();
+  const [variantId, setVariantId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+
+  // Options come from the service the caller already has in hand — the catalog
+  // list carries them, so there is nothing extra to fetch.
+  const variants = useMemo(
+    () => (service?.variants ?? []).filter((v) => v.isActive),
+    [service],
+  );
+
+  // Preselect when there is only one option — a single-choice picker is a
+  // pointless tap.
+  useEffect(() => {
+    if (variants.length === 1) setVariantId(variants[0]!.id);
+  }, [variants.length, variants]);
+
+  const unitPrice = variantId
+    ? Number(variants.find((v) => v.id === variantId)?.price ?? NaN)
+    : Number(service?.basePrice ?? NaN);
+  const lineTotal = Number.isFinite(unitPrice) ? unitPrice * quantity : null;
+
   const categories = useQuery({
     queryKey: ['ticket-categories'],
     queryFn: () => living.ticket.listCategories({ activeOnly: true }),
@@ -55,7 +84,11 @@ export function CreateRequestSheet({
   // Preselect the only unit they have, so the common case is one less tap.
   const onlyUnitId = units.length === 1 ? units[0]!.id : '';
   useEffect(() => {
-    if (open) reset({ unitId: onlyUnitId, categoryId: '', title: '', description: '', priority: 'MEDIUM' });
+    if (open) {
+      reset({ unitId: onlyUnitId, categoryId: '', title: '', description: '', priority: 'MEDIUM' });
+      setVariantId('');
+      setQuantity(1);
+    }
   }, [open, reset, onlyUnitId]);
 
   const onSubmit = handleSubmit(async (values) => {
@@ -70,6 +103,8 @@ export function CreateRequestSheet({
         await living.serviceRequest.create(communityId, {
           serviceId, unitId: values.unitId, title: values.title,
           description: values.description, priority: values.priority,
+          variantId: variantId || undefined,
+          quantity,
         });
         await qc.invalidateQueries({ queryKey: ['my', 'service-requests'] });
         toast.success('Service requested');
@@ -117,6 +152,63 @@ export function CreateRequestSheet({
               </select>
             </Field>
           )}
+          {/* Options and quantity only exist for a service request. A service
+              that offers options REQUIRES one — the API refuses to guess,
+              because guessing quotes a hatchback price for an SUV. */}
+          {isService && variants.length > 0 && (
+            <Field label="Option" error={!variantId ? 'Choose an option' : undefined}>
+              <div className="flex flex-wrap gap-1.5">
+                {variants.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setVariantId(v.id)}
+                    className={cn(
+                      'rounded-pill px-3 py-1.5 text-sm',
+                      variantId === v.id ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted',
+                    )}
+                  >
+                    {v.name}
+                    {v.price != null && ` · ${inr(Number(v.price))}`}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+
+          {isService && (
+            <Field label="How many?">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Fewer"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="flex h-10 w-10 items-center justify-center rounded-control bg-sunken text-strong disabled:opacity-40"
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="min-w-8 text-center text-base font-semibold text-strong" data-numeric>
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  aria-label="More"
+                  onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+                  className="flex h-10 w-10 items-center justify-center rounded-control bg-sunken text-strong disabled:opacity-40"
+                  disabled={quantity >= 20}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                {lineTotal != null && (
+                  <span className="ml-auto text-sm text-muted">
+                    Total <span className="font-medium text-strong">{inr(lineTotal)}</span>
+                  </span>
+                )}
+              </div>
+            </Field>
+          )}
+
           <Input label="Title" placeholder={isService ? 'e.g. Deep clean' : 'e.g. Leaking tap'} error={errors.title?.message} {...register('title')} />
           <Field label="Details" error={errors.description?.message}>
             <textarea rows={3} placeholder="A little more detail…" className={`${selectCls} py-2`} {...register('description')} />

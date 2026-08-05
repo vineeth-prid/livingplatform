@@ -60,6 +60,14 @@ export class ServiceCatalogService {
         ],
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      // Variants ride along: the resident app needs them to render the option
+      // picker, and a second round-trip per service tile would be absurd.
+      include: {
+        variants: {
+          where: { deletedAt: null, isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+      },
     });
 
     // Platform callers see the raw rows — there is no single tenant to resolve

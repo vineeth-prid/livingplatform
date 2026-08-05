@@ -1398,6 +1398,8 @@ model Service {
   packageItems    ServicePackageItem[]
   /// Per-tenant availability overrides (platform services only).
   tenantSettings  TenantServiceSetting[]
+  /// Priced options within one service (car type, apartment size, …).
+  variants        ServiceVariant[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1419,6 +1421,15 @@ model ServiceRequest {
   unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
   serviceId   String
   service     Service   @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  /// Which priced option was chosen, when the service offers variants.
+  variantId   String?
+  variant     ServiceVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  /// How many of this service were requested (two bathrooms, three cars).
+  quantity    Int       @default(1)
+  /// Unit price and line total FROZEN at request time, so later catalogue edits
+  /// never rewrite what a resident was quoted.
+  unitPrice   Decimal?  @db.Decimal(14, 2)
+  totalPrice  Decimal?  @db.Decimal(14, 2)
   residentId  String?
   resident    Resident? @relation(fields: [residentId], references: [id], onDelete: SetNull)
 
@@ -2898,4 +2909,36 @@ model TenantServiceSetting {
   @@unique([tenantId, serviceId])
   @@index([tenantId])
   @@map("tenant_service_settings")
+}
+
+/// A priced OPTION within a service — "Hatchback / Sedan / SUV" on a car wash,
+/// "1BHK / 2BHK / 3BHK" on a deep clean.
+///
+/// Deliberately not separate Services: they share one name, one description and
+/// one catalogue entry, and a resident picks between them at request time. A
+/// service with no variants behaves exactly as before and prices from
+/// `Service.basePrice`.
+model ServiceVariant {
+  id        String  @id @default(cuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  /// Shown to the resident, e.g. "SUV".
+  name      String
+  /// Price for ONE unit of this variant. Overrides Service.basePrice.
+  price     Decimal @db.Decimal(14, 2)
+  /// Optional per-variant duration; falls back to the service's estimate.
+  durationMinutes Int?
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  requests ServiceRequest[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([serviceId, name])
+  @@index([serviceId])
+  @@map("service_variants")
 }
