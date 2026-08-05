@@ -44,6 +44,8 @@ export class PushChannel implements INotificationChannel {
   private readonly logger = new Logger(PushChannel.name);
   private readonly ttl: number;
   private readonly configured: boolean;
+  /** Set when VAPID was supplied but rejected — surfaced by `health()`. */
+  private vapidError: string | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -51,12 +53,30 @@ export class PushChannel implements INotificationChannel {
   ) {
     const push = config.get('push', { infer: true });
     this.ttl = push.ttl;
-    this.configured = Boolean(push.publicKey && push.privateKey);
+    let configured = Boolean(push.publicKey && push.privateKey);
 
-    if (this.configured) {
-      webpush.setVapidDetails(push.subject, push.publicKey, push.privateKey);
-      this.logger.log('Web Push channel ready (VAPID configured)');
-    } else {
+    if (configured) {
+      // `setVapidDetails` THROWS on a malformed subject or a wrong-length key —
+      // and this runs in a provider constructor, so an unvalidated env var
+      // would take the entire API down at boot rather than disabling one
+      // channel. Degrade to unconfigured instead: push stops working and says
+      // why, everything else keeps running.
+      try {
+        webpush.setVapidDetails(push.subject, push.publicKey, push.privateKey);
+        this.logger.log('Web Push channel ready (VAPID configured)');
+      } catch (err) {
+        configured = false;
+        this.vapidError = (err as Error).message;
+        this.logger.error(
+          `Web Push DISABLED — the VAPID configuration is invalid: ${this.vapidError}. ` +
+            'Check VAPID_SUBJECT is a mailto: or https URL and the keys are a matching pair ' +
+            '(npx web-push generate-vapid-keys).',
+        );
+      }
+    }
+    this.configured = configured;
+
+    if (!this.configured && !this.vapidError) {
       this.logger.warn(
         'Web Push channel registered but NOT configured — set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to enable it. ' +
           'Gate notifications will still reach residents in-app and, if enabled, by WhatsApp/email.',
@@ -67,7 +87,9 @@ export class PushChannel implements INotificationChannel {
   async send(message: NotificationMessage): Promise<DeliveryResult> {
     if (!this.configured) {
       throw new BadRequestException(
-        'Web Push is not configured (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are unset)',
+        this.vapidError
+          ? `Web Push is misconfigured: ${this.vapidError}`
+          : 'Web Push is not configured (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are unset)',
       );
     }
 
@@ -149,7 +171,11 @@ export class PushChannel implements INotificationChannel {
             state: 'unhealthy',
             channel: this.channel,
             provider: this.provider,
-            reason: 'VAPID keys are not configured',
+            // Distinguish "never set up" from "set up wrongly" — the fix is
+            // different and this is the screen an admin looks at first.
+            reason: this.vapidError
+              ? `VAPID configuration is invalid: ${this.vapidError}`
+              : 'VAPID keys are not configured',
           },
     );
   }
