@@ -406,6 +406,7 @@ model Tenant {
   users       User[]
   roles       Role[] // tenant-scoped custom roles (system roles have tenantId = null)
   vendors     Vendor[] // vendors are tenant-scoped (cover many communities)
+  serviceSettings TenantServiceSetting[] // per-tenant availability of platform services
 
   // Audit / soft-delete base columns (see docs/architecture.md — Audit).
   createdAt   DateTime  @default(now())
@@ -1381,8 +1382,10 @@ model Service {
   /// free of charge; packages use it to compute the advertised saving.
   basePrice                Decimal? @db.Decimal(14, 2)
 
-  requests     ServiceRequest[]
-  packageItems ServicePackageItem[]
+  requests        ServiceRequest[]
+  packageItems    ServicePackageItem[]
+  /// Per-tenant availability overrides (platform services only).
+  tenantSettings  TenantServiceSetting[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -2852,4 +2855,31 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Per-tenant availability for a PLATFORM service (tenantId = null on Service).
+///
+/// A system service row is shared by every tenant, so a community admin must
+/// never edit or delete it — but they must still be able to withdraw it from
+/// their own catalog. This is that override: absent means "use the service's own
+/// isActive", present means this tenant's decision wins. Tenant-owned services
+/// need no row; their own isActive is authoritative.
+model TenantServiceSetting {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  isActive  Boolean @default(true)
+  /// Tenant-local ordering; falls back to the service's own sortOrder.
+  sortOrder Int?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@unique([tenantId, serviceId])
+  @@index([tenantId])
+  @@map("tenant_service_settings")
 }

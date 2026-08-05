@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Wrench } from 'lucide-react';
+import { Plus, Trash2, Wrench } from 'lucide-react';
 import type { Service } from '@living/types';
 import { useAuth } from '@living/hooks';
 import {
@@ -16,8 +16,13 @@ import { FormGrid, FormSection, FullWidth, TextAreaField } from '../shared/form-
  *
  * Availability is a STATUS, not a deletion: an inactive service disappears from
  * the resident app and can no longer be requested, while every historical
- * request keeps pointing at it and in-flight work carries on. That is why this
- * page has an Active/Inactive switch and no delete button.
+ * request keeps pointing at it and in-flight work carries on.
+ *
+ * Two kinds of row live here. A COMMUNITY service is the tenant's own and can be
+ * created, edited and deleted freely. A PLATFORM service is one row shared by
+ * every tenant, so it can only be withdrawn — the Availability switch records
+ * that against this tenant alone, leaving other communities untouched. An admin
+ * who wants their own wording or price creates a community service instead.
  */
 export function ServicesPage() {
   const { hasPermission } = useAuth();
@@ -32,6 +37,44 @@ export function ServicesPage() {
     queryKey: ['services', 'catalog', search],
     queryFn: () => living.serviceRequest.listServices({ search: search || undefined }),
   });
+
+  const confirmDelete = useConfirm();
+
+  const remove = useMutation({
+    mutationFn: (id: string) => living.serviceRequest.deleteService(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['services'] });
+      toast.success('Service deleted');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  /**
+   * Deleting is for a service created in error. Withdrawing one that residents
+   * have actually used should be a deactivation, so the confirmation says which
+   * is which and reports what still references it.
+   */
+  const onDelete = async (service: Service) => {
+    const usage = await living.serviceRequest
+      .serviceUsage(service.id)
+      .catch(() => ({ openRequests: 0, packages: 0 }));
+
+    const blockers = [
+      usage.openRequests > 0 && `${usage.openRequests} open request(s)`,
+      usage.packages > 0 && `${usage.packages} package(s)`,
+    ].filter(Boolean) as string[];
+
+    const ok = await confirmDelete({
+      title: `Delete ${service.name}?`,
+      description: blockers.length
+        ? `This service is still referenced by ${blockers.join(' and ')}. Deactivating it instead ` +
+          'withdraws it from the resident app while keeping that history intact.'
+        : 'Residents will no longer see this service. History is preserved.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (ok) remove.mutate(service.id);
+  };
 
   const setStatus = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
@@ -103,11 +146,25 @@ export function ServicesPage() {
       key: 'actions',
       header: '',
       align: 'right',
+      // A platform service is one row shared by every community, so it can be
+      // withdrawn (the Availability switch) but never edited or deleted here.
+      // A community that wants its own version creates one.
       cell: (s) =>
         canManage && !s.isSystem ? (
-          <Button size="sm" variant="secondary" onClick={() => setEditing(s)}>
-            Edit
-          </Button>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setEditing(s)}>
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Delete ${s.name}`}
+              disabled={remove.isPending}
+              onClick={() => void onDelete(s)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         ) : null,
     },
   ];
