@@ -412,13 +412,30 @@ async function seedAssetCategories(communityId: string, tenantId: string) {
   console.log(`✓ ${DEFAULT_ASSET_CATEGORIES.length} asset categories (demo community)`);
 }
 
+/**
+ * Reference data (permissions, roles, ticket categories, system services) is
+ * ALWAYS safe to re-run and must be re-run after any release that adds a role
+ * or permission — role grants are authoritative here, not additive.
+ *
+ * Demo data is not safe to re-run on a live system: it would resurrect the
+ * demo tenant, community and its accounts (which carry a published default
+ * password) on a database serving real customers. Set `SEED_SKIP_DEMO=true` to
+ * seed reference data only — that is the production path.
+ */
 async function main() {
+  const skipDemo = process.env.SEED_SKIP_DEMO === 'true';
+
   console.log('Seeding Living Platform…');
   await seedPermissions();
   await seedRoles();
   await seedTicketCategories();
   await seedServices();
-  await seedDemoData();
+
+  if (skipDemo) {
+    console.log('• SEED_SKIP_DEMO=true — reference data only, no demo tenant');
+  } else {
+    await seedDemoData();
+  }
   console.log('Done.');
 }
 
