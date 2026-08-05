@@ -4,6 +4,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { AppModule } from './app.module';
 import { ModuleEnabledGuard } from './common/guards/module-enabled.guard';
 import { expectSingleton } from './common/testing/di-scope';
+import { createPrismaStub } from './common/testing/prisma-stub';
 import { AmcExpiryService } from './modules/amc/amc-expiry.service';
 import { BillingSchedulerService } from './modules/billing/billing-scheduler.service';
 import { AnnouncementSchedulerService } from './modules/community-ops/announcement-scheduler.service';
@@ -51,7 +52,7 @@ describe('AppModule wiring', () => {
 
     moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
-      .useValue({ $connect: jest.fn(), $disconnect: jest.fn(), $on: jest.fn() })
+      .useValue(createPrismaStub())
       .overrideProvider(RedisService)
       .useValue({ ping: jest.fn(), get: jest.fn(), set: jest.fn(), del: jest.fn(), quit: jest.fn() })
       .overrideProvider(getQueueToken(NOTIFICATION_QUEUE))
