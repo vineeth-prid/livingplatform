@@ -24,6 +24,8 @@ export {
   PlatformResource,
   type ProvisionCommunityInput,
   type ProvisionCommunityResult,
+  type CommunityAdminAccount,
+  type CommunityRevenueRow,
 } from './resources/platform';
 export { CatalogResource, type CatalogKind, type CatalogOption } from './resources/catalog';
 export {

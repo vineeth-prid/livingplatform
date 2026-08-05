@@ -5,12 +5,13 @@ import { LivingApiError, type ProvisionCommunityResult } from '@living/living-sd
 import type { Community } from '@living/types';
 import {
   Badge, Button, Card, EmptyState, LoadingState, PageContainer, PageHeader,
-  PageTransition, toast,
+  PageTransition, SearchInput, toast,
 } from '@living/ui';
 import { Building2, Copy, KeyRound, LogIn, Pencil, Plus, Power } from 'lucide-react';
 
 import { living } from '../../lib/living';
 import { beginImpersonation, cancelImpersonation } from './impersonation';
+import { CommunityAdminCredentials } from './community-admin-credentials';
 import { CommunityEditForm } from './community-edit-form';
 import { ProvisionCommunityForm } from './provision-community-form';
 import { StatusBadge } from '../master-data';
@@ -35,7 +36,9 @@ export function AdminCommunitiesPage() {
   const [credentials, setCredentials] = useState<ProvisionCommunityResult['admin'] | null>(null);
   const [loggingInId, setLoggingInId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Community | null>(null);
+  const [viewingCreds, setViewingCreds] = useState<Community | null>(null);
   const [tab, setTab] = useState('all');
+  const [search, setSearch] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: qk.communities({ limit: 100 }),
@@ -50,8 +53,13 @@ export function AdminCommunitiesPage() {
   });
 
   const all = data?.items ?? [];
-  const communities = all.filter((c) =>
-    tab === 'all' ? true : tab === 'active' ? c.status === 'ACTIVE' : c.status !== 'ACTIVE');
+  const q = search.trim().toLowerCase();
+  const communities = all
+    .filter((c) => (tab === 'all' ? true : tab === 'active' ? c.status === 'ACTIVE' : c.status !== 'ACTIVE'))
+    .filter((c) =>
+      q === ''
+        ? true
+        : [c.name, c.code, c.city, c.state].some((f) => f?.toLowerCase().includes(q)));
 
   const copy = (text: string) => {
     void navigator.clipboard.writeText(text).then(() => toast.success('Copied'));
@@ -105,8 +113,14 @@ export function AdminCommunitiesPage() {
           </Card>
         )}
 
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
+          <SearchInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search name, code or city…"
+            className="w-full sm:w-64"
+          />
         </div>
 
         {isLoading ? (
@@ -140,6 +154,14 @@ export function AdminCommunitiesPage() {
                     </Button>
                     <Button
                       variant="ghost" size="sm"
+                      onClick={() => setViewingCreds(c)}
+                      aria-label={`Admin login for ${c.name}`}
+                      title="Association admin login — view the account, reset its password"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm"
                       loading={toggleStatus.isPending && toggleStatus.variables?.id === c.id}
                       onClick={() => toggleStatus.mutate(c)}
                       aria-label={c.status === 'ACTIVE' ? `Deactivate ${c.name}` : `Activate ${c.name}`}
@@ -167,6 +189,14 @@ export function AdminCommunitiesPage() {
           onOpenChange={setProvisioning}
           onProvisioned={(r) => setCredentials(r.admin)}
         />
+        {viewingCreds && (
+          <CommunityAdminCredentials
+            communityId={viewingCreds.id}
+            communityName={viewingCreds.name}
+            open={!!viewingCreds}
+            onOpenChange={(o) => !o && setViewingCreds(null)}
+          />
+        )}
         {editing && (
           <CommunityEditForm
             community={editing}

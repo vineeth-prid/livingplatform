@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -23,6 +23,17 @@ export class AdminController {
   @ApiOperation({ summary: 'Provision a community and its Association Admin (Platform Admin only)' })
   provisionCommunity(@Body() dto: ProvisionCommunityDto, @CurrentUser() user: AuthenticatedUser) {
     return this.provisioning.provisionCommunity(dto, user);
+  }
+
+  @Get('communities/:communityId/admin')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
+  @ApiOperation({
+    summary:
+      "A community's Association Admin login (Platform Admin only). The password " +
+      'is an argon2 hash and can never be read back — reset it to issue a new one.',
+  })
+  communityAdmin(@Param('communityId') communityId: string) {
+    return this.provisioning.communityAdmin(communityId);
   }
 
   @Post('communities/:communityId/login-as')

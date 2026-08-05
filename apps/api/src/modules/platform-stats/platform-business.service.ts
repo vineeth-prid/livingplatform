@@ -48,13 +48,35 @@ export interface PlatformBusinessIntelligence {
   };
 }
 
+/** One community's collection totals, split by rail. */
+export interface CommunityRevenueRow {
+  communityId: string;
+  communityName: string;
+  communityCode: string;
+  status: CommunityStatus;
+  maintenanceEnabled: boolean;
+  /** PAID only, all time. */
+  totalCollected: number;
+  maintenanceCollected: number;
+  serviceCollected: number;
+  last30Days: number;
+  paymentCount: number;
+  lastPaymentAt: Date | null;
+}
+
 /**
  * Platform-wide business intelligence.
  *
- * The hard rule here is the one from the brief: **do not expose community
- * financial data.** Every figure is either a count of communities or a sum
- * across ALL of them; nothing in this response can be attributed back to a
- * single association. Per-community money lives behind
+ * `overview()` stays aggregate-only — it is the shape of the business, and
+ * nothing in it can be attributed back to a single association.
+ *
+ * `revenueByCommunity()` is the deliberate exception, added because the
+ * platform operator asked to see which community a payment came from. That is
+ * an operator's own reconciliation need (they run the platform and carry the
+ * gateway relationship), so the split exists — but it stays on its own
+ * endpoint behind the platform-only gate rather than leaking into `overview()`,
+ * and it reports COLLECTION TOTALS ONLY: no resident, unit, or invoice detail
+ * crosses the tenant line. An association's books still live behind
  * `CommunityInsightsService`, which is tenant-scoped.
  */
 @Injectable()
@@ -187,6 +209,70 @@ export class PlatformBusinessService {
         growthPercent: prior > 0 ? Math.round(((recent - prior) / prior) * 100) : null,
       },
     };
+  }
+
+  /**
+   * Collection totals per community, split by rail — "which community did this
+   * money come from". Communities that have never collected are included with
+   * zeroes so the operator can see who is live and who is not.
+   */
+  async revenueByCommunity(): Promise<CommunityRevenueRow[]> {
+    const since30 = new Date(Date.now() - 30 * 86_400_000);
+
+    const communities = await this.prisma.community.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, code: true, status: true },
+      orderBy: { name: 'asc' },
+    });
+    if (communities.length === 0) return [];
+
+    const paid = { deletedAt: null, status: PaymentStatus.PAID };
+    const [byCommunity, byRail, recent, enabled] = await Promise.all([
+      this.prisma.payment.groupBy({
+        by: ['communityId'],
+        where: paid,
+        _sum: { amount: true },
+        _count: { _all: true },
+        _max: { paidAt: true },
+      }),
+      this.prisma.payment.groupBy({
+        by: ['communityId', 'purpose'],
+        where: paid,
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.groupBy({
+        by: ['communityId'],
+        where: { ...paid, paidAt: { gte: since30 } },
+        _sum: { amount: true },
+      }),
+      this.modules.maintenanceEnabledByCommunity(communities.map((c) => c.id)),
+    ]);
+
+    const totals = new Map(byCommunity.map((r) => [r.communityId, r]));
+    const recent30 = new Map(recent.map((r) => [r.communityId, Number(r._sum.amount ?? 0)]));
+    const rails = new Map<string, number>();
+    for (const row of byRail) {
+      rails.set(`${row.communityId}:${row.purpose}`, Number(row._sum.amount ?? 0));
+    }
+
+    return communities.map((c) => {
+      const total = totals.get(c.id);
+      const service = rails.get(`${c.id}:${PaymentPurpose.SERVICE}`) ?? 0;
+      const maintenance = rails.get(`${c.id}:${PaymentPurpose.MAINTENANCE}`) ?? 0;
+      return {
+        communityId: c.id,
+        communityName: c.name,
+        communityCode: c.code,
+        status: c.status,
+        maintenanceEnabled: enabled.get(c.id) ?? true,
+        totalCollected: round2(Number(total?._sum.amount ?? 0)),
+        maintenanceCollected: round2(maintenance),
+        serviceCollected: round2(service),
+        last30Days: round2(recent30.get(c.id) ?? 0),
+        paymentCount: total?._count._all ?? 0,
+        lastPaymentAt: total?._max.paidAt ?? null,
+      };
+    });
   }
 
   /** Maintenance-enabled flag per community, for the admin communities table. */

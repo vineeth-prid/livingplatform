@@ -40,6 +40,17 @@ export class PlatformStatsController {
     return this.business.overview();
   }
 
+  @Get('revenue-by-community')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
+  @ApiOperation({
+    summary:
+      'Collection totals per community, split maintenance / service — which community ' +
+      'the money came from. Totals only; no resident, unit or invoice detail.',
+  })
+  revenueByCommunity() {
+    return this.business.revenueByCommunity();
+  }
+
   @Get('maintenance-enabled')
   @RequirePermissions(PERMISSIONS.COMMUNITY_CREATE)
   @ApiOperation({ summary: 'Maintenance-billing flag per community (yes/no only)' })

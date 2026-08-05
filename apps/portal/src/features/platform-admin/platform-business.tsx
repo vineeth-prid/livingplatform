@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Building2, Lock, Package, Receipt, TrendingDown, TrendingUp, Wallet,
+  Building2, Package, Receipt, TrendingDown, TrendingUp, Wallet,
 } from 'lucide-react';
 import {
-  Card, EmptyState, LoadingState, PageContainer, PageHeader, StatCard,
+  Badge, Card, EmptyState, LoadingState, PageContainer, PageHeader, SearchInput, StatCard,
 } from '@living/ui';
 
 import { living } from '../../lib/living';
@@ -12,10 +13,11 @@ import { inr } from '../billing/queries';
 /**
  * Platform Admin → Business.
  *
- * Aggregated intelligence only. There is deliberately no per-community revenue
- * anywhere on this page: the platform operator sees the size and shape of the
- * business, not any individual association's books. Module adoption is a count
- * of communities, and package popularity is merged by name.
+ * Aggregates, plus one per-community breakdown: what each community has
+ * collected on the maintenance rail, which the operator asked for to see where
+ * the money comes from. Everything else stays aggregate — package popularity is
+ * merged by name, and no resident, unit or invoice detail appears here. Per-rail
+ * totals across both rails live on the Payments page.
  */
 export function PlatformBusinessPage() {
   const business = useQuery({
@@ -102,14 +104,7 @@ export function PlatformBusinessPage() {
           />
         </Card>
 
-        <Card variant="elevated" className="flex items-start gap-3">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-          <p className="text-sm text-muted">
-            Every figure here is an aggregate across communities. Per-community revenue,
-            outstanding balances and resident data are not exposed to the platform operator — an
-            association reads its own numbers from its Community dashboard.
-          </p>
-        </Card>
+        <MaintenanceByCommunity />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -125,6 +120,73 @@ export function PlatformBusinessPage() {
         />
       </div>
     </PageContainer>
+  );
+}
+
+/**
+ * Which communities run maintenance billing through Living, and what each has
+ * collected on that rail. Shares the Payments page's query, so switching pages
+ * costs no extra fetch.
+ */
+function MaintenanceByCommunity() {
+  const [search, setSearch] = useState('');
+  const [onlyEnabled, setOnlyEnabled] = useState(false);
+
+  const revenue = useQuery({
+    queryKey: ['admin', 'revenue-by-community'],
+    queryFn: () => living.platform.revenueByCommunity(),
+  });
+
+  const q = search.trim().toLowerCase();
+  const rows = (revenue.data ?? [])
+    .filter((r) => (onlyEnabled ? r.maintenanceEnabled : true))
+    .filter((r) =>
+      q === ''
+        ? true
+        : r.communityName.toLowerCase().includes(q) || r.communityCode.toLowerCase().includes(q))
+    .sort((a, b) => b.maintenanceCollected - a.maintenanceCollected);
+
+  return (
+    <Card variant="elevated">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 font-display text-h4 tracking-tight text-strong">
+          <Receipt className="h-4 w-4 text-muted" /> Maintenance by community
+        </h2>
+        <button
+          type="button"
+          onClick={() => setOnlyEnabled((v) => !v)}
+          className="text-xs text-brand transition-colors hover:text-brand-strong"
+        >
+          {onlyEnabled ? 'Show all' : 'Only billing through Living'}
+        </button>
+      </div>
+
+      <SearchInput
+        value={search}
+        onValueChange={setSearch}
+        placeholder="Filter by community…"
+        className="mb-3"
+      />
+
+      {revenue.isLoading ? (
+        <LoadingState label="Loading communities…" />
+      ) : rows.length === 0 ? (
+        <EmptyState title="No communities match" description="Try a different filter." />
+      ) : (
+        <ul className="flex max-h-80 flex-col divide-y divide-border-subtle overflow-y-auto">
+          {rows.map((r) => (
+            <li key={r.communityId} className="flex items-center justify-between gap-3 py-2.5">
+              <span className="min-w-0 flex-1 truncate text-sm text-body">{r.communityName}</span>
+              {r.maintenanceEnabled ? (
+                <span className="text-sm text-strong" data-numeric>{inr(r.maintenanceCollected)}</span>
+              ) : (
+                <Badge tone="neutral" size="sm">collects outside Living</Badge>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

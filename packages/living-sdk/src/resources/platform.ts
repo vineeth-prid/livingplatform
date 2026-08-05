@@ -24,6 +24,30 @@ export interface ProvisionCommunityResult<C = unknown> {
   };
 }
 
+export interface CommunityAdminAccount {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+}
+
+export interface CommunityRevenueRow {
+  communityId: string;
+  communityName: string;
+  communityCode: string;
+  status: string;
+  maintenanceEnabled: boolean;
+  totalCollected: number;
+  maintenanceCollected: number;
+  serviceCollected: number;
+  last30Days: number;
+  paymentCount: number;
+  lastPaymentAt: string | null;
+}
+
 /** Platform-level reads: RBAC catalog, users, profile, health — and provisioning. */
 export class PlatformResource {
   constructor(private readonly http: HttpClient) {}
@@ -31,6 +55,15 @@ export class PlatformResource {
   /** Provision a community + its Association Admin in one call (Platform Admin only). */
   provisionCommunity<C = unknown>(input: ProvisionCommunityInput): Promise<ProvisionCommunityResult<C>> {
     return this.http.post('/admin/communities', input);
+  }
+
+  /**
+   * A community's Association Admin login. The password is never returned —
+   * it is an argon2 hash and cannot be reversed. Use
+   * `auth.adminResetPassword(account.id)` to issue a new one.
+   */
+  communityAdmin(communityId: string): Promise<CommunityAdminAccount> {
+    return this.http.get(`/admin/communities/${communityId}/admin`);
   }
 
   /**
@@ -91,6 +124,10 @@ export class PlatformResource {
   }
   auditModules(): Promise<string[]> {
     return this.http.get('/admin/stats/audit/modules');
+  }
+  /** Collection totals per community, split maintenance / service. Totals only. */
+  revenueByCommunity(): Promise<CommunityRevenueRow[]> {
+    return this.http.get('/admin/stats/revenue-by-community');
   }
   systemInfo<T = unknown>(): Promise<T> {
     return this.http.get('/admin/stats/system');

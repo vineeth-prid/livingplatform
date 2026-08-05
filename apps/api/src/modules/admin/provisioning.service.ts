@@ -151,19 +151,7 @@ export class ProvisioningService {
     });
     if (!community) throw new NotFoundException('Community not found');
 
-    const admin = await this.prisma.user.findFirst({
-      where: {
-        tenantId: community.tenantId,
-        deletedAt: null,
-        status: 'ACTIVE',
-        roles: { some: { role: { key: ROLE_KEYS.ASSOCIATION_ADMIN } } },
-      },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true, email: true, firstName: true, lastName: true,
-        tenantId: true, status: true, emailVerifiedAt: true,
-      },
-    });
+    const admin = await this.findAssociationAdmin(community.tenantId, true);
     if (!admin) {
       throw new NotFoundException('This community has no association admin to sign in as');
     }
@@ -194,6 +182,62 @@ export class ProvisioningService {
         roles: principal.roles.map((r) => r.key),
       },
     };
+  }
+
+  /**
+   * The community's Association Admin login, for the operator's Communities
+   * table.
+   *
+   * There is deliberately no way to READ the password back: it is stored as an
+   * argon2 hash and nothing on the platform can reverse that — not this
+   * endpoint, not the database, not us. The honest affordance is "reset and
+   * show the new one once", which is `POST /auth/users/:id/reset-password`.
+   * This returns who to reset, so the operator can find the account without
+   * impersonating first.
+   */
+  async communityAdmin(communityId: string) {
+    if (!this.tenant.isPlatform) {
+      throw new ForbiddenException('Only a Platform Admin can view community admin accounts');
+    }
+
+    const community = await this.prisma.community.findFirst({
+      where: { id: communityId, deletedAt: null },
+      select: { tenantId: true },
+    });
+    if (!community) throw new NotFoundException('Community not found');
+
+    // Not active-only: an operator most needs this when the account is locked
+    // or suspended, which is exactly when an active-only lookup would hide it.
+    const admin = await this.findAssociationAdmin(community.tenantId, false);
+    if (!admin) throw new NotFoundException('This community has no association admin');
+
+    return {
+      id: admin.id,
+      email: admin.email,
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      status: admin.status,
+      mustChangePassword: admin.mustChangePassword,
+      lastLoginAt: admin.lastLoginAt,
+    };
+  }
+
+  /** The community's Association Admin — oldest first, so it is stable. */
+  private findAssociationAdmin(tenantId: string, activeOnly: boolean) {
+    return this.prisma.user.findFirst({
+      where: {
+        tenantId,
+        deletedAt: null,
+        ...(activeOnly ? { status: 'ACTIVE' as const } : {}),
+        roles: { some: { role: { key: ROLE_KEYS.ASSOCIATION_ADMIN } } },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true, email: true, firstName: true, lastName: true,
+        tenantId: true, status: true, emailVerifiedAt: true,
+        mustChangePassword: true, lastLoginAt: true,
+      },
+    });
   }
 
   private present<T extends { logoKey: string | null; coverImageKey: string | null }>(c: T) {

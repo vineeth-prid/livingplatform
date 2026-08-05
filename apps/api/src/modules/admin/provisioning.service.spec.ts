@@ -62,4 +62,80 @@ describe('ProvisioningService.loginAsCommunity', () => {
     expect(result.accessToken).toBe('a');
     expect(result.user.email).toBe('assoc@x');
   });
+
+  it('only signs in as an ACTIVE admin', async () => {
+    const svc = make({
+      isPlatform: true,
+      community: { id: 'c1', tenantId: 't1', name: 'X' },
+      admin: { id: 'a1', email: 'assoc@x', tenantId: 't1' },
+    });
+    await svc.loginAsCommunity('c1', actor, {});
+    const prisma = (svc as unknown as { prisma: PrismaService }).prisma;
+    const where = (prisma.user.findFirst as jest.Mock).mock.calls[0][0].where;
+    expect(where.status).toBe('ACTIVE');
+  });
+});
+
+/**
+ * The operator's credentials view. The password can never be read back, so the
+ * only thing this must get right is WHICH account to offer a reset for — and it
+ * has to find suspended admins, since that is exactly when an operator needs it.
+ */
+describe('ProvisioningService.communityAdmin', () => {
+  const make = (opts: {
+    isPlatform: boolean;
+    community?: { tenantId: string } | null;
+    admin?: Record<string, unknown> | null;
+  }) => {
+    const prisma = {
+      community: { findFirst: jest.fn().mockResolvedValue(opts.community ?? null) },
+      user: { findFirst: jest.fn().mockResolvedValue(opts.admin ?? null) },
+    } as unknown as PrismaService;
+    const tenant = { isPlatform: opts.isPlatform } as unknown as TenantContextService;
+    return new ProvisioningService(
+      prisma, tenant, {} as StorageService, {} as DomainEventsService,
+      {} as RbacService, {} as TokensService,
+    );
+  };
+
+  it('rejects a non-platform caller', async () => {
+    await expect(make({ isPlatform: false }).communityAdmin('c1'))
+      .rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('404s an unknown community', async () => {
+    await expect(make({ isPlatform: true, community: null }).communityAdmin('c1'))
+      .rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('finds a SUSPENDED admin — an active-only lookup would hide the account that most needs a reset', async () => {
+    const svc = make({
+      isPlatform: true,
+      community: { tenantId: 't1' },
+      admin: {
+        id: 'a1', email: 'assoc@x', firstName: 'A', lastName: 'B',
+        status: 'SUSPENDED', mustChangePassword: false, lastLoginAt: null,
+      },
+    });
+    const result = await svc.communityAdmin('c1');
+    expect(result.status).toBe('SUSPENDED');
+
+    const prisma = (svc as unknown as { prisma: PrismaService }).prisma;
+    expect((prisma.user.findFirst as jest.Mock).mock.calls[0][0].where.status).toBeUndefined();
+  });
+
+  it('never returns a password or hash', async () => {
+    const svc = make({
+      isPlatform: true,
+      community: { tenantId: 't1' },
+      admin: {
+        id: 'a1', email: 'assoc@x', firstName: 'A', lastName: 'B',
+        status: 'ACTIVE', mustChangePassword: true, lastLoginAt: null,
+        passwordHash: '$argon2id$leaked',
+      },
+    });
+    const result = await svc.communityAdmin('c1');
+    expect(JSON.stringify(result)).not.toContain('argon2');
+    expect(result).not.toHaveProperty('passwordHash');
+  });
 });
