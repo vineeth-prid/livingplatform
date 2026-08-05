@@ -88,8 +88,26 @@ export function NotificationPreferencesPage() {
         description={`Which notifications ${community?.name ?? 'this community'} sends, on which channel, and in what words.`}
       />
 
+      {/*
+        A connected WhatsApp gateway does NOT mean WhatsApp notifications send.
+        Routing is per community and per event, and both default to off — so an
+        operator can configure the gateway, send a successful test message, and
+        still see nothing delivered, with nothing on screen explaining why. This
+        is that explanation.
+      */}
+      {prefs.data.every((p) => !p.whatsappEnabled) && (
+        <Card variant="elevated" className="mb-4 flex items-start gap-3 border-warning/30">
+          <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning-fg" />
+          <p className="text-sm text-muted">
+            <strong className="text-strong">WhatsApp is off for every event.</strong> A connected
+            gateway and a successful test message are not enough — each event below also has to be
+            switched on here before anything is sent over WhatsApp.
+          </p>
+        </Card>
+      )}
+
       <Card variant="elevated" className="p-0">
-        <table className="w-full">
+        <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px]">
           <thead className="border-b border-border-subtle text-left">
             <tr className="text-xs uppercase tracking-wider text-subtle">
               <th className="px-4 py-3 font-medium">Event</th>
@@ -163,7 +181,7 @@ export function NotificationPreferencesPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
 
       <p className="mt-4 text-xs text-subtle">

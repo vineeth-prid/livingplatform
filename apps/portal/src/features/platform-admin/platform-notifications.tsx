@@ -100,7 +100,7 @@ function OverviewTab() {
           {(stats.data?.byChannel.length ?? 0) === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-subtle">No deliveries yet.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead><tr className="text-left text-2xs uppercase tracking-wider text-subtle">
                 {['Channel', 'Sent', 'Delivered', 'Failed'].map((h) => <th key={h} className="px-4 py-2 font-semibold">{h}</th>)}
               </tr></thead>
@@ -114,7 +114,7 @@ function OverviewTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </Card>
       </PlatformSection>
@@ -238,7 +238,7 @@ function HistoryTab() {
             <p className="px-4 py-10 text-center text-sm text-subtle">No notifications recorded yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
                 <thead><tr className="text-left text-2xs uppercase tracking-wider text-subtle">
                   {['Time', 'Channel', 'Recipient', 'Subject', 'Provider', 'Status'].map((h) => <th key={h} className="px-4 py-2 font-semibold">{h}</th>)}
                 </tr></thead>
@@ -254,7 +254,7 @@ function HistoryTab() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
       </Card>

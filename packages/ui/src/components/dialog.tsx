@@ -45,40 +45,56 @@ export function DialogContent({
             exit="exit"
             className="fixed inset-0 z-50 bg-[var(--surface-scrim)] backdrop-blur-sm"
           />
-          <MotionContent
-            variants={reduce(dialogContent, reduced)}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className={cn(
-              'fixed left-1/2 top-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2',
-              // Tall content must scroll inside the dialog, never off the screen.
-              'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
-              'rounded-xl border border-border-subtle bg-card p-6 shadow-floating',
-              'focus:outline-none',
-              className,
-            )}
-          >
-            {title && (
-              <DialogPrimitive.Title className="font-display text-h3 tracking-tight text-strong">
-                {title}
-              </DialogPrimitive.Title>
-            )}
-            {description && (
-              <DialogPrimitive.Description className="mt-1.5 text-sm text-muted">
-                {description}
-              </DialogPrimitive.Description>
-            )}
-            <div className={cn((title || description) && 'mt-5')}>{children}</div>
-            {showClose && (
-              <DialogPrimitive.Close
-                className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-sunken hover:text-strong focus-visible:shadow-ring"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </DialogPrimitive.Close>
-            )}
-          </MotionContent>
+          {/*
+            Centring is LAYOUT, not transform.
+
+            Framer writes the scale/rise animation to the element's inline
+            `transform`, and an inline style beats a class — so the previous
+            `-translate-x-1/2 -translate-y-1/2` was silently wiped the moment the
+            animation ran, dropping the dialog's TOP-LEFT CORNER at the centre of
+            the viewport. Every dialog in every app overflowed the right and
+            bottom edges, worst on a phone. A flex wrapper cannot be overridden
+            that way, and the animation is free to own `transform` outright.
+
+            `pointer-events-none` on the wrapper lets clicks fall through to the
+            overlay beneath, so Radix still closes on an outside click.
+          */}
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+            <MotionContent
+              variants={reduce(dialogContent, reduced)}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className={cn(
+                'pointer-events-auto relative w-full max-w-[560px]',
+                // Tall content scrolls inside the dialog, never off the screen.
+                'max-h-full overflow-y-auto overscroll-contain',
+                'rounded-xl border border-border-subtle bg-card p-6 shadow-floating',
+                'focus:outline-none',
+                className,
+              )}
+            >
+              {title && (
+                <DialogPrimitive.Title className="font-display text-h3 tracking-tight text-strong">
+                  {title}
+                </DialogPrimitive.Title>
+              )}
+              {description && (
+                <DialogPrimitive.Description className="mt-1.5 text-sm text-muted">
+                  {description}
+                </DialogPrimitive.Description>
+              )}
+              <div className={cn((title || description) && 'mt-5')}>{children}</div>
+              {showClose && (
+                <DialogPrimitive.Close
+                  className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-sunken hover:text-strong focus-visible:shadow-ring"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </DialogPrimitive.Close>
+              )}
+            </MotionContent>
+          </div>
         </DialogPrimitive.Portal>
       )}
     </AnimatePresence>

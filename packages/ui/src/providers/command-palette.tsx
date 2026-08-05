@@ -93,17 +93,20 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
               >
                 <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--surface-scrim)] backdrop-blur-sm" />
               </motion.div>
-              <MotionContent
-                variants={reduce(dialogContent, reduced)}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                aria-label="Command palette"
-                className={cn(
-                  'fixed left-1/2 top-[18vh] z-50 w-[min(92vw,600px)] -translate-x-1/2',
-                  'overflow-hidden rounded-xl border border-border-subtle bg-card shadow-floating',
-                )}
-              >
+              {/* Layout centring, not transform — the animation owns `transform`
+                  and an inline style beats the class. See dialog.tsx. */}
+              <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center p-4 pt-[18vh]">
+                <MotionContent
+                  variants={reduce(dialogContent, reduced)}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  aria-label="Command palette"
+                  className={cn(
+                    'pointer-events-auto w-full max-w-[600px] max-h-full',
+                    'overflow-hidden rounded-xl border border-border-subtle bg-card shadow-floating',
+                  )}
+                >
                 <Command
                   className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-subtle"
                   loop
@@ -140,7 +143,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
                     ))}
                   </Command.List>
                 </Command>
-              </MotionContent>
+                </MotionContent>
+              </div>
             </DialogPrimitive.Portal>
           )}
         </AnimatePresence>

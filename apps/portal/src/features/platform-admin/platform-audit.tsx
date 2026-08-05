@@ -85,7 +85,7 @@ function JobTable({ head, rows }: { head: string[]; rows: string[][] }) {
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-subtle">No scheduled jobs.</p>
       ) : (
-        <table className="w-full text-sm">
+        <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
           <thead><tr className="text-left text-2xs uppercase tracking-wider text-subtle">
             {head.map((h) => <th key={h} className="px-4 py-2 font-semibold">{h}</th>)}
           </tr></thead>
@@ -98,7 +98,7 @@ function JobTable({ head, rows }: { head: string[]; rows: string[][] }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </Card>
   );
@@ -130,7 +130,7 @@ function AuditLogTable() {
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
               <thead><tr className="text-left text-2xs uppercase tracking-wider text-subtle">
                 {['Time', 'User', 'Action', 'Module', 'IP address', 'Status'].map((h) => <th key={h} className="px-4 py-2 font-semibold">{h}</th>)}
               </tr></thead>
@@ -149,7 +149,7 @@ function AuditLogTable() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </div>
           {q.data!.meta.total > q.data!.meta.limit && (
             <Pagination meta={q.data!.meta} onPageChange={setPage} />

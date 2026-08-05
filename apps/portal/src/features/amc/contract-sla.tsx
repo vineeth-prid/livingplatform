@@ -52,7 +52,7 @@ export function ContractSla({ contractId, rules, onChanged }: { contractId: stri
         <EmptyState icon={Gauge} title="No SLA rules" description="Define response and resolution targets per priority." />
       ) : (
         <div className="overflow-hidden rounded-card border border-border-subtle">
-          <table className="w-full text-sm">
+          <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
             <thead className="bg-sunken/60 text-2xs uppercase tracking-wider text-subtle">
               <tr><th className="px-3.5 py-2 text-left font-semibold">Priority</th><th className="px-3.5 py-2 text-left font-semibold">Response</th><th className="px-3.5 py-2 text-left font-semibold">Resolution</th><th className="px-3.5 py-2 text-left font-semibold">Escalation</th><th /></tr>
             </thead>
@@ -69,7 +69,7 @@ export function ContractSla({ contractId, rules, onChanged }: { contractId: stri
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

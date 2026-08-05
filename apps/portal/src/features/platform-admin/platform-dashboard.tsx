@@ -71,7 +71,7 @@ export function PlatformDashboardPage() {
                   <DonutChart data={data.users.ownerVsTenant} height={160} />
                 </ChartWrapper>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <StatCard label="Active users (30d)" value={data.users.active} icon={CheckCircle2} />
                 <StatCard label="Monthly active (MAU)" value={data.users.mau} icon={TrendingUp} />
                 <StatCard label="Daily active (DAU)" value={data.users.dau} icon={TrendingUp} />
