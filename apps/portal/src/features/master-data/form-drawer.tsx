@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { LivingApiError } from '@living/living-sdk';
 import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 
+type Values = Record<string, string>;
+
 export type FieldType = 'text' | 'email' | 'tel' | 'number' | 'date' | 'textarea' | 'select' | 'custom';
 
 export interface FieldDef {
@@ -15,11 +17,23 @@ export interface FieldDef {
   half?: boolean;
   /** Read-only display (still submitted). */
   readOnly?: boolean;
-  /** For type: 'custom' — render your own control bound to this field's value. */
-  render?: (value: string, setValue: (v: string) => void, error?: string) => ReactNode;
+  /**
+   * For type: 'custom' — render your own control bound to this field's value.
+   *
+   * `values` and `set` are supplied so a field can DEPEND on a sibling (e.g.
+   * Floor filtered by the selected Block, and cleared when that Block changes).
+   * Both are optional extras: existing renders take three arguments and are
+   * unaffected.
+   */
+  render?: (
+    value: string,
+    setValue: (v: string) => void,
+    error?: string,
+    values?: Values,
+    set?: (name: string, v: string) => void,
+  ) => ReactNode;
 }
 
-type Values = Record<string, string>;
 
 /**
  * A config-driven create/edit drawer. Forms are intentionally secondary here
@@ -79,7 +93,7 @@ export function FormDrawer({
             {fields.map((f) => (
               <div key={f.name} className={f.half ? '' : 'sm:col-span-2'}>
                 {f.type === 'custom' && f.render ? (
-                  f.render(values[f.name] ?? '', (v) => set(f.name, v), errors[f.name])
+                  f.render(values[f.name] ?? '', (v) => set(f.name, v), errors[f.name], values, set)
                 ) : f.type === 'select' ? (
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-strong">{f.label}</span>

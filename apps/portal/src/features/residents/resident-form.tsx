@@ -12,6 +12,10 @@ import { opt, GENDER, RESIDENT_STATUS } from '../master-data/options';
 const OCCUPIED_BY = [
   { value: 'OWNER', label: 'Owner' },
   { value: 'TENANT', label: 'Tenant' },
+  // Household members a resident adds from their own app arrive as
+  // FAMILY_MEMBER. Listing it here means an admin can also record one directly,
+  // and — more importantly — the register renders the value instead of a blank.
+  { value: 'FAMILY_MEMBER', label: 'Family member' },
 ];
 
 type Values = {
@@ -97,6 +101,11 @@ export function ResidentForm({
     if (!values.lastName.trim()) e.lastName = 'Required';
     if (!values.mobile.trim()) e.mobile = 'Required';
     if (!editing && !values.occupiedBy) e.occupiedBy = 'Required';
+    // A resident with no unit cannot raise a request, book an amenity, invite a
+    // visitor or receive a delivery — every resident-facing feature is scoped by
+    // unit. Creating one unattached produces an account that silently does
+    // nothing, so the unit is required up front rather than "fixed later".
+    if (!editing && !values.unitId) e.unitId = 'Choose the unit this resident lives in';
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 

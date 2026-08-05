@@ -231,7 +231,10 @@ export class ResidentService {
         mobile: dto.mobile,
         email: dto.email,
         unitId: me.unitId,
-        occupiedBy: 'SECONDARY',
+        // FAMILY_MEMBER, not SECONDARY: the residents register has to be able
+        // to tell a household member the resident added themselves from a
+        // co-occupant an admin created.
+        occupiedBy: 'FAMILY_MEMBER',
       },
       actor,
     );

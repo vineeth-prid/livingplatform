@@ -148,6 +148,10 @@ enum ResidentRole {
   SECONDARY
   OWNER
   TENANT
+  /// A household member added by the resident themselves (spouse, parent,
+  /// child). Distinct from SECONDARY, which is an admin-created co-occupant:
+  /// the residents register needs to show which is which.
+  FAMILY_MEMBER
 }
 
 /// Shared active/inactive status for vendors and staff.

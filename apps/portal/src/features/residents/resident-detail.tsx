@@ -91,11 +91,14 @@ export function ResidentDetailPage() {
                 </FieldGrid>
               </DetailSection>
 
+              {/* Relationship dropped: in an emergency a name and a number are
+                  what anyone acts on, and it was never collected in the form —
+                  so the field only ever rendered blank. The column is left on
+                  the model for any historical data. */}
               <DetailSection title="Emergency contact">
                 <FieldGrid>
                   <Field label="Name" value={r.emergencyContactName} />
                   <Field label="Phone" value={r.emergencyContactPhone} mono />
-                  <Field label="Relationship" value={r.emergencyContactRelationship} />
                 </FieldGrid>
               </DetailSection>
 

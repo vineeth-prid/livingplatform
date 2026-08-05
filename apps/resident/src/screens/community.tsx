@@ -13,6 +13,31 @@ import { ScreenHeader } from '../shell';
 
 interface EmergencyContact { name: string; role?: string; phone: string }
 
+/**
+ * The numbers a resident can call, in an emergency, from their phone.
+ *
+ * `emergencyContacts` is a JSON column, so it arrives as `unknown` and may be
+ * null, an object, or contain half-filled rows — this is the one screen where
+ * rendering nothing because of a malformed entry is genuinely costly, so bad
+ * rows are dropped rather than allowed to blank the section.
+ *
+ * When an association has configured none, the community's own contact number
+ * stands in. An empty Emergency contacts section helps nobody.
+ */
+function emergencyContacts(
+  community: { emergencyContacts?: unknown; contactPhone?: string | null; name?: string } | null,
+): EmergencyContact[] {
+  const raw = Array.isArray(community?.emergencyContacts) ? community.emergencyContacts : [];
+  const configured = (raw as EmergencyContact[]).filter(
+    (c) => c && typeof c.phone === 'string' && c.phone.trim() && typeof c.name === 'string',
+  );
+  if (configured.length > 0) return configured;
+
+  return community?.contactPhone
+    ? [{ name: community.name ?? 'Community office', role: 'Management', phone: community.contactPhone }]
+    : [];
+}
+
 const PRIORITY_TONE: Record<string, NonNullable<BadgeProps['tone']>> = {
   LOW: 'neutral', NORMAL: 'info', HIGH: 'warning', CRITICAL: 'danger',
 };
@@ -29,7 +54,7 @@ export function CommunityScreen() {
     ],
   });
 
-  const contacts = (community?.emergencyContacts as EmergencyContact[] | undefined) ?? [];
+  const contacts = emergencyContacts(community);
 
   return (
     <div>
