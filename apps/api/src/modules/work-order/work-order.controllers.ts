@@ -69,6 +69,18 @@ export class WorkOrderController {
     return this.workOrders.findMany(communityId, query);
   }
 
+  /**
+   * Work orders on the caller's own unit(s). Self-scoped and therefore NOT
+   * permission-gated — residents deliberately hold no work-order permission,
+   * but maintenance happening in their flat is exactly what they should be able
+   * to follow. Declared BEFORE `:id` so "mine" is not swallowed by the param.
+   */
+  @Get('work-orders/mine')
+  @ApiOperation({ summary: 'Work orders on my unit (resident self-service)' })
+  mine(@Query() query: QueryWorkOrderDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.workOrders.findMine(query, user);
+  }
+
   @Get('work-orders/:id')
   @RequirePermissions(PERMISSIONS.WORKORDER_VIEW)
   @ApiOperation({ summary: 'Work order details (updates, attachments, timeline, assignee)' })

@@ -154,6 +154,49 @@ export class WorkOrderService {
     };
   }
 
+  /**
+   * Work orders raised against the caller's OWN unit(s).
+   *
+   * Self-service, so it carries no RBAC permission — residents hold none of the
+   * work-order permissions by design, yet maintenance happening in their flat is
+   * exactly the thing they should be able to follow. Scoped by the caller's own
+   * resident records, so there is nothing to leak.
+   *
+   * Internal updates and cost estimates are stripped: a resident should see that
+   * work is happening and where it has got to, not the contractor's pricing.
+   */
+  async findMine(query: QueryWorkOrderDto, actor: AuthenticatedUser): Promise<Paginated<unknown>> {
+    const assignments = await this.prisma.residentUnit.findMany({
+      where: { resident: { userId: actor.id, deletedAt: null } },
+      select: { unitId: true },
+    });
+    const unitIds = [...new Set(assignments.map((a) => a.unitId))];
+    if (unitIds.length === 0) return paginate([], 0, query);
+
+    const where: Prisma.WorkOrderWhereInput = {
+      deletedAt: null,
+      unitId: { in: unitIds },
+      ...(query.status ? { status: query.status } : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.workOrder.findMany({
+        where,
+        orderBy: resolveSort(query, SORTABLE, 'createdAt'),
+        skip: query.skip,
+        take: query.take,
+        select: {
+          id: true, number: true, title: true, description: true,
+          status: true, priority: true, unitId: true,
+          dueDate: true, startedDate: true, completedDate: true,
+          createdAt: true, updatedAt: true,
+        },
+      }),
+      this.prisma.workOrder.count({ where }),
+    ]);
+    return paginate(items, total, query);
+  }
+
   async findMany(communityId: string, query: QueryWorkOrderDto): Promise<Paginated<unknown>> {
     await this.access.assert(communityId);
     const where: Prisma.WorkOrderWhereInput = {

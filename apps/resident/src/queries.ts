@@ -7,7 +7,7 @@ import { useResidentCommunity } from './community';
 import { useMyResident } from './community-ops';
 import { living } from './lib/living';
 
-export type RequestKind = 'ticket' | 'service' | 'visitor';
+export type RequestKind = 'ticket' | 'service' | 'visitor' | 'work-order';
 
 export interface MyRequest {
   kind: RequestKind;
@@ -22,6 +22,16 @@ export interface MyRequest {
 
 const ACTIVE_TICKET = new Set(['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD']);
 const ACTIVE_SERVICE = new Set(['REQUESTED', 'ASSIGNED', 'ACCEPTED', 'SCHEDULED', 'IN_PROGRESS']);
+const ACTIVE_WORK_ORDER = new Set([
+  'PENDING_APPROVAL', 'APPROVED', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD',
+]);
+
+/** "WO-000123" — the API returns the raw sequence, not the display number. */
+function formatWorkOrderNumber(workOrder: { number?: number; id: string }): string {
+  return workOrder.number != null
+    ? `WO-${String(workOrder.number).padStart(6, '0')}`
+    : workOrder.id.slice(0, 8).toUpperCase();
+}
 
 /**
  * The resident's own tickets + service requests, merged and newest-first.
@@ -36,7 +46,7 @@ export function useMyRequests() {
   const enabled = !!communityId && !!uid;
   const residentIds = useMemo(() => new Set(residents.map((r) => r.id)), [residents]);
 
-  const [tickets, services] = useQueries({
+  const [tickets, services, workOrders] = useQueries({
     queries: [
       {
         queryKey: ['my', 'tickets', communityId],
@@ -47,6 +57,14 @@ export function useMyRequests() {
         queryKey: ['my', 'service-requests', communityId],
         queryFn: () => living.serviceRequest.list(communityId!, { limit: 100, sortBy: 'createdAt', sortDir: 'desc' }),
         enabled,
+      },
+      {
+        // Maintenance raised against this resident's flat. Self-scoped
+        // server-side (residents hold no work-order permission), so unlike the
+        // two lists above it needs no client-side ownership filter.
+        queryKey: ['my', 'work-orders'],
+        queryFn: () => living.workOrder.mine({ limit: 50, sortBy: 'createdAt', sortDir: 'desc' }),
+        enabled: !!uid,
       },
     ],
   });
@@ -74,11 +92,25 @@ export function useMyRequests() {
       kind: 'service' as const, id: s.id, number: s.requestNumber, title: s.title,
       status: s.status, priority: s.priority, createdAt: s.createdAt, detailPath: `/requests/service/${s.id}`,
     })),
+    // Maintenance on this flat. Read-only for a resident — there is no detail
+    // screen to open, so the row links back to the list rather than a dead end.
+    ...(workOrders.data?.items ?? []).map((w) => ({
+      kind: 'work-order' as const,
+      id: w.id,
+      number: formatWorkOrderNumber(w),
+      title: w.title,
+      status: w.status,
+      priority: w.priority,
+      createdAt: w.createdAt,
+      detailPath: '/requests',
+    })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const open = items.filter((r) =>
-    r.kind === 'ticket' ? ACTIVE_TICKET.has(r.status) : ACTIVE_SERVICE.has(r.status),
-  );
+  const open = items.filter((r) => {
+    if (r.kind === 'ticket') return ACTIVE_TICKET.has(r.status);
+    if (r.kind === 'work-order') return ACTIVE_WORK_ORDER.has(r.status);
+    return ACTIVE_SERVICE.has(r.status);
+  });
 
   return {
     items,

@@ -15,6 +15,15 @@ export class WorkOrderResource {
   list(communityId: string, params?: Query): Promise<Paginated<WorkOrder>> {
     return this.http.get(`/communities/${communityId}/work-orders`, params);
   }
+
+  /**
+   * Work orders on the signed-in resident's own unit(s). Needs no work-order
+   * permission — residents hold none — and returns a trimmed row: status and
+   * schedule, never internal updates or cost estimates.
+   */
+  mine(params?: Query): Promise<Paginated<WorkOrder>> {
+    return this.http.get('/work-orders/mine', params);
+  }
   create(communityId: string, input: Body): Promise<WorkOrder> {
     return this.http.post(`/communities/${communityId}/work-orders`, input);
   }

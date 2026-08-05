@@ -127,10 +127,18 @@ export function WorkOrderForm({
           {total != null && (
             <p className="text-sm text-subtle">Estimated total: <span className="font-medium text-strong">{total.toLocaleString()}</span></p>
           )}
+          {/* Approval is role-based, not assigned to a named person — there is
+              no manager to pick, which is what the old copy implied. Say where
+              it actually goes instead. */}
           {!editing && (
             <label className="flex items-start gap-2 text-sm text-body">
               <input type="checkbox" className="mt-1" {...register('requestApproval')} />
-              <span>Request approval instead — recommend this work order for a manager to approve (non-emergency).</span>
+              <span>
+                Request approval instead (non-emergency). It goes to the{' '}
+                <strong className="font-medium text-strong">Pending approval</strong> queue, where
+                anyone who can approve work orders — the Association Admin or a Facility Manager —
+                can review it.
+              </span>
             </label>
           )}
           <div className="mt-2 flex justify-end gap-3">

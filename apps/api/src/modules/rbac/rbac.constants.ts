@@ -609,7 +609,14 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.SERVICE_VIEW,
       P.SERVICE_UPDATE,
       P.SERVICE_COMPLETE,
-      // Staff execute work orders (not verify/close).
+      // Staff execute work orders (not verify/close) and may RAISE one.
+      //
+      // CREATE + RECOMMEND together, deliberately: a staff member who finds a
+      // burst pipe must be able to raise the work, but it lands in the approval
+      // queue rather than going live on their say-so. Approval itself stays with
+      // whoever holds WORKORDER_APPROVE (Association Admin / Facility Manager).
+      P.WORKORDER_CREATE,
+      P.WORKORDER_RECOMMEND,
       P.WORKORDER_VIEW,
       P.WORKORDER_UPDATE,
       P.WORKORDER_START,

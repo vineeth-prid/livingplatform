@@ -16,6 +16,7 @@ const KIND_LABEL: Record<RequestKind, string> = {
   ticket: 'Complaint',
   service: 'Service',
   visitor: 'Visitor',
+  'work-order': 'Maintenance',
 };
 
 /**
@@ -78,7 +79,13 @@ export function RequestsScreen() {
       <div className="flex flex-col gap-3 px-4">
         <SearchInput value={q} onValueChange={setQ} placeholder="Search your requests…" />
         <div className="flex gap-1.5">
-          {([['all', 'All'], ['ticket', 'Complaints'], ['service', 'Services'], ['visitor', 'Visitors']] as const).map(([v, label]) => (
+          {([
+            ['all', 'All'],
+            ['ticket', 'Complaints'],
+            ['service', 'Services'],
+            ['visitor', 'Visitors'],
+            ['work-order', 'Maintenance'],
+          ] as const).map(([v, label]) => (
             <button key={v} onClick={() => setFilter(v)}
               className={cn('rounded-pill px-3 py-1.5 text-sm font-medium transition-colors',
                 filter === v ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted')}>
