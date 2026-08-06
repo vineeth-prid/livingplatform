@@ -57,13 +57,21 @@ export class TicketService {
     await this.categories.assertUsable(dto.categoryId, community.tenantId);
     if (dto.residentId) await this.assertResidentInCommunity(dto.residentId, communityId);
 
+    // A resident raising their own complaint does not send (and must not have
+    // to know) their resident id — the app posts unit/category/title/body only.
+    // Without this the ticket was stored with residentId NULL, so it belonged
+    // to nobody: no notification could address the person who raised it, and
+    // an admin filtering by resident never saw it. The resident app hid the gap
+    // by filtering its own list on reportedById instead.
+    const residentId = dto.residentId ?? (await this.callerResidentId(communityId, actor));
+
     const ticket = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
           communityId,
           unitId: dto.unitId,
           categoryId: dto.categoryId,
-          residentId: dto.residentId,
+          residentId,
           title: dto.title,
           description: dto.description,
           priority: dto.priority ?? 'MEDIUM',
@@ -542,6 +550,25 @@ export class TicketService {
       select: { id: true },
     });
     if (!unit) throw new BadRequestException('Unit does not belong to this community');
+  }
+
+  /**
+   * The caller's own resident record in this community, when they have one.
+   *
+   * Returns undefined for staff and admins — they are raising it on someone
+   * else's behalf, and an unattributed ticket is the correct outcome there
+   * rather than one falsely linked to the operator.
+   */
+  private async callerResidentId(
+    communityId: string,
+    actor: AuthenticatedUser,
+  ): Promise<string | undefined> {
+    const resident = await this.prisma.resident.findFirst({
+      where: { communityId, userId: actor.id, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return resident?.id;
   }
 
   private async assertResidentInCommunity(residentId: string, communityId: string) {

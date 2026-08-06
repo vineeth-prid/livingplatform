@@ -68,6 +68,11 @@ export class ServiceRequestService {
     await this.catalog.assertUsable(dto.serviceId, community.tenantId);
     if (dto.residentId) await this.assertResidentInCommunity(dto.residentId, communityId);
 
+    // Same gap as tickets: the resident app posts service/unit/title only, so a
+    // resident's own request was stored with residentId NULL — unattributed,
+    // and unreachable by any notification addressed to the person who made it.
+    const residentId = dto.residentId ?? (await this.callerResidentId(communityId, actor));
+
     // Price the request ONCE, here, and freeze the result onto the row. A later
     // catalogue edit must never rewrite what the resident was quoted.
     const service = await this.prisma.service.findUniqueOrThrow({
@@ -98,7 +103,7 @@ export class ServiceRequestService {
         quantity: priced.quantity,
         unitPrice: priced.unitPrice,
         totalPrice: priced.totalPrice,
-        residentId: dto.residentId,
+        residentId,
         packagePurchaseId: internal?.packagePurchaseId ?? null,
         title: dto.title,
         description: dto.description,
@@ -471,6 +476,22 @@ export class ServiceRequestService {
       select: { id: true },
     });
     if (!unit) throw new BadRequestException('Unit does not belong to this community');
+  }
+
+  /**
+   * The caller's own resident record in this community, when they have one.
+   * Undefined for staff and admins raising a request on someone's behalf.
+   */
+  private async callerResidentId(
+    communityId: string,
+    actor: AuthenticatedUser,
+  ): Promise<string | undefined> {
+    const resident = await this.prisma.resident.findFirst({
+      where: { communityId, userId: actor.id, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return resident?.id;
   }
 
   private async assertResidentInCommunity(residentId: string, communityId: string) {
