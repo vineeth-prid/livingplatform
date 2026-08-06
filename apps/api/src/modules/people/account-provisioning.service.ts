@@ -15,8 +15,17 @@ import type { ProfileKind } from './user-link.service';
  */
 export const ONE_TIME_PASSWORD = 'Living@123';
 
-/** Strip a phone number down to its digits so "+91 98765 43210" and
- *  "9876543210" collide as intended. Keeps the last 10+ digits as-is. */
+/**
+ * Strip a phone number down to its digits, so spacing and punctuation never
+ * make two spellings of one number into two accounts.
+ *
+ * A COUNTRY CODE still survives: "+91 98765 43210" becomes 919876543210, which
+ * is a different username from 9876543210. The two do NOT collide, despite what
+ * this comment used to claim. Left alone on purpose — the derivation is baked
+ * into every username already provisioned, so collapsing country codes now
+ * would strand accounts whose stored username carries one. Correcting it is a
+ * backfill, not a code edit.
+ */
 export function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
 }
@@ -158,6 +167,77 @@ export class AccountProvisioningService {
    *
    * Idempotent: safe to call with the same value repeatedly.
    */
+  /**
+   * Move a person's login to a new mobile number.
+   *
+   * The mobile IS the username, so changing it on the profile without changing
+   * it on the account left the person signing in with the OLD number
+   * indefinitely — the edit looked saved and changed nothing that mattered.
+   *
+   * Only renames an account whose username still matches the OLD number. If it
+   * differs, someone set the username deliberately and an edit to a profile
+   * phone must not silently take it over.
+   *
+   * The synthetic `<number>@living.local` email moves too, since it is derived
+   * from the number and nothing else. A REAL email address is left alone.
+   *
+   * Returns true when the login actually moved.
+   */
+  async syncLoginPhone(input: {
+    userId: string | null | undefined;
+    oldPhone: string | null | undefined;
+    newPhone: string;
+    actorId: string;
+  }): Promise<boolean> {
+    if (!input.userId) return false;
+
+    const next = normalizePhone(input.newPhone);
+    const previous = normalizePhone(input.oldPhone ?? '');
+    if (!next || next === previous) return false;
+    if (next.length < 7) {
+      throw new ConflictException('A valid mobile number is required — it becomes the login username');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, username: true, email: true },
+    });
+    if (!user) return false;
+
+    // Someone chose this username explicitly — leave it to them.
+    if (user.username !== previous) return false;
+
+    const clash = await this.prisma.user.findUnique({
+      where: { username: next },
+      select: { id: true },
+    });
+    if (clash && clash.id !== user.id) {
+      throw new ConflictException(
+        'Another account already signs in with this mobile number. Change that account first, ' +
+          'or give this person a different number.',
+      );
+    }
+
+    const syntheticEmail = `${previous}@living.local`;
+    const nextEmail = user.email === syntheticEmail ? `${next}@living.local` : user.email;
+    if (nextEmail !== user.email) {
+      const emailClash = await this.prisma.user.findUnique({
+        where: { email: nextEmail },
+        select: { id: true },
+      });
+      if (emailClash && emailClash.id !== user.id) {
+        throw new ConflictException('Another account already uses the email for this mobile number');
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { username: next, email: nextEmail, updatedById: input.actorId },
+    });
+    this.logger.log(`Login moved ${previous} → ${next} for user ${user.id}`);
+    return true;
+  }
+
   async syncSecurityRole(
     userId: string | null,
     communityId: string,

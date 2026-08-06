@@ -289,6 +289,17 @@ export class ResidentService {
         id,
       });
     }
+    // The mobile is the login username — move the account before saving, so a
+    // clash fails the edit rather than leaving the resident on a number that
+    // does not sign in.
+    if (dto.mobile) {
+      await this.accounts.syncLoginPhone({
+        userId: existing.userId,
+        oldPhone: existing.mobile,
+        newPhone: dto.mobile,
+        actorId: actor.id,
+      });
+    }
     const resident = await this.prisma.resident.update({
       where: { id },
       data: {

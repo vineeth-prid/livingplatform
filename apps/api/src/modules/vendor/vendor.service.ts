@@ -154,6 +154,17 @@ export class VendorService {
         id,
       });
     }
+    // The mobile is the login username — move the account before saving, so a
+    // clash fails the edit instead of stranding the vendor on a number they
+    // cannot sign in with.
+    if (dto.phone) {
+      await this.accounts.syncLoginPhone({
+        userId: vendor.userId,
+        oldPhone: vendor.phone,
+        newPhone: dto.phone,
+        actorId: actor.id,
+      });
+    }
     return this.prisma.vendor.update({
       where: { id },
       data: {

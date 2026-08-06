@@ -152,6 +152,18 @@ export class StaffService {
         id,
       });
     }
+    // The mobile IS the login username, so it has to move on the account too —
+    // before the profile is saved, so a clash fails the whole edit rather than
+    // leaving the profile on a number the person cannot sign in with.
+    if (dto.phone) {
+      await this.accounts.syncLoginPhone({
+        userId: existing.userId,
+        oldPhone: existing.phone,
+        newPhone: dto.phone,
+        actorId: actor.id,
+      });
+    }
+
     const staff = await this.prisma.staff.update({
       where: { id },
       data: {
