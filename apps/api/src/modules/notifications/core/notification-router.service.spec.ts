@@ -143,3 +143,96 @@ describe('NotificationRouterService — visitor fan-out', () => {
     expect(dispatcher.dispatchTemplate).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * These seven events were bound in EVENT_MAP — so they appeared in the
+ * community's notification-preferences UI with working toggles — while
+ * `contextFor` returned null for every one of them. An admin could switch
+ * WhatsApp on for "Ticket assigned", watch the toggle save, and nothing would
+ * ever send, on any channel. The code claimed the engines notified directly;
+ * they did not, and nothing else listened.
+ *
+ * The failure was silent by construction: no error, no log, no delivery row.
+ * Each event therefore gets a test asserting a message is actually produced.
+ */
+describe('NotificationRouterService — work events reach their assignee', () => {
+  const TICKET = {
+    number: 42, title: 'Leaking tap', status: 'IN_PROGRESS',
+    residentId: 'res-1', assignedStaffId: 'staff-1', assignedVendorId: null,
+  };
+  const REQUEST = {
+    number: 7, title: 'Deep clean', residentId: 'res-1',
+    assignedStaffId: null, assignedVendorId: 'vendor-1',
+  };
+  const WORK_ORDER = {
+    number: 9, title: 'Replace pump', completedDate: new Date('2026-08-06T10:00:00Z'),
+    assignedStaffId: 'staff-1', assignedVendorId: null,
+  };
+
+  function makeWorkRouter(channels: string[] = ['email', 'whatsapp']) {
+    const { router, dispatcher, prisma } = makeRouter([]);
+    const p = prisma as unknown as Record<string, { findUnique: jest.Mock }>;
+    p.ticket = { findUnique: jest.fn().mockResolvedValue(TICKET) };
+    p.serviceRequest = { findUnique: jest.fn().mockResolvedValue(REQUEST) };
+    p.workOrder = { findUnique: jest.fn().mockResolvedValue(WORK_ORDER) };
+
+    const preferences = (router as unknown as { preferences: NotificationPreferenceService })
+      .preferences;
+    (preferences.resolve as jest.Mock).mockResolvedValue({ enabled: true, channels });
+    return { router, dispatcher };
+  }
+
+  it.each([
+    [DomainEventName.TicketAssigned, NOTIFICATION_TEMPLATES.TICKET_ASSIGNED],
+    [DomainEventName.TicketCreated, NOTIFICATION_TEMPLATES.TICKET_CREATED],
+    [DomainEventName.TicketStatusChanged, NOTIFICATION_TEMPLATES.TICKET_UPDATED],
+    [DomainEventName.ServiceAssigned, NOTIFICATION_TEMPLATES.SERVICE_ASSIGNED],
+    [DomainEventName.WorkOrderAssigned, NOTIFICATION_TEMPLATES.WORK_ORDER_ASSIGNED],
+    [DomainEventName.WorkCompleted, NOTIFICATION_TEMPLATES.WORK_ORDER_COMPLETED],
+  ])('%s sends on every enabled channel', async (name, template) => {
+    const { router, dispatcher } = makeWorkRouter();
+
+    await router.onDomainEvent(event(name));
+
+    const calls = (dispatcher.dispatchTemplate as jest.Mock).mock.calls;
+    // One per enabled channel — this is the WhatsApp bug: email alone is a pass
+    // for the old code path but not for a community that enabled WhatsApp.
+    expect(calls.map((c) => c[0])).toEqual(['email', 'whatsapp']);
+    expect(calls[0][1]).toBe(template);
+  });
+
+  it('addresses the assignee on assignment, not the resident', async () => {
+    const { router, dispatcher } = makeWorkRouter(['whatsapp']);
+    const recipients = (router as unknown as { recipients: RecipientResolver }).recipients;
+
+    await router.onDomainEvent(event(DomainEventName.TicketAssigned));
+
+    const ref = (recipients.resolve as jest.Mock).mock.calls[0][1] as RecipientRef;
+    expect(ref.staffId).toBe('staff-1');
+    expect(ref.residentId).toBeUndefined();
+    expect(dispatcher.dispatchTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the vendor when no staff member is assigned', async () => {
+    const { router } = makeWorkRouter(['whatsapp']);
+    const recipients = (router as unknown as { recipients: RecipientResolver }).recipients;
+
+    await router.onDomainEvent(event(DomainEventName.ServiceAssigned));
+
+    const ref = (recipients.resolve as jest.Mock).mock.calls[0][1] as RecipientRef;
+    expect(ref.vendorId).toBe('vendor-1');
+  });
+
+  it('stays silent when nothing is assigned yet — a normal state, not an error', async () => {
+    const { router, dispatcher } = makeWorkRouter(['whatsapp']);
+    const prisma = (router as unknown as { prisma: Record<string, { findUnique: jest.Mock }> })
+      .prisma;
+    prisma.ticket.findUnique.mockResolvedValue({
+      ...TICKET, assignedStaffId: null, assignedVendorId: null,
+    });
+
+    await router.onDomainEvent(event(DomainEventName.TicketAssigned));
+
+    expect(dispatcher.dispatchTemplate).not.toHaveBeenCalled();
+  });
+});

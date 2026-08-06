@@ -7,6 +7,9 @@ import type { AppConfig } from '../../../config/configuration';
 import { DomainEventName, type DomainEvent } from '../../events/domain-events';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PERMISSIONS } from '../../rbac/rbac.constants';
+import { formatServiceRequestNumber } from '../../service-request/service-request.service';
+import { formatTicketNumber } from '../../ticket/ticket.service';
+import { formatWorkOrderNumber } from '../../work-order/work-order.service';
 import { NotificationPreferenceService } from '../preferences/notification-preference.service';
 import { NOTIFICATION_TEMPLATES } from '../notification.constants';
 import type { NotificationChannelName } from './notification-channel.interface';
@@ -324,12 +327,132 @@ export class NotificationRouterService {
         }];
       }
 
+      case DomainEventName.TicketCreated:
+      case DomainEventName.TicketAssigned:
+      case DomainEventName.TicketStatusChanged: {
+        const ticket = await this.prisma.ticket.findUnique({
+          where: { id: event.entityId },
+          select: {
+            number: true, title: true, status: true, residentId: true,
+            assignedStaffId: true, assignedVendorId: true,
+          },
+        });
+        if (!ticket) return null;
+
+        const ticketNumber = formatTicketNumber(ticket.number);
+        const base = {
+          ticketNumber,
+          ticketTitle: ticket.title,
+          title: ticket.title,
+          communityName: await this.communityName(communityId),
+          actionUrl: `${this.webAppUrl}/tickets/${event.entityId}`,
+          ticketUrl: `${this.webAppUrl}/tickets/${event.entityId}`,
+        };
+
+        // On assignment the assignee is the audience; otherwise it is the
+        // resident who raised it and is waiting to hear back.
+        if (event.name === DomainEventName.TicketAssigned) {
+          const assignee = this.assigneeRef(ticket, communityId);
+          if (!assignee) return null;
+          return [{ recipient: assignee, variables: { ...base, assigneeName: '', recipientName: '' } }];
+        }
+
+        if (!ticket.residentId) return null;
+        return [{
+          recipient: { residentId: ticket.residentId, communityId },
+          variables: {
+            ...base,
+            recipientName: '',
+            note: `Status: ${ticket.status.toLowerCase().replace(/_/g, ' ')}`,
+          },
+        }];
+      }
+
+      case DomainEventName.ServiceAssigned:
+      case DomainEventName.ServiceCompleted: {
+        const request = await this.prisma.serviceRequest.findUnique({
+          where: { id: event.entityId },
+          select: {
+            number: true, title: true, residentId: true,
+            assignedStaffId: true, assignedVendorId: true,
+          },
+        });
+        if (!request) return null;
+
+        const base = {
+          requestNumber: formatServiceRequestNumber(request.number),
+          title: request.title,
+          communityName: await this.communityName(communityId),
+          actionUrl: `${this.webAppUrl}/service-requests/${event.entityId}`,
+        };
+
+        if (event.name === DomainEventName.ServiceAssigned) {
+          const assignee = this.assigneeRef(request, communityId);
+          if (!assignee) return null;
+          return [{ recipient: assignee, variables: { ...base, assigneeName: '' } }];
+        }
+
+        if (!request.residentId) return null;
+        return [{
+          recipient: { residentId: request.residentId, communityId },
+          variables: {
+            ...base,
+            recipientName: '',
+            heading: 'Your request is complete',
+            bodyHtml: `<p>${base.title} (${base.requestNumber}) has been completed.</p>`,
+          },
+        }];
+      }
+
+      case DomainEventName.WorkOrderAssigned:
+      case DomainEventName.WorkCompleted: {
+        const workOrder = await this.prisma.workOrder.findUnique({
+          where: { id: event.entityId },
+          select: {
+            number: true, title: true, completedDate: true,
+            assignedStaffId: true, assignedVendorId: true,
+          },
+        });
+        if (!workOrder) return null;
+
+        // A work order has no resident — it is internal work. On completion the
+        // audience is whoever did it, so they get the confirmation they raised.
+        const assignee = this.assigneeRef(workOrder, communityId);
+        if (!assignee) return null;
+
+        const workOrderNumber = formatWorkOrderNumber(workOrder.number);
+        return [{
+          recipient: assignee,
+          variables: {
+            workOrderNumber,
+            title: workOrder.title,
+            communityName: await this.communityName(communityId),
+            assigneeName: '',
+            recipientName: '',
+            completedAt: workOrder.completedDate?.toDateString() ?? new Date().toDateString(),
+            actionUrl: `${this.webAppUrl}/work-orders/${event.entityId}`,
+            workOrderUrl: `${this.webAppUrl}/work-orders/${event.entityId}`,
+          },
+        }];
+      }
+
       default:
-        // Ticket / service / work-order events address the assignee, which the
-        // engines already notify directly. Routing them here would double-send,
-        // so they stay bound for *preference* purposes only.
         return null;
     }
+  }
+
+  /**
+   * Staff XOR vendor — the two are mutually exclusive everywhere in the domain,
+   * so the first one set is the assignee. Returns null when nothing is assigned
+   * yet, which is a normal state and not an error.
+   */
+  private assigneeRef(
+    row: { assignedStaffId: string | null; assignedVendorId: string | null },
+    communityId: string | undefined,
+  ): RecipientRef | null {
+    if (row.assignedStaffId) return { staffId: row.assignedStaffId, communityId };
+    if (row.assignedVendorId) return { vendorId: row.assignedVendorId, communityId };
+    return null;
   }
 
   /**
