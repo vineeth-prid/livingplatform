@@ -84,30 +84,34 @@ describe('AccountProvisioningService.syncLoginPhone', () => {
   });
 
   /**
-   * Documents a REAL discrepancy rather than asserting the intent.
-   *
-   * `normalizePhone` only strips non-digits, so a country code survives and
-   * "+91 98765 43210" normalises to 919876543210 — a DIFFERENT username from
-   * 9876543210. Its own doc comment claims the two "collide as intended"; they
-   * do not. Adding the country code to an existing person therefore moves their
-   * login to a new username, and creating two people with the same number in
-   * different formats yields two accounts.
-   *
-   * Left as-is deliberately: the derivation is already baked into every
-   * provisioned username in production, so changing it would strand accounts
-   * whose stored username carries a country code. Fixing it needs a backfill,
-   * not a code edit.
+   * The whole point of collapsing to 10 digits: adding, removing or changing a
+   * country code is not a new number, so it must not move the login and must
+   * never produce a second account for the same person.
    */
-  it('treats a country-coded number as a DIFFERENT username (known discrepancy)', async () => {
+  it.each([
+    ['+91 98765 43210'],
+    ['0091-9876543210'],
+    ['09876543210'],
+  ])('treats %s as the same number, not a new one', async (spelling) => {
     const { service, prisma } = makeService(USER);
 
     const moved = await service.syncLoginPhone({
-      userId: 'u-1', oldPhone: '9876543210', newPhone: '+91 98765 43210', actorId: 'a-1',
+      userId: 'u-1', oldPhone: '9876543210', newPhone: spelling, actorId: 'a-1',
     });
 
-    expect(moved).toBe(true);
+    expect(moved).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('a genuinely different number still moves, country code or not', async () => {
+    const { service, prisma } = makeService(USER);
+
+    await service.syncLoginPhone({
+      userId: 'u-1', oldPhone: '+91 98765 43210', newPhone: '+91 90000 11111', actorId: 'a-1',
+    });
+
     expect((prisma.user.update as jest.Mock).mock.calls[0][0].data.username)
-      .toBe('919876543210');
+      .toBe('9000011111');
   });
 
   it('refuses when another account already signs in with that number', async () => {
@@ -140,11 +144,14 @@ describe('AccountProvisioningService.syncLoginPhone', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
-  it('rejects a number too short to be a username', async () => {
+  it('rejects anything that is not a 10-digit mobile', async () => {
     const { service } = makeService(USER);
 
     await expect(
       service.syncLoginPhone({ userId: 'u-1', oldPhone: '9876543210', newPhone: '123', actorId: 'a-1' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.syncLoginPhone({ userId: 'u-1', oldPhone: '9876543210', newPhone: '98765 4321', actorId: 'a-1' }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 });

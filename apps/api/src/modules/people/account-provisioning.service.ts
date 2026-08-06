@@ -15,19 +15,24 @@ import type { ProfileKind } from './user-link.service';
  */
 export const ONE_TIME_PASSWORD = 'Living@123';
 
+/** An Indian mobile number is 10 digits; anything before that is a country code. */
+const MOBILE_DIGITS = 10;
+
 /**
- * Strip a phone number down to its digits, so spacing and punctuation never
- * make two spellings of one number into two accounts.
+ * Reduce a phone number to the 10 digits that identify it.
  *
- * A COUNTRY CODE still survives: "+91 98765 43210" becomes 919876543210, which
- * is a different username from 9876543210. The two do NOT collide, despite what
- * this comment used to claim. Left alone on purpose — the derivation is baked
- * into every username already provisioned, so collapsing country codes now
- * would strand accounts whose stored username carries one. Correcting it is a
- * backfill, not a code edit.
+ * Punctuation and spacing go, and so does any country or trunk prefix — "+91
+ * 98765 43210", "0091-9876543210", "09876543210" and "9876543210" all become
+ * 9876543210. That collapse is the point: the number IS the login username, so
+ * two spellings of one person's mobile must never become two accounts, which is
+ * exactly what happened while the country code survived normalisation.
+ *
+ * Shorter values are returned as-is rather than padded — they are rejected as
+ * usernames upstream, and quietly reshaping them would hide a bad input.
  */
 export function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '');
+  const digits = phone.replace(/\D/g, '');
+  return digits.length > MOBILE_DIGITS ? digits.slice(-MOBILE_DIGITS) : digits;
 }
 
 const ROLE_FOR_KIND: Record<ProfileKind, RoleKey> = {
@@ -81,8 +86,11 @@ export class AccountProvisioningService {
    */
   async provisionLogin(input: ProvisionLoginInput): Promise<string | null> {
     const username = normalizePhone(input.phone);
-    if (username.length < 7) {
-      throw new ConflictException('A valid mobile number is required — it becomes the login username');
+    if (username.length !== MOBILE_DIGITS) {
+      throw new ConflictException(
+        `A valid ${MOBILE_DIGITS}-digit mobile number is required — it becomes the login username. ` +
+          'A country code is fine and is removed automatically.',
+      );
     }
 
     const existing = await this.prisma.user.findUnique({
@@ -194,8 +202,11 @@ export class AccountProvisioningService {
     const next = normalizePhone(input.newPhone);
     const previous = normalizePhone(input.oldPhone ?? '');
     if (!next || next === previous) return false;
-    if (next.length < 7) {
-      throw new ConflictException('A valid mobile number is required — it becomes the login username');
+    if (next.length !== MOBILE_DIGITS) {
+      throw new ConflictException(
+        `A valid ${MOBILE_DIGITS}-digit mobile number is required — it becomes the login username. ` +
+          'A country code is fine and is removed automatically.',
+      );
     }
 
     const user = await this.prisma.user.findUnique({
