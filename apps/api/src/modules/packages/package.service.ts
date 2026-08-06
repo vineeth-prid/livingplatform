@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ServicePackageStatus } from '@prisma/client';
+import { PackagePurchaseStatus, Prisma, ServicePackageStatus } from '@prisma/client';
 
 import { resolveSort } from '../../common/dto/list-query.dto';
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
@@ -221,7 +221,15 @@ export class PackageService {
     return toView(row);
   }
 
-  /** Enable / disable. Packages are never deleted while purchases reference them. */
+  /**
+   * Enable / disable — the supported way to stop selling a package.
+   *
+   * An INACTIVE package stops being PURCHASABLE and vanishes from the resident
+   * app, while every purchase already made runs to its expiry untouched:
+   * redemption checks the PURCHASE's status and validity window, never the
+   * package's, so a resident mid-package keeps the balance they paid for.
+   * Withdrawing a package must not take back something already sold.
+   */
   async setStatus(
     communityId: string,
     id: string,
@@ -280,6 +288,16 @@ export class PackageService {
       include: PACKAGE_INCLUDE,
     });
     return toView(row);
+  }
+
+  /** Purchases still running against this package — shown before switching it off. */
+  async livePurchases(communityId: string, id: string): Promise<{ active: number }> {
+    await this.access.assert(communityId);
+    await this.requirePackage(communityId, id);
+    const active = await this.prisma.servicePackagePurchase.count({
+      where: { packageId: id, deletedAt: null, status: PackagePurchaseStatus.ACTIVE },
+    });
+    return { active };
   }
 
   async remove(

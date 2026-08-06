@@ -55,6 +55,33 @@ export function PackagesPage() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  /**
+   * Withdrawing is not a silent flip: it stops new purchases, and an admin's
+   * first question is what happens to residents who already bought it. Answer
+   * that with the real number before they commit. Publishing needs no ceremony.
+   */
+  const onToggleStatus = async (p: ServicePackage) => {
+    if (p.status !== 'ACTIVE') {
+      setStatus.mutate({ id: p.id, status: 'ACTIVE' });
+      return;
+    }
+    const live = await living.packages
+      .livePurchases(communityId!, p.id)
+      .catch(() => ({ active: 0 }));
+    const ok = await confirm({
+      title: `Withdraw ${p.name}?`,
+      description:
+        `It stops being purchasable and leaves the resident app immediately. ${
+          live.active > 0
+            ? `${live.active} resident${live.active === 1 ? '' : 's'} already bought it and keep${live.active === 1 ? 's' : ''} it until their own expiry — nothing is taken back.`
+            : 'Nobody is currently using it.'
+        } You can publish it again at any time.`,
+      confirmLabel: 'Withdraw',
+    });
+    if (ok) setStatus.mutate({ id: p.id, status: 'INACTIVE' });
+  };
+
   const duplicate = useMutation(
     mutate((id: string) => living.packages.duplicate(communityId!, id), 'Copied as an inactive draft'),
   );
@@ -116,9 +143,7 @@ export function PackagesPage() {
           aria-checked={p.status === 'ACTIVE'}
           aria-label={`${p.name} availability`}
           disabled={!canManage || setStatus.isPending}
-          onClick={() =>
-            setStatus.mutate({ id: p.id, status: p.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' })
-          }
+          onClick={() => void onToggleStatus(p)}
           className="focus-visible:outline-none focus-visible:shadow-ring rounded-pill"
         >
           <Badge tone={p.status === 'ACTIVE' ? 'success' : 'neutral'} size="sm" dot>

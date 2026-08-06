@@ -110,6 +110,10 @@ export class PackagesResource {
   setStatus(communityId: string, id: string, status: ServicePackageStatus): Promise<ServicePackage> {
     return this.http.patch(`/communities/${communityId}/packages/${id}/status`, { status });
   }
+  /** Purchases still running against a package — shown before withdrawing it. */
+  livePurchases(communityId: string, id: string): Promise<{ active: number }> {
+    return this.http.get(`/communities/${communityId}/packages/${id}/purchases/live`);
+  }
   duplicate(communityId: string, id: string): Promise<ServicePackage> {
     return this.http.post(`/communities/${communityId}/packages/${id}/duplicate`, {});
   }

@@ -109,6 +109,15 @@ export class PackageController {
     return this.packages.setStatus(communityId, id, status, user);
   }
 
+  @Get(':id/purchases/live')
+  @RequirePermissions(PERMISSIONS.PACKAGE_MANAGE)
+  @ApiOperation({
+    summary: 'How many purchases are still running — shown before withdrawing a package',
+  })
+  livePurchases(@Param('communityId') communityId: string, @Param('id') id: string) {
+    return this.packages.livePurchases(communityId, id);
+  }
+
   @Post(':id/duplicate')
   @RequirePermissions(PERMISSIONS.PACKAGE_MANAGE)
   @HttpCode(HttpStatus.OK)
