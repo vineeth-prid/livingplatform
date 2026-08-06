@@ -149,10 +149,19 @@ function RailCard({
           </Badge>
         ) : (
           <Badge tone="neutral" size="sm">
-            Not configured
+            {config.keyIdMasked && config.hasKeySecret ? 'Not enabled' : 'Not configured'}
           </Badge>
         )}
       </div>
+
+      {/* A bare "Not configured" sent admins back to re-enter credentials that
+          were already stored correctly — the blocker is usually the enable
+          switch, which is far down the card. Name the missing piece. */}
+      {!config.ready && notReadyReason(config) && (
+        <div className="mb-4 rounded-control bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+          {notReadyReason(config)}
+        </div>
+      )}
 
       {config.mode === 'LIVE' && config.ready && (
         <div className="mb-4 flex items-center gap-2 rounded-control bg-warning-bg px-3 py-2 text-sm text-warning-fg">
@@ -218,8 +227,13 @@ function RailCard({
 
       <div className="mt-4 rounded-control bg-sunken px-3 py-2">
         <p className="text-xs font-medium text-strong">Webhook URL for Razorpay</p>
+        {/* Derived from the configured API base URL, not the browser's origin.
+            Rewriting the portal origin to :4000 only ever produced a correct URL
+            on a developer's laptop — in production it hands the admin a webhook
+            address Razorpay cannot reach, so payments are taken and never
+            confirmed back. */}
         <code className="mt-1 block break-all text-xs text-muted">
-          {`${window.location.origin.replace(/:\d+$/, ':4000')}/api/v1/payments/webhooks/razorpay/${communityId}/${config.purpose}`}
+          {`${apiBaseUrl()}/payments/webhooks/razorpay/${communityId}/${config.purpose}`}
         </code>
         <p className="mt-1 text-2xs text-subtle">
           Subscribe to <strong>payment.captured</strong>, <strong>order.paid</strong> and{' '}
@@ -244,4 +258,29 @@ function RailCard({
       )}
     </Card>
   );
+}
+
+/** The API's public base URL, without a trailing slash. */
+function apiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  return (configured ?? `${window.location.origin}/api/v1`).replace(/\/+$/, '');
+}
+
+/**
+ * Why a rail is not ready to take money.
+ *
+ * "Not configured" on its own sent an admin back to re-enter credentials that
+ * were already saved correctly — the actual blocker is usually the enable
+ * switch. Readiness is `enabled && keyId && keySecret` server-side; this names
+ * whichever part is missing.
+ */
+function notReadyReason(config: {
+  enabled: boolean;
+  keyIdMasked: string | null;
+  hasKeySecret: boolean;
+}): string | null {
+  if (!config.keyIdMasked) return 'Add the key id from your Razorpay dashboard.';
+  if (!config.hasKeySecret) return 'Add the key secret — it is stored encrypted and never shown again.';
+  if (!config.enabled) return 'Credentials are saved. Switch on “Accept payments on this rail” to go live.';
+  return null;
 }

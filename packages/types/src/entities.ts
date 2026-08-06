@@ -107,6 +107,13 @@ export interface Staff extends AuditFields {
   firstName: string; lastName: string; role: StaffRole; department?: string | null;
   phone: string; email?: string | null; photoKey?: string | null; photoUrl?: string | null;
   status: PersonStatus;
+  /**
+   * Ticket-category keys this staff member handles — what auto-assignment
+   * matches a request against. The API has always returned it; leaving it off
+   * this type is why the edit form could not load it back and silently cleared
+   * it on every save.
+   */
+  categories?: string[];
 }
 
 /** Resolved assignee attached to ticket / service-request / work-order details. */

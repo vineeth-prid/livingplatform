@@ -69,13 +69,26 @@ export function StaffForm({
               firstName: staff.firstName, lastName: staff.lastName,
               role: staff.role, department: staff.department ?? '', phone: staff.phone,
               email: staff.email ?? '', status: staff.status,
+              // Without this the picker opened EMPTY when editing, so saving a
+              // staff member for any other reason silently wiped the categories
+              // that route work to them.
+              categories: (staff.categories ?? []).join(','),
             }
           : {}
       }
       onSubmit={async (values) => {
+        // FormDrawer holds every field as a string, but the API takes
+        // `categories` as a real array — posting the joined string is what
+        // produced "categories must be an array" and meant NO staff member
+        // could ever be given a category, which is why nothing auto-assigned.
+        const { categories, ...rest } = values;
+        const payload = {
+          ...rest,
+          categories: String(categories ?? '').split(',').map((c) => c.trim()).filter(Boolean),
+        };
         const result = editing
-          ? await living.people.updateStaff(staff.id, values)
-          : await living.people.createStaff(communityId, values);
+          ? await living.people.updateStaff(staff.id, payload)
+          : await living.people.createStaff(communityId, payload);
         await qc.invalidateQueries({ queryKey: ['staff'] });
         if (editing) await qc.invalidateQueries({ queryKey: ['staff-member', staff.id] });
         onSaved?.();
