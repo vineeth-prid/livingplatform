@@ -47,6 +47,10 @@ export const DomainEventName = {
   FeedbackSubmitted: 'service_request.feedback_submitted',
   // Sprint 6 — Work Order Engine
   WorkOrderCreated: 'work_order.created',
+  /// Staff proposed paid work; it is waiting on a manager.
+  WorkOrderRecommended: 'work_order.recommended',
+  WorkOrderApproved: 'work_order.approved',
+  WorkOrderRejected: 'work_order.rejected',
   WorkOrderAssigned: 'work_order.assigned',
   WorkStarted: 'work_order.started',
   ProgressUpdated: 'work_order.progress_updated',
@@ -223,6 +227,9 @@ export type ServiceRequestEvent = DomainEventEnvelope<
 
 export type WorkOrderEvent = DomainEventEnvelope<
   | typeof DomainEventName.WorkOrderCreated
+  | typeof DomainEventName.WorkOrderRecommended
+  | typeof DomainEventName.WorkOrderApproved
+  | typeof DomainEventName.WorkOrderRejected
   | typeof DomainEventName.WorkOrderAssigned
   | typeof DomainEventName.WorkStarted
   | typeof DomainEventName.ProgressUpdated

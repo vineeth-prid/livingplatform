@@ -240,6 +240,14 @@ enum WorkOrderStatus {
 /// NO foreign key, so any engine (Ticket, Service Request, Preventive
 /// Maintenance, future AMC/manual) can create Work Orders without this engine
 /// depending on them.
+/// Which side of the work a photo documents. Site evidence is only meaningful
+/// as a pair — 'this is how I found it' and 'this is how I left it' — and the
+/// resident and admin are shown them that way.
+enum WorkEvidenceStage {
+  BEFORE
+  AFTER
+}
+
 enum WorkOrderOriginType {
   MANUAL
   TICKET
@@ -1342,6 +1350,8 @@ model TicketAttachment {
   size         Int
   storageKey   String
   uploadedById String
+  /// BEFORE / AFTER when the photo is site evidence; null otherwise.
+  stage        WorkEvidenceStage?
 
   createdAt DateTime  @default(now())
   deletedAt DateTime?
@@ -1629,6 +1639,9 @@ model WorkOrderAttachment {
   size         Int
   storageKey   String
   uploadedById String
+  /// BEFORE / AFTER when the photo is site evidence; null for an ordinary
+  /// attachment such as an invoice or a spec sheet.
+  stage        WorkEvidenceStage?
 
   createdAt DateTime  @default(now())
   deletedAt DateTime?

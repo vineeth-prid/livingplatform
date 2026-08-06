@@ -38,6 +38,7 @@ export class WorkOrderAttachmentService {
         size: dto.size,
         storageKey: dto.storageKey,
         uploadedById: actor.id,
+        stage: dto.stage,
       },
     });
     return this.present(attachment);

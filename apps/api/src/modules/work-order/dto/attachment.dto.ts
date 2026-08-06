@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { WorkEvidenceStage } from '@prisma/client';
+import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class RequestWorkOrderUploadUrlDto {
   @ApiProperty({ example: 'before.jpg' })
@@ -28,4 +29,12 @@ export class CreateWorkOrderAttachmentDto {
   @ApiProperty({ description: 'Storage key from the upload-url endpoint' })
   @IsString() @MinLength(1)
   storageKey!: string;
+
+  /**
+   * Marks the photo as site evidence. BEFORE is required to start work and
+   * AFTER to complete it; omit for an ordinary attachment such as an invoice.
+   */
+  @ApiPropertyOptional({ enum: WorkEvidenceStage })
+  @IsOptional() @IsEnum(WorkEvidenceStage)
+  stage?: WorkEvidenceStage;
 }

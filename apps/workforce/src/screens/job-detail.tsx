@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -13,6 +13,8 @@ import type { Assignee } from '@living/types';
 import { KIND_META, PriorityPill, StatusPill } from '../components';
 import { type ActionIntent, type JobKind, workerActions } from '../execution';
 import { useJob, useJobStatus } from '../jobs';
+import { useWorker } from '../worker';
+import { RaiseWorkOrderSheet } from '../raise-work-order';
 import { living } from '../lib/living';
 import {
   MetaRow, PhotoPanel, TicketNotes, TimelinePanel, WorkOrderProgress,
@@ -31,6 +33,7 @@ interface JobDetail {
   workOrderNumber?: string;
   requestNumber?: string;
   ticketNumber?: string;
+  unitId?: string | null;
   unit?: { unitNumber?: string } | null;
   resident?: { firstName: string; lastName: string } | null;
   assignee?: Assignee | null;
@@ -55,6 +58,8 @@ export function JobDetailScreen() {
   const { session } = useAuth();
   const perms = session?.permissions;
   const confirm = useConfirm();
+  const { communityId } = useWorker();
+  const [raising, setRaising] = useState(false);
 
   const q = useJob(kind, id);
   const status = useJobStatus(kind, id);
@@ -127,6 +132,36 @@ export function JobDetailScreen() {
         </div>
       )}
 
+      {/*
+        Raising work off a ticket or request. Not offered on a work order — one
+        does not beget another — and hidden once the job is finished, when there
+        is nothing left to escalate.
+      */}
+      {kind !== 'work-order' && communityId && !['COMPLETED', 'CLOSED', 'CANCELLED', 'RESOLVED'].includes(data.status) && (
+        <div className="mt-3 px-4">
+          <Button variant="secondary" size="lg" block onClick={() => setRaising(true)}>
+            <Wrench className="h-4 w-4" /> Raise a work order
+          </Button>
+          <p className="mt-1.5 text-center text-xs text-subtle">
+            Needs parts or paid work? Raise it here — with a cost it goes for approval.
+          </p>
+        </div>
+      )}
+
+      {raising && communityId && (
+        <RaiseWorkOrderSheet
+          open={raising}
+          onOpenChange={setRaising}
+          communityId={communityId}
+          origin={{
+            kind: kind as 'ticket' | 'service-request',
+            id,
+            title: data.title,
+            unitId: data.unitId ?? null,
+          }}
+        />
+      )}
+
       {/* Verify readiness — display only (verification is a manager action) */}
       {kind === 'work-order' && data.status === 'COMPLETED' && (
         <div className="mx-4 mt-4 flex items-center gap-2.5 rounded-card bg-[var(--success-bg)] px-4 py-3 text-sm text-[var(--success-fg,var(--success))]">
@@ -169,18 +204,39 @@ export function JobDetailScreen() {
         )}
 
         {/* Photos (WO + ticket share the StorageService flow; SR has none) */}
+        {/*
+          Before and after are separate panels because they are separate
+          obligations: a BEFORE photo gates starting, an AFTER photo gates
+          completing. One combined list would let a staff member add two "after"
+          shots and wonder why Start is still refused.
+        */}
         {kind === 'work-order' && (
-          <Section title="Photos">
-            <PhotoPanel
-              queryKey={['job', 'work-order', id, 'attachments']}
-              canAdd={has(perms, 'workorder:update')}
-              api={{
-                list: () => living.workOrder.listAttachments(id),
-                uploadUrl: (input) => living.workOrder.attachmentUploadUrl(id, input),
-                add: (input) => living.workOrder.addAttachment(id, input),
-              }}
-            />
-          </Section>
+          <>
+            <Section title={data.status === 'ASSIGNED' || data.status === 'ACCEPTED' || data.status === 'APPROVED' ? 'Before photos — required to start' : 'Before photos'}>
+              <PhotoPanel
+                queryKey={['job', 'work-order', id, 'attachments']}
+                canAdd={has(perms, 'workorder:update')}
+                stage="BEFORE"
+                api={{
+                  list: () => living.workOrder.listAttachments(id),
+                  uploadUrl: (input) => living.workOrder.attachmentUploadUrl(id, input),
+                  add: (input) => living.workOrder.addAttachment(id, input),
+                }}
+              />
+            </Section>
+            <Section title={data.status === 'IN_PROGRESS' ? 'After photos — required to complete' : 'After photos'}>
+              <PhotoPanel
+                queryKey={['job', 'work-order', id, 'attachments']}
+                canAdd={has(perms, 'workorder:update')}
+                stage="AFTER"
+                api={{
+                  list: () => living.workOrder.listAttachments(id),
+                  uploadUrl: (input) => living.workOrder.attachmentUploadUrl(id, input),
+                  add: (input) => living.workOrder.addAttachment(id, input),
+                }}
+              />
+            </Section>
+          </>
         )}
         {kind === 'ticket' && (
           <Section title="Photos">

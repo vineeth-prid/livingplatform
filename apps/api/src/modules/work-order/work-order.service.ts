@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, WorkOrderEventType, WorkOrderStatus } from '@prisma/client';
@@ -38,6 +39,8 @@ export function formatWorkOrderNumber(n: number): string {
 
 @Injectable()
 export class WorkOrderService {
+  private readonly logger = new Logger(WorkOrderService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CommunityAccessService,
@@ -61,7 +64,14 @@ export class WorkOrderService {
    * execution lane once a manager approves.
    */
   async recommend(communityId: string, dto: CreateWorkOrderDto, actor: AuthenticatedUser) {
-    return this.persistNew(communityId, dto, actor, { recommended: true });
+    const workOrder = await this.persistNew(communityId, dto, actor, { recommended: true });
+    // Park the ticket: there is nothing for staff to do until the spend is
+    // decided, and leaving it IN_PROGRESS misreports it to the resident.
+    await this.holdOrigin(
+      { id: workOrder.id, originType: dto.originType ?? null, originId: dto.originId ?? null },
+      actor,
+    );
+    return workOrder;
   }
 
   private async persistNew(
@@ -105,7 +115,13 @@ export class WorkOrderService {
       return created;
     });
 
-    this.publish(DomainEventName.WorkOrderCreated, workOrder, actor);
+    // A recommendation is a request for a DECISION, not an announcement that
+    // work exists — it has to reach approvers and the resident waiting on it.
+    this.publish(
+      opts.recommended ? DomainEventName.WorkOrderRecommended : DomainEventName.WorkOrderCreated,
+      workOrder,
+      actor,
+    );
     return this.present(workOrder);
   }
 
@@ -123,10 +139,21 @@ export class WorkOrderService {
       actorId: actor.id,
       metadata: dto.remarks ? { remarks: dto.remarks } : undefined,
     });
+    // The ticket was parked when the money question was raised; the answer has
+    // arrived, so hand it back to the person waiting on it.
+    await this.resumeOrigin(workOrder, actor, 'approved');
+    this.publish(DomainEventName.WorkOrderApproved, updated, actor);
     return this.present(updated);
   }
 
-  /** Reject a recommended work order → REJECTED (terminal), with a reason. */
+  /**
+   * Reject a recommended work order → REJECTED (terminal), with a reason.
+   *
+   * Rejection is a decision about the SPENDING, not about the problem. The
+   * ticket comes off hold and the staff member carries on and resolves it
+   * without the paid work — leaving it parked would strand the resident on a
+   * decision that was already made.
+   */
   async reject(id: string, dto: RejectWorkOrderDto, actor: AuthenticatedUser) {
     const workOrder = await this.loadOrThrow(id);
     this.statusFlow.assertTransition(workOrder.status, W.REJECTED);
@@ -140,7 +167,78 @@ export class WorkOrderService {
       actorId: actor.id,
       metadata: { reason: dto.reason },
     });
+    await this.resumeOrigin(workOrder, actor, 'rejected');
+    this.publish(DomainEventName.WorkOrderRejected, updated, actor);
     return this.present(updated);
+  }
+
+  /**
+   * Park the originating ticket while a manager decides on the spend.
+   *
+   * Staff have no action to take until the answer comes back, so the ticket
+   * moves to ON_HOLD rather than sitting in IN_PROGRESS looking like someone is
+   * working on it. Best-effort: the work order is already recorded, and a
+   * failure here must not undo that.
+   */
+  private async holdOrigin(
+    workOrder: { id: string; originType: string | null; originId: string | null },
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    if (workOrder.originType !== 'TICKET' || !workOrder.originId) return;
+    try {
+      await this.prisma.ticket.updateMany({
+        where: { id: workOrder.originId, deletedAt: null, status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] } },
+        data: { status: 'ON_HOLD', updatedById: actor.id },
+      });
+    } catch (err) {
+      this.logger.warn(`Could not hold ticket ${workOrder.originId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Take the originating ticket off hold once the spend decision is made. */
+  private async resumeOrigin(
+    workOrder: { id: string; originType: string | null; originId: string | null },
+    actor: AuthenticatedUser,
+    _outcome: 'approved' | 'rejected',
+  ): Promise<void> {
+    if (workOrder.originType !== 'TICKET' || !workOrder.originId) return;
+    try {
+      await this.prisma.ticket.updateMany({
+        where: { id: workOrder.originId, deletedAt: null, status: 'ON_HOLD' },
+        data: { status: 'IN_PROGRESS', updatedById: actor.id },
+      });
+    } catch (err) {
+      this.logger.warn(`Could not resume ticket ${workOrder.originId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Site evidence is a precondition, not a nicety.
+   *
+   * A BEFORE photo has to exist before work starts, and an AFTER photo before it
+   * is called complete. Enforced on the API rather than in the app because it is
+   * the record the resident and the admin rely on to see what was actually done
+   * — a client-side check would be advisory, and the one time it mattered would
+   * be the time somebody worked around it.
+   *
+   * The message says which photo is missing; "invalid transition" would send a
+   * staff member hunting for a status problem that does not exist.
+   */
+  private async assertEvidence(workOrderId: string, to: WorkOrderStatus): Promise<void> {
+    const stage =
+      to === W.IN_PROGRESS ? 'BEFORE' : to === W.COMPLETED ? 'AFTER' : null;
+    if (!stage) return;
+
+    const count = await this.prisma.workOrderAttachment.count({
+      where: { workOrderId, deletedAt: null, stage },
+    });
+    if (count > 0) return;
+
+    throw new BadRequestException(
+      stage === 'BEFORE'
+        ? 'Take a “before” photo of the site before starting work.'
+        : 'Take an “after” photo showing the finished work before completing it.',
+    );
   }
 
   /** Estimated total is stored (labour + material) whenever either is provided. */
@@ -302,6 +400,7 @@ export class WorkOrderService {
     }
     this.statusFlow.assertTransition(from, to);
     this.assertStatusPermission(to, actor);
+    await this.assertEvidence(id, to);
 
     const now = new Date();
     const updated = await this.prisma.workOrder.update({

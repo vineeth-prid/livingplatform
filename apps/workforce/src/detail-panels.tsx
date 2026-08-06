@@ -256,12 +256,30 @@ const isImage = (a: Attachment) => a.contentType?.startsWith('image/');
  * Photos are downscaled, PUT to the signed URL, and only then registered — in
  * that order, so a record never exists without the object behind it.
  */
-export function PhotoPanel({ queryKey, api, canAdd }: { queryKey: unknown[]; api: AttachmentApi; canAdd: boolean }) {
+export function PhotoPanel({
+  queryKey, api, canAdd, stage,
+}: {
+  queryKey: unknown[];
+  api: AttachmentApi;
+  canAdd: boolean;
+  /**
+   * Tags what the photo documents. The API requires a BEFORE photo to start
+   * work and an AFTER photo to complete it, so an untagged upload would satisfy
+   * neither gate and the staff member would be stuck with no idea why.
+   */
+  stage?: 'BEFORE' | 'AFTER';
+}) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [staged, setStaged] = useState<File[]>([]);
   const q = useQuery({ queryKey, queryFn: api.list });
-  const attachments = q.data ?? [];
+  // Both panels read the same endpoint, so each shows only its own stage —
+  // otherwise "before" and "after" would list identical photos and neither
+  // would mean anything.
+  const all = q.data ?? [];
+  const attachments = stage
+    ? all.filter((a) => (a as { stage?: string }).stage === stage)
+    : all;
 
   const previews = useMemo(() => staged.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [staged]);
 
@@ -284,7 +302,10 @@ export function PhotoPanel({ queryKey, api, canAdd }: { queryKey: unknown[]; api
         });
         if (!put.ok) throw new Error('Could not upload the photo — check your connection');
 
-        await api.add({ fileName: file.name, contentType, size: file.size, storageKey: signed.key });
+        await api.add({
+          fileName: file.name, contentType, size: file.size, storageKey: signed.key,
+          ...(stage ? { stage } : {}),
+        });
       }
     },
     onSuccess: () => { setStaged([]); void q.refetch(); toast.success('Photos added'); },

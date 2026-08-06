@@ -94,6 +94,20 @@ const EVENT_MAP: Partial<Record<string, EventBinding>> = {
     event: NotificationEvent.WORK_ORDER_ASSIGNED,
     template: NOTIFICATION_TEMPLATES.WORK_ORDER_ASSIGNED,
   },
+  // The approval lane. A recommendation is a request for a decision, and both
+  // outcomes change what the resident should expect — so all three notify.
+  [DomainEventName.WorkOrderRecommended]: {
+    event: NotificationEvent.WORK_ORDER_UPDATE,
+    template: NOTIFICATION_TEMPLATES.GENERIC,
+  },
+  [DomainEventName.WorkOrderApproved]: {
+    event: NotificationEvent.WORK_ORDER_UPDATE,
+    template: NOTIFICATION_TEMPLATES.GENERIC,
+  },
+  [DomainEventName.WorkOrderRejected]: {
+    event: NotificationEvent.WORK_ORDER_UPDATE,
+    template: NOTIFICATION_TEMPLATES.GENERIC,
+  },
   [DomainEventName.WorkCompleted]: {
     event: NotificationEvent.WORK_ORDER_UPDATE,
     template: NOTIFICATION_TEMPLATES.WORK_ORDER_COMPLETED,
@@ -404,6 +418,80 @@ export class NotificationRouterService {
         }];
       }
 
+      /**
+       * The approval lane speaks to the RESIDENT waiting on the ticket, plus
+       * the approvers who have to decide. Staff already know — they raised it.
+       */
+      case DomainEventName.WorkOrderRecommended:
+      case DomainEventName.WorkOrderApproved:
+      case DomainEventName.WorkOrderRejected: {
+        const workOrder = await this.prisma.workOrder.findUnique({
+          where: { id: event.entityId },
+          select: {
+            number: true, title: true, originType: true, originId: true,
+            estimatedTotalCost: true, rejectionReason: true,
+          },
+        });
+        if (!workOrder) return null;
+
+        const number = formatWorkOrderNumber(workOrder.number);
+        const heading =
+          event.name === DomainEventName.WorkOrderRecommended
+            ? 'Additional work needs approval'
+            : event.name === DomainEventName.WorkOrderApproved
+              ? 'Approved — work is resuming'
+              : 'Approved to continue without the extra work';
+        const body =
+          event.name === DomainEventName.WorkOrderRecommended
+            ? `<p>${workOrder.title} (${number}) needs approval before work can continue. We will update you as soon as it is decided.</p>`
+            : event.name === DomainEventName.WorkOrderApproved
+              ? `<p>${workOrder.title} (${number}) has been approved and work is resuming.</p>`
+              : `<p>The additional work for ${workOrder.title} (${number}) was not approved. Our team is continuing with the original request.</p>`;
+
+        const variables = {
+          subject: `${heading} — ${number}`,
+          heading,
+          bodyHtml: body,
+          workOrderNumber: number,
+          title: workOrder.title,
+          recipientName: '',
+          actionUrl: `${this.webAppUrl}/work-orders/${event.entityId}`,
+        };
+
+        const messages: RoutedMessage[] = [];
+
+        // The resident whose ticket is parked on this decision.
+        if (workOrder.originType === 'TICKET' && workOrder.originId) {
+          const ticket = await this.prisma.ticket.findUnique({
+            where: { id: workOrder.originId },
+            select: { residentId: true },
+          });
+          if (ticket?.residentId) {
+            messages.push({
+              recipient: { residentId: ticket.residentId, communityId },
+              variables,
+            });
+          }
+        }
+
+        // Only a pending decision needs an approver; the outcomes do not.
+        if (event.name === DomainEventName.WorkOrderRecommended && communityId) {
+          for (const approver of await this.approversFor(communityId, PERMISSIONS.WORKORDER_APPROVE)) {
+            messages.push({
+              recipient: { userId: approver.id, email: approver.email, name: approver.firstName },
+              variables: {
+                ...variables,
+                recipientName: approver.firstName,
+                bodyHtml:
+                  `<p>${workOrder.title} (${number}) is waiting on your approval` +
+                  `${workOrder.estimatedTotalCost ? ` — estimated ${this.currency} ${Number(workOrder.estimatedTotalCost).toFixed(2)}` : ''}.</p>`,
+              },
+            });
+          }
+        }
+        return messages.length > 0 ? messages : null;
+      }
+
       case DomainEventName.WorkOrderAssigned:
       case DomainEventName.WorkCompleted: {
         const workOrder = await this.prisma.workOrder.findUnique({
@@ -460,12 +548,12 @@ export class NotificationRouterService {
    * whoever manages it. Resolved from role grants rather than a hardcoded role
    * key, so a custom role holding `visitor:approve` is alerted too.
    */
-  private async approversFor(communityId: string) {
+  private async approversFor(communityId: string, permission: string = PERMISSIONS.VISITOR_APPROVE) {
     const grants = await this.prisma.userRole.findMany({
       where: {
         communityId,
         role: {
-          permissions: { some: { permission: { key: PERMISSIONS.VISITOR_APPROVE } } },
+          permissions: { some: { permission: { key: permission } } },
         },
         user: { status: 'ACTIVE', deletedAt: null },
       },

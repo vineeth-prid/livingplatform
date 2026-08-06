@@ -4,7 +4,7 @@ import { Download, Paperclip } from 'lucide-react';
 import { useAuth } from '@living/hooks';
 import { LivingApiError } from '@living/living-sdk';
 import { formatFileSize } from '@living/utils';
-import { Button, EmptyState, Skeleton, toast } from '@living/ui';
+import { Badge, Button, EmptyState, Skeleton, toast } from '@living/ui';
 
 import { living } from '../../lib/living';
 import { useWorkOrderMutations } from './queries';
@@ -45,7 +45,17 @@ export function WorkOrderAttachments({ workOrderId }: { workOrderId: string }) {
             <li key={a.id} className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-sunken">
               <Paperclip className="h-4 w-4 shrink-0 text-muted" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-strong">{a.fileName}</p>
+                <p className="flex items-center gap-2 truncate text-sm font-medium text-strong">
+                  <span className="truncate">{a.fileName}</span>
+                  {/* Site evidence, labelled. Verification turns on whether the
+                      "after" shot matches what was signed off, so which side of
+                      the work a photo shows is the whole point of having it. */}
+                  {(a as { stage?: string }).stage && (
+                    <Badge tone={(a as { stage?: string }).stage === 'BEFORE' ? 'neutral' : 'success'} size="sm">
+                      {(a as { stage?: string }).stage === 'BEFORE' ? 'before' : 'after'}
+                    </Badge>
+                  )}
+                </p>
                 <p className="text-xs text-subtle">{formatFileSize(a.size)}</p>
               </div>
               {a.downloadUrl && (
