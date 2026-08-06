@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import { TicketService } from '../ticket/ticket.service';
+import { StaffAutoAssignService } from '../staff/staff-auto-assign.service';
 import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
   AssignServiceRequestDto,
@@ -50,6 +51,7 @@ export class ServiceRequestService {
     private readonly tickets: TicketService,
     private readonly events: DomainEventsService,
     private readonly autoAssign: VendorAutoAssignService,
+    private readonly staffAutoAssign: StaffAutoAssignService,
   ) {}
 
   /**
@@ -71,7 +73,10 @@ export class ServiceRequestService {
     // Same gap as tickets: the resident app posts service/unit/title only, so a
     // resident's own request was stored with residentId NULL — unattributed,
     // and unreachable by any notification addressed to the person who made it.
-    const residentId = dto.residentId ?? (await this.callerResidentId(communityId, actor));
+    const residentId =
+      dto.residentId
+      ?? (await this.callerResidentId(communityId, actor))
+      ?? (await this.primaryResidentOfUnit(dto.unitId));
 
     // Price the request ONCE, here, and freeze the result onto the row. A later
     // catalogue edit must never rewrite what the resident was quoted.
@@ -144,18 +149,34 @@ export class ServiceRequestService {
       });
       if (!service) return null;
 
+      const categories = [service.key, service.name];
+
       const picked = await this.autoAssign.pick({
         tenantId,
         communityId: request.communityId,
-        categories: [service.key, service.name],
+        categories,
       });
       this.autoAssign.logOutcome('service-request', request.id, picked);
-      if (!picked) return null;
+
+      // VENDORS FIRST here, unlike tickets, because a service is bought from
+      // the vendor catalogue. But falling through to in-house staff matters: a
+      // community whose housekeeping is done by its own people had NO staff
+      // path at all on this route — only tickets tried staff — so a service
+      // with no matching vendor was left unassigned even when somebody
+      // in-house was allocated exactly that category.
+      const staffPick = picked
+        ? null
+        : await this.staffAutoAssign.pick({ communityId: request.communityId, categories });
+      if (staffPick) this.staffAutoAssign.logOutcome('service-request', request.id, staffPick);
+
+      if (!picked && !staffPick) return null;
 
       const updated = await this.prisma.serviceRequest.update({
         where: { id: request.id },
         data: {
-          assignedVendorId: picked.vendorId,
+          // Staff XOR vendor — never both.
+          assignedVendorId: picked?.vendorId ?? null,
+          assignedStaffId: staffPick?.staffId ?? null,
           assignedAt: new Date(),
           autoAssigned: true,
           // assignedById stays null: no person made this call.
@@ -492,6 +513,16 @@ export class ServiceRequestService {
       select: { id: true },
     });
     return resident?.id;
+  }
+
+  /** The unit's occupant, for a request an admin raised on someone's behalf. */
+  private async primaryResidentOfUnit(unitId: string): Promise<string | undefined> {
+    const assignment = await this.prisma.residentUnit.findFirst({
+      where: { unitId, status: 'ACTIVE', resident: { deletedAt: null } },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      select: { residentId: true },
+    });
+    return assignment?.residentId;
   }
 
   private async assertResidentInCommunity(residentId: string, communityId: string) {

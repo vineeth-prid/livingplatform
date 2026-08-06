@@ -63,7 +63,10 @@ export class TicketService {
     // to nobody: no notification could address the person who raised it, and
     // an admin filtering by resident never saw it. The resident app hid the gap
     // by filtering its own list on reportedById instead.
-    const residentId = dto.residentId ?? (await this.callerResidentId(communityId, actor));
+    const residentId =
+      dto.residentId
+      ?? (await this.callerResidentId(communityId, actor))
+      ?? (await this.primaryResidentOfUnit(dto.unitId));
 
     const ticket = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
@@ -569,6 +572,23 @@ export class TicketService {
       select: { id: true },
     });
     return resident?.id;
+  }
+
+  /**
+   * The unit's occupant, for a ticket an ADMIN raised on someone's behalf.
+   *
+   * The admin portal asks for a unit, never a resident — so without this the
+   * ticket is unattributed and the person it was raised for is never told about
+   * it. PRIMARY first, because a unit can hold an owner, a tenant and family
+   * members, and the primary occupant is who the community deals with.
+   */
+  private async primaryResidentOfUnit(unitId: string): Promise<string | undefined> {
+    const assignment = await this.prisma.residentUnit.findFirst({
+      where: { unitId, status: 'ACTIVE', resident: { deletedAt: null } },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      select: { residentId: true },
+    });
+    return assignment?.residentId;
   }
 
   private async assertResidentInCommunity(residentId: string, communityId: string) {
