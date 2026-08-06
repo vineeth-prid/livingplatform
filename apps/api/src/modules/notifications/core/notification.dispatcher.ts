@@ -42,6 +42,8 @@ export class NotificationDispatcher {
   private readonly logger = new Logger(NotificationDispatcher.name);
   private readonly attempts: number;
   private readonly defaultLocale: string;
+  /** Hard ceiling on one send attempt. See `deliver`. */
+  private readonly sendTimeoutMs = Number(process.env.NOTIFICATION_SEND_TIMEOUT_MS ?? 30_000);
 
   constructor(
     private readonly router: ChannelRouter,
@@ -148,7 +150,18 @@ export class NotificationDispatcher {
     await this.tracking.markProcessing(data.deliveryId);
     try {
       const message = deserializeMessage(data.message);
-      const result = await channel.send(message);
+      // A provider that hangs must not hold a worker slot open indefinitely.
+      // There are only `concurrency` slots (5 by default): a handful of stuck
+      // sends wedges the ENTIRE queue, and every other notification — every
+      // channel, every community — silently stops. The delivery row is left
+      // reading PROCESSING forever, which is exactly what that state looked
+      // like in production. Bounding the send turns a silent stall into a
+      // failed attempt that retries and eventually dead-letters with a reason.
+      const result = await withTimeout(
+        channel.send(message),
+        this.sendTimeoutMs,
+        `${data.channel} send exceeded ${this.sendTimeoutMs}ms`,
+      );
       const durationMs = Date.now() - start;
       await this.tracking.markSent(data.deliveryId, {
         providerMessageId: result.messageId,
@@ -223,4 +236,23 @@ function deserializeMessage(message: NotificationMessage): NotificationMessage {
         : a,
     ),
   };
+}
+
+/**
+ * Reject if `promise` has not settled within `ms`.
+ *
+ * The timer is cleared on settle so a resolved send does not keep the event
+ * loop alive, and the underlying promise is left to finish on its own — there
+ * is no way to cancel an in-flight socket, and abandoning it is the point: the
+ * worker slot is freed either way.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return promise;
+  let timer: NodeJS.Timeout;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer)) as Promise<T>;
 }

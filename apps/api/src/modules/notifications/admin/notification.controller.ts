@@ -1,4 +1,6 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  BadGatewayException, Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
@@ -103,8 +105,7 @@ export class NotificationController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a test email' })
   async emailTest(@Body() dto: SendTestEmailDto) {
-    const r = await this.dispatcher.dispatchTest('email', dto.to);
-    return { sent: true, provider: r.provider, messageId: r.messageId };
+    return sendTest(() => this.dispatcher.dispatchTest('email', dto.to));
   }
 
   @Get('email/statistics')
@@ -128,8 +129,7 @@ export class NotificationController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a test WhatsApp message' })
   async whatsappTest(@Body() dto: SendTestWhatsAppDto) {
-    const r = await this.dispatcher.dispatchTest('whatsapp', dto.to);
-    return { sent: true, provider: r.provider, messageId: r.messageId };
+    return sendTest(() => this.dispatcher.dispatchTest('whatsapp', dto.to));
   }
 
   @Get('whatsapp/statistics')
@@ -236,5 +236,30 @@ export class NotificationController {
   @ApiOperation({ summary: 'Platform default templates available to every community' })
   templates() {
     return this.engine.list().map((name) => ({ name, source: 'platform' as const }));
+  }
+}
+
+/**
+ * Run a channel test and report what actually happened.
+ *
+ * A provider failure here is not a bug in the API — it is the answer the admin
+ * came for. Letting it propagate turns "SMTP authentication failed" or
+ * "ECONNREFUSED 10.0.0.5:587" into a bare 500 "Internal server error" on the
+ * one screen whose entire purpose is telling you why sending is broken.
+ *
+ * 502, not 500: the upstream provider rejected us, the API is fine.
+ */
+async function sendTest(
+  run: () => Promise<{ provider: string; messageId: string | null }>,
+): Promise<{ sent: true; provider: string; messageId: string | null }> {
+  try {
+    const r = await run();
+    return { sent: true, provider: r.provider, messageId: r.messageId };
+  } catch (err) {
+    const e = err as Error & { code?: string; responseCode?: number };
+    // `code` (ECONNREFUSED, EAUTH…) and SMTP `responseCode` are the parts that
+    // actually identify the misconfiguration, and neither is in `message`.
+    const detail = [e.code, e.responseCode, e.message].filter(Boolean).join(' · ');
+    throw new BadGatewayException(`Test send failed: ${detail || 'unknown provider error'}`);
   }
 }

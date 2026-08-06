@@ -42,6 +42,14 @@ export class SmtpEmailProvider implements EmailProvider {
       auth: config.username ? { user: config.username, pass: config.password } : undefined,
       // Let STARTTLS upgrade non-secure connections when the server offers it.
       requireTLS: !config.secure && config.port !== 25,
+      // Nodemailer's defaults are far too patient for a queue worker: 2 minutes
+      // to connect and TEN to the socket. A firewalled or wrong-port SMTP host
+      // does not refuse the connection, it simply never answers — so the send
+      // hangs, holds one of the few worker slots, and every other notification
+      // queues behind it. Fail fast and let the retry backoff do its job.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
 

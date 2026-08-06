@@ -91,3 +91,53 @@ describe('NotificationDispatcher', () => {
     await expect(dispatcher.deliver({ deliveryId: 'del-1', channel: 'email', message: { channel: 'email', to: 'a@b.com', subject: 'Hi', html: '<p>x</p>' } })).rejects.toThrow('smtp down');
   });
 });
+
+/**
+ * Production symptom this pins: delivery rows stuck in PROCESSING forever, and
+ * every other notification silently stopping.
+ *
+ * There are only `concurrency` worker slots (5 by default). A provider that
+ * hangs rather than failing — a firewalled SMTP host that never answers, an
+ * unreachable gateway — holds its slot indefinitely, and a handful of those
+ * wedge the whole queue for every channel and every community. Nothing errors,
+ * nothing logs, notifications just stop.
+ */
+describe('NotificationDispatcher — a hung provider cannot hold a worker slot', () => {
+  const NEVER = new Promise<never>(() => {});
+
+  it('fails the attempt instead of hanging when the channel never settles', async () => {
+    const { dispatcher, channel } = makeDispatcher();
+    (channel.send as jest.Mock).mockReturnValue(NEVER);
+    (dispatcher as unknown as { sendTimeoutMs: number }).sendTimeoutMs = 25;
+
+    await expect(
+      dispatcher.deliver({ deliveryId: 'del-1', channel: 'email', message: { channel: 'email', to: 'a@b.test', subject: 'S', text: 'B' } }),
+    ).rejects.toThrow(/exceeded 25ms/);
+  });
+
+  it('marks the row PROCESSING before attempting, so a stuck row is diagnosable', async () => {
+    const { dispatcher, channel, tracking } = makeDispatcher();
+    (channel.send as jest.Mock).mockReturnValue(NEVER);
+    (dispatcher as unknown as { sendTimeoutMs: number }).sendTimeoutMs = 25;
+
+    await dispatcher
+      .deliver({ deliveryId: 'del-1', channel: 'email', message: { channel: 'email', to: 'a@b.test', subject: 'S', text: 'B' } })
+      .catch(() => undefined);
+
+    expect(tracking.markProcessing).toHaveBeenCalledWith('del-1');
+    expect(tracking.markSent).not.toHaveBeenCalled();
+  });
+
+  it('does not penalise a send that completes within the budget', async () => {
+    const { dispatcher, channel, tracking } = makeDispatcher();
+    (channel.send as jest.Mock).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ messageId: 'm', provider: 'smtp', channel: 'email', raw: {} }), 5)),
+    );
+    (dispatcher as unknown as { sendTimeoutMs: number }).sendTimeoutMs = 200;
+
+    const result = await dispatcher.deliver({ deliveryId: 'del-1', channel: 'email', message: { channel: 'email', to: 'a@b.test', subject: 'S', text: 'B' } });
+
+    expect(result.messageId).toBe('m');
+    expect(tracking.markSent).toHaveBeenCalled();
+  });
+});
