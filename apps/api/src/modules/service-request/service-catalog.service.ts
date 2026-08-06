@@ -173,7 +173,24 @@ export class ServiceCatalogService {
     });
   }
 
+  /**
+   * Edit a service.
+   *
+   * Editing a PLATFORM service from a community adopts it: the row is copied
+   * into that tenant with the edits applied, and the original is withdrawn for
+   * them alone via TenantServiceSetting. The community ends up owning an
+   * ordinary service — rename it, reprice it, give it variants — while every
+   * other community keeps the untouched default and past requests still resolve
+   * the row they were booked against.
+   */
   async update(id: string, dto: UpdateServiceDto) {
+    const service = await this.prisma.service.findFirst({ where: { id, deletedAt: null } });
+    if (!service) throw new NotFoundException('Service not found');
+
+    if (service.tenantId === null && !this.tenant.isPlatform) {
+      return this.adoptPlatformService(service, dto);
+    }
+
     await this.load(id); // authorization: throws unless the caller may manage it
     return this.prisma.service.update({
       where: { id },
@@ -188,6 +205,51 @@ export class ServiceCatalogService {
         sortOrder: dto.sortOrder,
         basePrice: dto.basePrice,
       },
+    });
+  }
+
+  /** Copy a platform service into this tenant with the edits, and withdraw the original. */
+  private async adoptPlatformService(
+    service: {
+      id: string; key: string; name: string; description: string | null;
+      estimatedDurationMinutes: number | null; iconKey: string | null; color: string | null;
+      isActive: boolean; sortOrder: number; basePrice: Prisma.Decimal | null;
+    },
+    dto: UpdateServiceDto,
+  ) {
+    const tenantId = this.tenant.tenantId;
+    if (!tenantId) throw new ForbiddenException('No tenant context');
+
+    return this.prisma.$transaction(async (tx) => {
+      const key = dto.key ?? service.key;
+      // An earlier adoption may already own this key — update rather than
+      // collide with the tenant/key uniqueness.
+      const existing = await tx.service.findFirst({ where: { tenantId, key, deletedAt: null } });
+
+      const data = {
+        key,
+        name: dto.name ?? service.name,
+        description: dto.description ?? service.description,
+        estimatedDurationMinutes:
+          dto.estimatedDurationMinutes ?? service.estimatedDurationMinutes,
+        iconKey: dto.iconKey ?? service.iconKey,
+        color: dto.color ?? service.color,
+        isActive: dto.isActive ?? service.isActive,
+        sortOrder: dto.sortOrder ?? service.sortOrder,
+        basePrice: dto.basePrice ?? service.basePrice,
+      };
+
+      const owned = existing
+        ? await tx.service.update({ where: { id: existing.id }, data })
+        : await tx.service.create({ data: { ...data, tenantId } });
+
+      await tx.tenantServiceSetting.upsert({
+        where: { tenantId_serviceId: { tenantId, serviceId: service.id } },
+        create: { tenantId, serviceId: service.id, isActive: false },
+        update: { isActive: false },
+      });
+
+      return owned;
     });
   }
 
@@ -301,20 +363,20 @@ export class ServiceCatalogService {
   }
 
   /**
-   * May the caller EDIT or DELETE this row?
+   * May the caller EDIT or DELETE this row directly?
    *
-   * Editing a platform service is still refused: the row is shared with every
-   * other tenant, so a rename or price change here would reach communities that
-   * never asked for it. Withdrawing it is a different question and is handled by
-   * `setStatus` through TenantServiceSetting — an admin who wants their own
-   * version copies it by creating a community service.
+   * A platform row is shared with every other tenant, so it is never mutated in
+   * place by a community. That is not a refusal any more: `update` adopts the
+   * service into the tenant first and edits the copy, and `setStatus` withdraws
+   * it through TenantServiceSetting. This guard is what remains for the paths
+   * with no adopt equivalent — deletion.
    */
   private assertOwned(service: { tenantId: string | null }): void {
     if (this.tenant.isPlatform) return;
     if (service.tenantId === null) {
       throw new ForbiddenException(
-        'A platform service cannot be edited or deleted. Deactivate it to withdraw it from your ' +
-          'catalog, or create your own community service.',
+        'A platform service cannot be deleted. Switch it off to withdraw it from your catalog — ' +
+          'editing it gives your community its own copy automatically.',
       );
     }
     if (service.tenantId !== this.tenant.tenantId) {

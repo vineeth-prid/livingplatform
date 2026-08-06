@@ -22,6 +22,7 @@ import {
 import {
   CreateTicketCategoryDto,
   QueryTicketCategoryDto,
+  SetCategoryStatusDto,
   UpdateTicketCategoryDto,
 } from './dto/category.dto';
 import { CreateCommentDto } from './dto/comment.dto';
@@ -210,6 +211,18 @@ export class TicketCategoryController {
   @RequirePermissions(PERMISSIONS.TICKET_UPDATE)
   update(@Param('id') id: string, @Body() dto: UpdateTicketCategoryDto) {
     return this.categories.update(id, dto);
+  }
+
+  /**
+   * Turn a category on or off for this community — the supported alternative to
+   * deleting one. A system default is switched off for this tenant only; the
+   * shared row is untouched for everyone else.
+   */
+  @Patch(':id/status')
+  @RequirePermissions(PERMISSIONS.TICKET_UPDATE)
+  @ApiOperation({ summary: 'Enable or disable a category for this community' })
+  setStatus(@Param('id') id: string, @Body() dto: SetCategoryStatusDto) {
+    return this.categories.setStatus(id, dto.isActive);
   }
 
   @Delete(':id')

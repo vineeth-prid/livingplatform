@@ -26,17 +26,68 @@ export class TicketCategoryService {
     private readonly tenant: TenantContextService,
   ) {}
 
-  list(query: QueryTicketCategoryDto) {
-    return this.prisma.ticketCategory.findMany({
+  /**
+   * The categories this caller can use, with the tenant's own on/off decision
+   * folded in.
+   *
+   * A community switching a system default off records that against its own
+   * tenant, so the effective `isActive` here is the override where one exists
+   * and the shared row's value otherwise. Every caller — portal, staff picker,
+   * resident app — sees the same effective list without knowing about it.
+   */
+  async list(query: QueryTicketCategoryDto) {
+    const tenantId = this.tenant.tenantId;
+    const categories = await this.prisma.ticketCategory.findMany({
       where: {
         deletedAt: null,
-        ...(query.activeOnly ? { isActive: true } : {}),
         ...(this.tenant.isPlatform
           ? {}
-          : { OR: [{ tenantId: null }, { tenantId: this.tenant.tenantId }] }),
+          : { OR: [{ tenantId: null }, { tenantId }] }),
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
+
+    if (this.tenant.isPlatform || !tenantId) {
+      return query.activeOnly ? categories.filter((c) => c.isActive) : categories;
+    }
+
+    const overrides = await this.prisma.tenantCategorySetting.findMany({
+      where: { tenantId, categoryId: { in: categories.map((c) => c.id) } },
+      select: { categoryId: true, isActive: true },
+    });
+    const byId = new Map(overrides.map((o) => [o.categoryId, o.isActive]));
+
+    const effective = categories.map((c) => ({ ...c, isActive: byId.get(c.id) ?? c.isActive }));
+    return query.activeOnly ? effective.filter((c) => c.isActive) : effective;
+  }
+
+  /**
+   * Turn a category on or off for this community.
+   *
+   * Categories are the community's vocabulary, so this is theirs to decide even
+   * for a platform default — but a default is switched off through an override,
+   * never by mutating the shared row, or one community hiding "Carpentry" would
+   * remove it from every other community.
+   */
+  async setStatus(id: string, isActive: boolean) {
+    const category = await this.prisma.ticketCategory.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!category) throw new NotFoundException('Category not found');
+
+    if (category.tenantId === null && !this.tenant.isPlatform) {
+      const tenantId = this.tenant.tenantId;
+      if (!tenantId) throw new ForbiddenException('No tenant context');
+      await this.prisma.tenantCategorySetting.upsert({
+        where: { tenantId_categoryId: { tenantId, categoryId: id } },
+        create: { tenantId, categoryId: id, isActive },
+        update: { isActive },
+      });
+      return { ...category, isActive };
+    }
+
+    await this.load(id);
+    return this.prisma.ticketCategory.update({ where: { id }, data: { isActive } });
   }
 
   async create(dto: CreateTicketCategoryDto) {
@@ -60,7 +111,25 @@ export class TicketCategoryService {
     });
   }
 
+  /**
+   * Edit a category.
+   *
+   * Editing a SYSTEM default from a community adopts it: the row is copied into
+   * that tenant with the edits applied, and the original is switched off for
+   * them alone. They end up owning an ordinary category they can change freely,
+   * every other community keeps the untouched default, and existing tickets
+   * keep pointing at the row they were raised against.
+   */
   async update(id: string, dto: UpdateTicketCategoryDto) {
+    const category = await this.prisma.ticketCategory.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!category) throw new NotFoundException('Category not found');
+
+    if (category.tenantId === null && !this.tenant.isPlatform) {
+      return this.adoptSystemCategory(category, dto);
+    }
+
     await this.load(id); // authorization: throws unless the caller may manage it
     return this.prisma.ticketCategory.update({
       where: { id },
@@ -73,6 +142,48 @@ export class TicketCategoryService {
         isActive: dto.isActive,
         sortOrder: dto.sortOrder,
       },
+    });
+  }
+
+  /** Copy a system default into this tenant with the edits, and hide the original. */
+  private async adoptSystemCategory(
+    category: { id: string; key: string; name: string; description: string | null; color: string | null; iconKey: string | null; isActive: boolean; sortOrder: number },
+    dto: UpdateTicketCategoryDto,
+  ) {
+    const tenantId = this.tenant.tenantId;
+    if (!tenantId) throw new ForbiddenException('No tenant context');
+
+    return this.prisma.$transaction(async (tx) => {
+      // The tenant may already own a category on this key from an earlier edit —
+      // update it rather than colliding with @@unique([tenantId, key]).
+      const key = dto.key ?? category.key;
+      const existing = await tx.ticketCategory.findFirst({
+        where: { tenantId, key, deletedAt: null },
+      });
+
+      const data = {
+        key,
+        name: dto.name ?? category.name,
+        description: dto.description ?? category.description,
+        color: dto.color ?? category.color,
+        iconKey: dto.iconKey ?? category.iconKey,
+        isActive: dto.isActive ?? category.isActive,
+        sortOrder: dto.sortOrder ?? category.sortOrder,
+      };
+
+      const owned = existing
+        ? await tx.ticketCategory.update({ where: { id: existing.id }, data })
+        : await tx.ticketCategory.create({
+            data: { ...data, tenantId, isSystem: false },
+          });
+
+      await tx.tenantCategorySetting.upsert({
+        where: { tenantId_categoryId: { tenantId, categoryId: category.id } },
+        create: { tenantId, categoryId: category.id, isActive: false },
+        update: { isActive: false },
+      });
+
+      return owned;
     });
   }
 
@@ -94,10 +205,21 @@ export class TicketCategoryService {
         isActive: true,
         OR: [{ tenantId: null }, { tenantId }],
       },
-      select: { id: true },
+      select: { id: true, tenantId: true },
     });
     if (!category) {
       throw new BadRequestException('Category is not available for this community');
+    }
+    // A system default this tenant switched off is not available to them, even
+    // though the shared row is still active for everyone else.
+    if (category.tenantId === null) {
+      const override = await this.prisma.tenantCategorySetting.findUnique({
+        where: { tenantId_categoryId: { tenantId, categoryId } },
+        select: { isActive: true },
+      });
+      if (override && !override.isActive) {
+        throw new BadRequestException('Category is not available for this community');
+      }
     }
   }
 

@@ -411,6 +411,7 @@ model Tenant {
   roles       Role[] // tenant-scoped custom roles (system roles have tenantId = null)
   vendors     Vendor[] // vendors are tenant-scoped (cover many communities)
   serviceSettings TenantServiceSetting[] // per-tenant availability of platform services
+  categorySettings TenantCategorySetting[] // per-tenant availability of system categories
 
   // Audit / soft-delete base columns (see docs/architecture.md — Audit).
   createdAt   DateTime  @default(now())
@@ -1243,7 +1244,8 @@ model TicketCategory {
   isSystem    Boolean @default(false)
   sortOrder   Int     @default(0)
 
-  tickets Ticket[]
+  tickets       Ticket[]
+  tenantSettings TenantCategorySetting[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -2941,4 +2943,30 @@ model ServiceVariant {
   @@unique([serviceId, name])
   @@index([serviceId])
   @@map("service_variants")
+}
+
+/// A tenant's own view of a SYSTEM ticket category (tenantId = null).
+///
+/// Categories are the community's vocabulary, not the platform's, so a
+/// community admin can switch a default off when they do not use it. The shared
+/// row is never mutated: one community hiding "Carpentry" must not remove it
+/// from every other community. Editing a system category takes a different
+/// route — it clones the row into the tenant and hides the original here, so
+/// the community ends up owning an ordinary category it can change freely.
+model TenantCategorySetting {
+  id         String         @id @default(cuid())
+  tenantId   String
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   TicketCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  isActive Boolean @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@unique([tenantId, categoryId])
+  @@index([tenantId])
+  @@map("tenant_category_settings")
 }

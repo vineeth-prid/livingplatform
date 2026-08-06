@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Tags, Trash2 } from 'lucide-react';
+import { Plus, Power, Tags } from 'lucide-react';
 import type { TicketCategory } from '@living/types';
 import { useAuth } from '@living/hooks';
 import {
@@ -33,25 +33,30 @@ export function CategoriesPage() {
     queryFn: () => living.ticket.listCategories(),
   });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => living.ticket.deleteCategory(id),
-    onSuccess: () => {
+  // Switching off, not deleting: a category is referenced by every request ever
+  // raised against it, so withdrawing it must not remove that history.
+  const setStatus = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      living.ticket.setCategoryStatus(id, isActive),
+    onSuccess: (_r, v) => {
       void qc.invalidateQueries({ queryKey: ['ticket-categories'] });
-      toast.success('Category deleted');
+      toast.success(v.isActive ? 'Category turned on' : 'Category turned off');
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const onDelete = async (category: TicketCategory) => {
-    const ok = await confirm({
-      title: `Delete ${category.name}?`,
-      description:
-        'Existing requests keep their category and staff specialities referencing it are ' +
-        'cleared. New requests can no longer be raised against it.',
-      confirmLabel: 'Delete',
-      tone: 'danger',
-    });
-    if (ok) remove.mutate(category.id);
+  const onToggle = async (category: TicketCategory) => {
+    if (category.isActive) {
+      const ok = await confirm({
+        title: `Turn off ${category.name}?`,
+        description:
+          'It disappears from the pickers when raising a request and from staff specialities. ' +
+          'Existing requests keep it, and you can turn it back on at any time.',
+        confirmLabel: 'Turn off',
+      });
+      if (!ok) return;
+    }
+    setStatus.mutate({ id: category.id, isActive: !category.isActive });
   };
 
   const rows = categories.data ?? [];
@@ -98,18 +103,20 @@ export function CategoriesPage() {
       key: 'actions',
       header: '',
       align: 'right',
+      // Platform rows are editable too now: editing one gives this community
+      // its own copy and withdraws the shared default here alone.
       cell: (c) =>
-        canManage && !c.isSystem ? (
+        canManage ? (
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="secondary" onClick={() => setEditing(c)}>Edit</Button>
             <Button
               size="sm"
               variant="ghost"
-              aria-label={`Delete ${c.name}`}
-              disabled={remove.isPending}
-              onClick={() => void onDelete(c)}
+              disabled={setStatus.isPending}
+              onClick={() => void onToggle(c)}
             >
-              <Trash2 className="h-4 w-4" />
+              <Power className={`h-4 w-4 ${c.isActive ? 'text-success-fg' : 'text-muted'}`} />
+              {c.isActive ? 'Turn off' : 'Turn on'}
             </Button>
           </div>
         ) : null,

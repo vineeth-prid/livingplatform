@@ -40,3 +40,10 @@ export class QueryTicketCategoryDto {
   @IsOptional() @Type(() => Boolean) @IsBoolean()
   activeOnly?: boolean;
 }
+
+/** Enable / disable a category for this community. Categories are never deleted. */
+export class SetCategoryStatusDto {
+  @ApiProperty({ description: 'true = usable when raising a ticket, false = hidden' })
+  @IsBoolean()
+  isActive!: boolean;
+}

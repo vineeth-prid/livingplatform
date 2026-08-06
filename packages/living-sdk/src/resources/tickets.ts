@@ -73,6 +73,14 @@ export class TicketResource {
   updateCategory(id: string, input: Body): Promise<TicketCategory> {
     return this.http.patch(`/ticket-categories/${id}`, input);
   }
+  /**
+   * Turn a category on or off for this community — the supported way to stop
+   * using one. A platform default is switched off for this community alone.
+   */
+  setCategoryStatus(id: string, isActive: boolean): Promise<TicketCategory> {
+    return this.http.patch(`/ticket-categories/${id}/status`, { isActive });
+  }
+  /** @deprecated Prefer `setCategoryStatus(id, false)` — categories are not deleted. */
   deleteCategory(id: string): Promise<unknown> {
     return this.http.delete(`/ticket-categories/${id}`);
   }

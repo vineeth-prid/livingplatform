@@ -147,23 +147,28 @@ export function ServicesPage() {
       header: '',
       align: 'right',
       // A platform service is one row shared by every community, so it can be
-      // withdrawn (the Availability switch) but never edited or deleted here.
-      // A community that wants its own version creates one.
+      // Platform rows are editable too: editing one hands this community its
+      // own copy and withdraws the shared default here alone, so a rename or
+      // reprice never reaches a community that did not ask for it. Deletion
+      // stays off the table — the Availability switch is how a service is
+      // withdrawn, and history keeps resolving it.
       cell: (s) =>
-        canManage && !s.isSystem ? (
+        canManage ? (
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="secondary" onClick={() => setEditing(s)}>
               Edit
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label={`Delete ${s.name}`}
-              disabled={remove.isPending}
-              onClick={() => void onDelete(s)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {!s.isSystem && (
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Delete ${s.name}`}
+                disabled={remove.isPending}
+                onClick={() => void onDelete(s)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         ) : null,
     },
