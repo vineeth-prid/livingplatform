@@ -46,6 +46,7 @@ export class TicketAttachmentService {
         size: dto.size,
         storageKey: dto.storageKey,
         uploadedById: actor.id,
+        stage: dto.stage,
       },
     });
     await this.timeline.record({

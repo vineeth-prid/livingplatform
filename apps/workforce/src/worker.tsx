@@ -35,6 +35,9 @@ interface WorkerValue {
   /** The assignee ids used to filter "my jobs". */
   staffId: string | null;
   vendorId: string | null;
+  /** The login id — a work order this person RAISED is theirs to follow even
+   *  before anyone is assigned to it. */
+  userId: string | null;
   isLinked: boolean;
   isLoading: boolean;
 }
@@ -86,6 +89,7 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
       vendor,
       staffId: staff?.id ?? null,
       vendorId: vendor?.id ?? null,
+      userId: uid ?? null,
       isLinked: !!staff || !!vendor,
       isLoading: communityQ.isLoading || staffQ.isLoading || vendorQ.isLoading,
     };

@@ -1,7 +1,7 @@
 import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Camera, CheckCircle2, Gauge, ImagePlus, Lock, MessageSquare, Paperclip,
+  Camera, CheckCircle2, Gauge, ImagePlus, Lock, MessageSquare, Paperclip, X,
 } from 'lucide-react';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
@@ -312,8 +312,13 @@ export function PhotoPanel({
     onError: (err) => toast.error(err instanceof LivingApiError ? err.message : 'Upload failed'),
   });
 
-  const onPick = (files: FileList | null) => {
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
     if (files && files.length) setStaged((prev) => [...prev, ...Array.from(files)]);
+    // Reset the input, or picking the SAME file twice fires no change event and
+    // the second attempt looks like the app ignored them — which is exactly what
+    // happens when a worker retakes a shot that did not come out.
+    e.target.value = '';
   };
 
   return (
@@ -341,6 +346,18 @@ export function PhotoPanel({
           {previews.map((p, i) => (
             <div key={i} className="relative aspect-square overflow-hidden rounded-card ring-1 ring-inset ring-[var(--brand-primary)]/40">
               <img src={p.url} alt={p.file.name} className="h-full w-full object-cover opacity-80" />
+              {/* Discard THIS one. "Clear" throws away every staged photo, which
+                  is the wrong tool when one shot of four came out blurred —
+                  a worker would have to retake all of them. */}
+              <button
+                type="button"
+                onClick={() => setStaged((prev) => prev.filter((_, index) => index !== i))}
+                disabled={upload.isPending}
+                aria-label={`Remove ${p.file.name}`}
+                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white transition-colors hover:bg-black/80 disabled:opacity-40"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
               <span className="absolute inset-x-0 bottom-0 bg-black/40 px-1 py-0.5 text-center text-2xs text-white">Ready</span>
             </div>
           ))}
@@ -349,8 +366,8 @@ export function PhotoPanel({
 
       {canAdd && (
         <div className="flex flex-col gap-2">
-          <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => onPick(e.target.files)} />
-          <input ref={galleryRef} type="file" accept="image/*" multiple hidden onChange={(e) => onPick(e.target.files)} />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
+          <input ref={galleryRef} type="file" accept="image/*" multiple hidden onChange={onPick} />
           <div className="flex gap-2">
             <Button variant="secondary" size="lg" className="flex-1" onClick={() => cameraRef.current?.click()}>
               <Camera className="h-4 w-4" /> Take photo

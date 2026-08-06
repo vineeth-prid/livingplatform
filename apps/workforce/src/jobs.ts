@@ -55,7 +55,7 @@ function toJob(kind: JobKind, raw: WorkOrder | ServiceRequest | Ticket): Job {
  * carries >100 open jobs, add server-side `assignedToMe` + pagination.
  */
 export function useMyJobs() {
-  const { communityId, staffId, vendorId, isLinked } = useWorker();
+  const { communityId, staffId, vendorId, userId, isLinked } = useWorker();
   const enabled = !!communityId && isLinked;
   const params = { limit: 100, sortBy: 'createdAt', sortDir: 'desc' as const };
 
@@ -70,14 +70,27 @@ export function useMyJobs() {
   const mine = (o: { assignedStaffId?: string | null; assignedVendorId?: string | null }) =>
     (!!staffId && o.assignedStaffId === staffId) || (!!vendorId && o.assignedVendorId === vendorId);
 
+  /**
+   * A work order this person RAISED is theirs to follow, assigned or not.
+   *
+   * Filtering on assignment alone hid every recommendation the moment it was
+   * made: a PENDING_APPROVAL order has no assignee yet, so the staff member who
+   * raised it could not see it, its status, or whether anyone had decided —
+   * while their ticket sat parked waiting on exactly that.
+   */
+  const raisedByMe = (o: { recommendedById?: string | null; requestedById?: string | null }) =>
+    !!userId && (o.recommendedById === userId || o.requestedById === userId);
+
   const all = useMemo<Job[]>(() => {
     const jobs = [
-      ...(woQ.data?.items ?? []).filter(mine).map((w) => toJob('work-order', w)),
+      ...(woQ.data?.items ?? [])
+        .filter((w) => mine(w) || raisedByMe(w))
+        .map((w) => toJob('work-order', w)),
       ...(srQ.data?.items ?? []).filter(mine).map((s) => toJob('service-request', s)),
       ...(tkQ.data?.items ?? []).filter(mine).map((t) => toJob('ticket', t)),
     ];
     return jobs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  }, [woQ.data, srQ.data, tkQ.data, staffId, vendorId]);
+  }, [woQ.data, srQ.data, tkQ.data, staffId, vendorId, userId]);
 
   const buckets = useMemo(() => {
     const dayStart = startOfToday();

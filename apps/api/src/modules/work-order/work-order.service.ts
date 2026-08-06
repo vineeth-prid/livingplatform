@@ -64,6 +64,7 @@ export class WorkOrderService {
    * execution lane once a manager approves.
    */
   async recommend(communityId: string, dto: CreateWorkOrderDto, actor: AuthenticatedUser) {
+    await this.assertNoPendingForOrigin(dto.originType, dto.originId);
     const workOrder = await this.persistNew(communityId, dto, actor, { recommended: true });
     // Park the ticket: there is nothing for staff to do until the spend is
     // decided, and leaving it IN_PROGRESS misreports it to the resident.
@@ -170,6 +171,32 @@ export class WorkOrderService {
     await this.resumeOrigin(workOrder, actor, 'rejected');
     this.publish(DomainEventName.WorkOrderRejected, updated, actor);
     return this.present(updated);
+  }
+
+  /**
+   * One open question per request.
+   *
+   * A second recommendation against the same ticket gives a manager two
+   * competing estimates for one problem, and whichever they answer first
+   * releases the ticket while the other sits pending forever. The staff member
+   * waits for the answer, or the manager rejects and they raise a revised one.
+   */
+  private async assertNoPendingForOrigin(
+    originType: string | undefined,
+    originId: string | undefined,
+  ): Promise<void> {
+    if (!originType || !originId || originType === 'MANUAL') return;
+
+    const pending = await this.prisma.workOrder.findFirst({
+      where: { originType: originType as never, originId, status: W.PENDING_APPROVAL, deletedAt: null },
+      select: { number: true },
+    });
+    if (!pending) return;
+
+    throw new BadRequestException(
+      `${formatWorkOrderNumber(pending.number)} is already waiting for approval on this request. ` +
+        'Wait for that decision before raising another.',
+    );
   }
 
   /**

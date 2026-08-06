@@ -63,6 +63,19 @@ export function JobDetailScreen() {
 
   const q = useJob(kind, id);
   const status = useJobStatus(kind, id);
+
+  /**
+   * A work order raised off THIS job that nobody has decided on yet. Drives both
+   * the "waiting for approval" banner and the suppression of a second raise.
+   */
+  const pendingWoQ = useQuery({
+    queryKey: ['job', kind, id, 'pending-wo'],
+    queryFn: () => living.workOrder.list(communityId!, { limit: 20, status: 'PENDING_APPROVAL' }),
+    enabled: !!communityId && kind !== 'work-order',
+  });
+  const pendingWo = (pendingWoQ.data?.items ?? []).find(
+    (w) => (w as { originId?: string | null }).originId === id,
+  );
   const notFound = q.isError && q.error instanceof LivingApiError && q.error.isNotFound;
 
   const data = q.data as unknown as JobDetail | undefined;
@@ -133,11 +146,28 @@ export function JobDetailScreen() {
       )}
 
       {/*
-        Raising work off a ticket or request. Not offered on a work order — one
-        does not beget another — and hidden once the job is finished, when there
-        is nothing left to escalate.
+        Why this job is stuck, in the one place the worker is looking. The API
+        refuses to resume a ticket that is awaiting a decision, so without this
+        the only feedback would be an error after tapping Resume.
       */}
-      {kind !== 'work-order' && communityId && !['COMPLETED', 'CLOSED', 'CANCELLED', 'RESOLVED'].includes(data.status) && (
+      {pendingWo && (
+        <div className="mx-4 mt-4 flex items-start gap-2.5 rounded-card bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-fg)]">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>{pendingWo.workOrderNumber ?? 'A work order'} is waiting for approval.</strong>{' '}
+            This job stays paused until a manager approves or rejects it — you do not need to do
+            anything, and it resumes on its own.
+          </span>
+        </div>
+      )}
+
+      {/*
+        Raising work off a ticket or request. Not offered on a work order — one
+        does not beget another — hidden once the job is finished, and hidden
+        while a decision is outstanding: a second estimate for one problem gives
+        the manager two answers and leaves whichever they skip pending forever.
+      */}
+      {kind !== 'work-order' && communityId && !pendingWo && !['COMPLETED', 'CLOSED', 'CANCELLED', 'RESOLVED'].includes(data.status) && (
         <div className="mt-3 px-4">
           <Button variant="secondary" size="lg" block onClick={() => setRaising(true)}>
             <Wrench className="h-4 w-4" /> Raise a work order
@@ -238,18 +268,36 @@ export function JobDetailScreen() {
             </Section>
           </>
         )}
+        {/* Tickets carry the same obligation as work orders — and this is where
+            most staff work actually happens, so gating only work orders left
+            the requirement missing exactly where it mattered. */}
         {kind === 'ticket' && (
-          <Section title="Photos">
-            <PhotoPanel
-              queryKey={['job', 'ticket', id, 'attachments']}
-              canAdd={has(perms, 'ticket:update')}
-              api={{
-                list: () => living.ticket.listAttachments(id),
-                uploadUrl: (input) => living.ticket.attachmentUploadUrl(id, input),
-                add: (input) => living.ticket.addAttachment(id, input),
-              }}
-            />
-          </Section>
+          <>
+            <Section title={['OPEN', 'ASSIGNED'].includes(data.status) ? 'Before photos — required to start' : 'Before photos'}>
+              <PhotoPanel
+                queryKey={['job', 'ticket', id, 'attachments']}
+                canAdd={has(perms, 'ticket:update')}
+                stage="BEFORE"
+                api={{
+                  list: () => living.ticket.listAttachments(id),
+                  uploadUrl: (input) => living.ticket.attachmentUploadUrl(id, input),
+                  add: (input) => living.ticket.addAttachment(id, input),
+                }}
+              />
+            </Section>
+            <Section title={data.status === 'IN_PROGRESS' ? 'After photos — required to resolve' : 'After photos'}>
+              <PhotoPanel
+                queryKey={['job', 'ticket', id, 'attachments']}
+                canAdd={has(perms, 'ticket:update')}
+                stage="AFTER"
+                api={{
+                  list: () => living.ticket.listAttachments(id),
+                  uploadUrl: (input) => living.ticket.attachmentUploadUrl(id, input),
+                  add: (input) => living.ticket.addAttachment(id, input),
+                }}
+              />
+            </Section>
+          </>
         )}
 
         {/* Service-request feedback (display only) */}

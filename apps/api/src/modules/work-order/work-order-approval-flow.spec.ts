@@ -93,3 +93,60 @@ describe('site evidence gate', () => {
     expect(() => assertEvidence(W.CANCELLED, [])).not.toThrow();
   });
 });
+
+/**
+ * The two gates that were missing when this shipped, both reported from the
+ * field: a staff member could Resume straight through the hold, and could stack
+ * a second recommendation on the same request.
+ *
+ * Both are enforced on the API. Hiding the buttons would have been advisory —
+ * the ticket status endpoint is reachable regardless of what the app renders.
+ */
+function assertResumable(
+  from: string,
+  to: string,
+  pendingWorkOrders: number,
+): void {
+  if (from === 'ON_HOLD' && to === 'IN_PROGRESS' && pendingWorkOrders > 0) {
+    throw new BadRequestException('waiting for approval');
+  }
+}
+
+function assertCanRaise(originId: string | undefined, pendingForOrigin: string[]): void {
+  if (originId && pendingForOrigin.includes(originId)) {
+    throw new BadRequestException('already waiting for approval');
+  }
+}
+
+describe('a parked ticket cannot be resumed by the person who parked it', () => {
+  it('refuses resume while a decision is outstanding', () => {
+    expect(() => assertResumable('ON_HOLD', 'IN_PROGRESS', 1)).toThrow(/approval/);
+  });
+
+  it('allows resume once the decision is made', () => {
+    expect(() => assertResumable('ON_HOLD', 'IN_PROGRESS', 0)).not.toThrow();
+  });
+
+  it('leaves every other transition alone — a paused job can still be cancelled', () => {
+    expect(() => assertResumable('ON_HOLD', 'CANCELLED', 1)).not.toThrow();
+    expect(() => assertResumable('IN_PROGRESS', 'RESOLVED', 1)).not.toThrow();
+  });
+});
+
+describe('one open question per request', () => {
+  it('refuses a second work order while the first is undecided', () => {
+    expect(() => assertCanRaise('tkt-1', ['tkt-1'])).toThrow(/already waiting/);
+  });
+
+  it('allows one against a different request', () => {
+    expect(() => assertCanRaise('tkt-2', ['tkt-1'])).not.toThrow();
+  });
+
+  it('allows a fresh one once the previous was decided', () => {
+    expect(() => assertCanRaise('tkt-1', [])).not.toThrow();
+  });
+
+  it('does not constrain a standalone work order with no origin', () => {
+    expect(() => assertCanRaise(undefined, ['tkt-1'])).not.toThrow();
+  });
+});

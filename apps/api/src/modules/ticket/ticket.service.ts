@@ -349,6 +349,8 @@ export class TicketService {
     const to = dto.status;
     this.statusFlow.assertTransition(from, to);
     this.assertStatusPermission(to, actor);
+    await this.assertNotAwaitingApproval(id, from, to);
+    await this.assertEvidence(id, to);
 
     const isReopen =
       to === TicketStatus.IN_PROGRESS &&
@@ -553,6 +555,64 @@ export class TicketService {
       select: { id: true },
     });
     if (!unit) throw new BadRequestException('Unit does not belong to this community');
+  }
+
+  /**
+   * A ticket parked on a spending decision cannot be resumed by the person who
+   * asked for that decision.
+   *
+   * Moving it to ON_HOLD was never enough on its own: ON_HOLD → IN_PROGRESS is
+   * an ordinary transition, so "Resume" put the staff member straight back to
+   * work on the job they had just told the resident was paused. The manager's
+   * answer is what releases it, and approve/reject already do exactly that.
+   */
+  private async assertNotAwaitingApproval(
+    ticketId: string,
+    from: TicketStatus,
+    to: TicketStatus,
+  ): Promise<void> {
+    if (from !== TicketStatus.ON_HOLD || to !== TicketStatus.IN_PROGRESS) return;
+
+    const pending = await this.prisma.workOrder.findFirst({
+      where: {
+        originType: 'TICKET',
+        originId: ticketId,
+        status: 'PENDING_APPROVAL',
+        deletedAt: null,
+      },
+      select: { number: true },
+    });
+    if (!pending) return;
+
+    throw new BadRequestException(
+      `Work order WO-${String(pending.number).padStart(6, '0')} is waiting for approval. ` +
+        'This job resumes on its own once a manager approves or rejects it.',
+    );
+  }
+
+  /**
+   * Site evidence, same rule as work orders: a BEFORE photo to start, an AFTER
+   * photo to resolve.
+   *
+   * Gating only work orders was a real gap — most staff work is a TICKET, and
+   * that path had no photo requirement at all, so the obligation existed
+   * everywhere except where the work actually happens.
+   */
+  private async assertEvidence(ticketId: string, to: TicketStatus): Promise<void> {
+    const stage =
+      to === TicketStatus.IN_PROGRESS ? 'BEFORE' : to === TicketStatus.RESOLVED ? 'AFTER' : null;
+    if (!stage) return;
+
+    const count = await this.prisma.ticketAttachment.count({
+      where: { ticketId, deletedAt: null, stage },
+    });
+    if (count > 0) return;
+
+    throw new BadRequestException(
+      stage === 'BEFORE'
+        ? 'Take a “before” photo of the site before starting work.'
+        : 'Take an “after” photo showing the finished work before resolving this.',
+    );
   }
 
   /**
