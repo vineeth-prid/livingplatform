@@ -186,8 +186,64 @@ export function TicketNotes({ id, canComment }: { id: string; canComment: boolea
 type Attachment = WorkOrderAttachment | TicketAttachment;
 interface AttachmentApi {
   list: () => Promise<Attachment[]>;
-  uploadUrl: (input: { fileName: string; contentType?: string }) => Promise<{ key: string }>;
+  uploadUrl: (
+    input: { fileName: string; contentType?: string },
+  ) => Promise<{ key: string; uploadUrl: string }>;
   add: (input: Record<string, unknown>) => Promise<Attachment>;
+}
+
+/** Longest edge we keep. A site photo needs to be legible, not printable. */
+const MAX_EDGE = 1600;
+const JPEG_QUALITY = 0.8;
+
+/**
+ * Downscale a camera photo before it goes anywhere near memory or the network.
+ *
+ * A modern phone camera produces 4–12 MB per shot. Staging several of those as
+ * object URLs, then holding each File through an upload, is what made a mid-range
+ * Android throw "low memory" and drop the picture. Resizing to a 1600px JPEG
+ * turns a 9 MB frame into roughly 300 KB, which also makes the upload finish on
+ * site rather than in the car park.
+ *
+ * Anything that is not an image, or that fails to decode, is returned untouched
+ * — a failed optimisation must never lose the file.
+ */
+async function shrinkImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('decode failed'));
+      el.src = url;
+    });
+
+    const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+    if (scale === 1 && file.size < 1_000_000) return file;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
+    );
+    // Free the backing store immediately rather than waiting for GC — on a
+    // phone the next capture may come before that happens.
+    canvas.width = 0;
+    canvas.height = 0;
+    if (!blob || blob.size >= file.size) return file;
+
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 const isImage = (a: Attachment) => a.contentType?.startsWith('image/');
@@ -197,9 +253,8 @@ const isImage = (a: Attachment) => a.contentType?.startsWith('image/');
  * opens the gallery/files. Chosen files preview as thumbnails, then register
  * via the StorageService signed-URL flow.
  *
- * ponytail: storage is a metadata-only stub, so we register the record without
- * the byte PUT — exactly the portal's behaviour. When a real provider lands, add
- * the `fetch(uploadUrl, { method: 'PUT', body: file })` step; nothing else changes.
+ * Photos are downscaled, PUT to the signed URL, and only then registered — in
+ * that order, so a record never exists without the object behind it.
  */
 export function PhotoPanel({ queryKey, api, canAdd }: { queryKey: unknown[]; api: AttachmentApi; canAdd: boolean }) {
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -212,9 +267,23 @@ export function PhotoPanel({ queryKey, api, canAdd }: { queryKey: unknown[]; api
 
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
-      for (const file of files) {
+      for (const original of files) {
+        const file = await shrinkImage(original);
         const contentType = file.type || 'application/octet-stream';
         const signed = await api.uploadUrl({ fileName: file.name, contentType });
+
+        // PUT THE BYTES. This step was missing: the app asked for a signed URL,
+        // ignored it, and registered an attachment row pointing at an object
+        // that was never stored. Every staff and vendor photo since has been a
+        // record with nothing behind it — which is why they would not open in
+        // the admin portal and why the site photo "was not captured".
+        const put = await fetch(signed.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': contentType },
+          body: file,
+        });
+        if (!put.ok) throw new Error('Could not upload the photo — check your connection');
+
         await api.add({ fileName: file.name, contentType, size: file.size, storageKey: signed.key });
       }
     },
