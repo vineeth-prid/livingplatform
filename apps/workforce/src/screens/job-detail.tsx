@@ -251,6 +251,7 @@ export function JobDetailScreen() {
                   list: () => living.workOrder.listAttachments(id),
                   uploadUrl: (input) => living.workOrder.attachmentUploadUrl(id, input),
                   add: (input) => living.workOrder.addAttachment(id, input),
+                  remove: (attachmentId) => living.workOrder.removeAttachment(id, attachmentId),
                 }}
               />
             </Section>
@@ -263,6 +264,7 @@ export function JobDetailScreen() {
                   list: () => living.workOrder.listAttachments(id),
                   uploadUrl: (input) => living.workOrder.attachmentUploadUrl(id, input),
                   add: (input) => living.workOrder.addAttachment(id, input),
+                  remove: (attachmentId) => living.workOrder.removeAttachment(id, attachmentId),
                 }}
               />
             </Section>
@@ -282,6 +284,7 @@ export function JobDetailScreen() {
                   list: () => living.ticket.listAttachments(id),
                   uploadUrl: (input) => living.ticket.attachmentUploadUrl(id, input),
                   add: (input) => living.ticket.addAttachment(id, input),
+                  remove: (attachmentId) => living.ticket.removeAttachment(id, attachmentId),
                 }}
               />
             </Section>
@@ -294,6 +297,7 @@ export function JobDetailScreen() {
                   list: () => living.ticket.listAttachments(id),
                   uploadUrl: (input) => living.ticket.attachmentUploadUrl(id, input),
                   add: (input) => living.ticket.addAttachment(id, input),
+                  remove: (attachmentId) => living.ticket.removeAttachment(id, attachmentId),
                 }}
               />
             </Section>

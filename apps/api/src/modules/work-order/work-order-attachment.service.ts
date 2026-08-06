@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
   CreateWorkOrderAttachmentDto,
@@ -42,6 +43,31 @@ export class WorkOrderAttachmentService {
       },
     });
     return this.present(attachment);
+  }
+
+  /**
+   * Remove a photo the worker just added. Soft delete; uploader only, unless
+   * the caller can manage the work order. Without it a blurred or wrong-stage
+   * shot was permanent — and if it was the only AFTER photo it satisfied the
+   * completion gate with a picture of nothing useful.
+   */
+  async remove(workOrderId: string, attachmentId: string, actor: AuthenticatedUser) {
+    await this.assertAccess(workOrderId);
+    const attachment = await this.prisma.workOrderAttachment.findFirst({
+      where: { id: attachmentId, workOrderId, deletedAt: null },
+    });
+    if (!attachment) throw new NotFoundException('Attachment not found');
+
+    const canManageAny = actor.permissions.includes(PERMISSIONS.WORKORDER_UPDATE);
+    if (attachment.uploadedById !== actor.id && !canManageAny) {
+      throw new ForbiddenException('You can only remove photos you added');
+    }
+
+    await this.prisma.workOrderAttachment.update({
+      where: { id: attachmentId },
+      data: { deletedAt: new Date() },
+    });
+    return { id: attachmentId, deleted: true };
   }
 
   async list(workOrderId: string) {

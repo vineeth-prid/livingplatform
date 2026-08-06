@@ -190,6 +190,7 @@ interface AttachmentApi {
     input: { fileName: string; contentType?: string },
   ) => Promise<{ key: string; uploadUrl: string }>;
   add: (input: Record<string, unknown>) => Promise<Attachment>;
+  remove?: (attachmentId: string) => Promise<unknown>;
 }
 
 /** Longest edge we keep. A site photo needs to be legible, not printable. */
@@ -312,6 +313,22 @@ export function PhotoPanel({
     onError: (err) => toast.error(err instanceof LivingApiError ? err.message : 'Upload failed'),
   });
 
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  async function onRemove(attachmentId: string) {
+    if (!api.remove) return;
+    setRemoving(attachmentId);
+    try {
+      await api.remove(attachmentId);
+      await q.refetch();
+      toast.success('Photo removed');
+    } catch (err) {
+      toast.error(err instanceof LivingApiError ? err.message : 'Could not remove the photo');
+    } finally {
+      setRemoving(null);
+    }
+  }
+
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length) setStaged((prev) => [...prev, ...Array.from(files)]);
@@ -332,6 +349,20 @@ export function PhotoPanel({
           {attachments.map((a) => (
             <a key={a.id} href={a.downloadUrl ?? undefined} target="_blank" rel="noreferrer"
               className="group relative aspect-square overflow-hidden rounded-card bg-sunken focus-visible:outline-none focus-visible:shadow-ring">
+              {/* Remove an UPLOADED photo. A blurred or wrong-stage shot was
+                  permanent otherwise — and if it was the only "after" photo it
+                  satisfied the resolve gate with a picture of nothing useful. */}
+              {canAdd && api.remove && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); void onRemove(a.id); }}
+                  disabled={removing === a.id}
+                  aria-label={`Remove ${a.fileName}`}
+                  className="absolute right-1 top-1 z-10 rounded-full bg-black/60 p-1 text-white transition-colors hover:bg-black/80 disabled:opacity-40"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
               {isImage(a) && a.downloadUrl ? (
                 <img src={a.downloadUrl} alt={a.fileName} className="h-full w-full object-cover" loading="lazy" />
               ) : (

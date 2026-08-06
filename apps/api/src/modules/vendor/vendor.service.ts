@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Logger,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -29,6 +30,8 @@ const SORTABLE = ['name', 'companyName', 'category', 'createdAt', 'status'] as c
  */
 @Injectable()
 export class VendorService {
+  private readonly logger = new Logger(VendorService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
@@ -75,7 +78,11 @@ export class VendorService {
         email: dto.email,
         addressLine: dto.addressLine,
         city: dto.city,
-        communityIds: dto.communityIds ?? [],
+        // Coverage decides everything downstream — auto-assignment, manual
+        // assignment and AMCs all filter on it. A vendor created with an empty
+        // list is inert: they appear in the register and can be assigned to
+        // nothing, which is exactly how they were being created.
+        communityIds: await this.resolveCoverage(dto.communityIds, actor),
         status: dto.status ?? 'ACTIVE',
         remarks: dto.remarks,
         metadata: dto.metadata as Prisma.InputJsonValue | undefined,
@@ -197,6 +204,37 @@ export class VendorService {
   }
 
   /** Sequential per-tenant code: V-000001, V-000002, … */
+  /**
+   * Which communities a new vendor covers.
+   *
+   * An explicit list always wins. When none is given — the portal form did not
+   * send one, so this was every vendor — fall back to the tenant's communities
+   * rather than storing an empty array. An empty array is not "all", it is
+   * "none": the vendor is created, listed, and then rejected by every
+   * assignment path with "vendor does not cover this community".
+   *
+   * A single-community tenant is the common case and lands exactly where the
+   * admin expects. Coverage stays editable afterwards.
+   */
+  private async resolveCoverage(
+    explicit: string[] | undefined,
+    actor: AuthenticatedUser,
+  ): Promise<string[]> {
+    if (explicit?.length) return explicit;
+
+    const tenantId = this.tenant.isPlatform ? null : this.tenant.tenantId;
+    if (!tenantId) return [];
+
+    const communities = await this.prisma.community.findMany({
+      where: { tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (communities.length === 0) {
+      this.logger.warn(`Vendor created by ${actor.id} with no community coverage`);
+    }
+    return communities.map((c) => c.id);
+  }
+
   private async nextVendorCode(tenantId: string): Promise<string> {
     const count = await this.prisma.vendor.count({ where: { tenantId } });
     return `V-${String(count + 1).padStart(6, '0')}`;

@@ -82,4 +82,8 @@ export class WorkOrderResource {
   addAttachment(id: string, input: Body): Promise<WorkOrderAttachment> {
     return this.http.post(`/work-orders/${id}/attachments`, input);
   }
+  /** Remove an attachment you added (soft delete — history is kept). */
+  removeAttachment(id: string, attachmentId: string): Promise<unknown> {
+    return this.http.delete(`/work-orders/${id}/attachments/${attachmentId}`);
+  }
 }

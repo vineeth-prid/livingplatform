@@ -226,4 +226,16 @@ export class WorkOrderAttachmentController {
   ) {
     return this.attachments.add(id, dto, user);
   }
+
+  /** Remove a photo you added — same permission as adding one. */
+  @Delete('work-orders/:id/attachments/:attachmentId')
+  @RequirePermissions(PERMISSIONS.WORKORDER_UPDATE)
+  @ApiOperation({ summary: 'Remove an attachment (soft delete; uploader or manager)' })
+  removeAttachment(
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.attachments.remove(id, attachmentId, user);
+  }
 }

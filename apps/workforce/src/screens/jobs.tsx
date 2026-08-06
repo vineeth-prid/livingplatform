@@ -15,8 +15,8 @@ const KIND_CHIPS: [KindFilter, string][] = [
   ['all', 'All'], ['work-order', 'Work orders'], ['service-request', 'Services'], ['ticket', 'Tickets'],
 ];
 
-/** The full queue — search + kind/status/priority filters over a responsive card
- *  grid (one column on a phone, two on a tablet). Job-first, minimal typing. */
+/** The full queue — search + kind/status/priority filters over a single-column
+ *  card list. Job-first, minimal typing. */
 export function JobsScreen() {
   const { isLinked, isLoading: workerLoading } = useWorker();
   const jobs = useMyJobs();
@@ -69,13 +69,21 @@ export function JobsScreen() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 px-4 sm:grid-cols-2">
+      {/*
+        One job per row, always.
+        This was two-up from `sm` onwards, which is 640px — a phone in landscape
+        and most tablets. A job card carries a number, title, unit, status and
+        due date; at half width those wrap and truncate, and the list stops
+        being scannable, which is the only thing it is for. A worker reads this
+        top to bottom, so the extra column bought nothing and cost legibility.
+      */}
+      <div className="mt-4 grid grid-cols-1 gap-2 px-4">
         {!isLinked && !workerLoading ? (
-          <div className="sm:col-span-2"><ProfileNotLinked /></div>
+          <div><ProfileNotLinked /></div>
         ) : workerLoading || jobs.isLoading ? (
           Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[76px] rounded-card" />)
         ) : filtered.length === 0 ? (
-          <div className="sm:col-span-2">
+          <div>
             <EmptyState title="No matching jobs" description="Try a different filter or search." />
           </div>
         ) : (

@@ -62,6 +62,10 @@ export class TicketResource {
   addAttachment(id: string, input: Body): Promise<TicketAttachment> {
     return this.http.post(`/tickets/${id}/attachments`, input);
   }
+  /** Remove an attachment you added (soft delete — history is kept). */
+  removeAttachment(id: string, attachmentId: string): Promise<unknown> {
+    return this.http.delete(`/tickets/${id}/attachments/${attachmentId}`);
+  }
 
   // Categories
   listCategories(params?: { activeOnly?: boolean }): Promise<TicketCategory[]> {

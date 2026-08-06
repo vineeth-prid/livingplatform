@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { Vendor } from '@living/types';
 
 import { living } from '../../lib/living';
+import { useCommunity } from '../community/community-context';
 import { FormDrawer, type FieldDef } from '../master-data';
 import { opt, PERSON_STATUS } from '../master-data/options';
 import { ServicesMultiSelect } from '../shared/services-multi-select';
@@ -46,6 +47,7 @@ export function VendorForm({
   onSaved?: () => void;
 }) {
   const qc = useQueryClient();
+  const { communityId } = useCommunity();
   const editing = !!vendor;
 
   return (
@@ -74,6 +76,13 @@ export function VendorForm({
           serviceCategories: values.serviceCategories
             ? values.serviceCategories.split(',').filter(Boolean)
             : [],
+          // Coverage. A vendor is scoped by `communityIds[]`, and this form
+          // never sent one — so every vendor was created covering NOTHING.
+          // Auto-assignment skipped them, manual assignment answered "vendor
+          // does not cover this community", and AMCs could not be raised
+          // against them. Adding a vendor from a community means they serve
+          // that community; anything wider is a platform decision.
+          ...(editing || !communityId ? {} : { communityIds: [communityId] }),
         };
         const result = editing
           ? await living.people.updateVendor(vendor.id, body)

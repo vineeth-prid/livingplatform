@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { TicketEventType } from '@prisma/client';
 
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
   CreateAttachmentDto,
@@ -57,6 +58,36 @@ export class TicketAttachmentService {
       metadata: { fileName: dto.fileName },
     });
     return this.present(attachment);
+  }
+
+  /**
+   * Remove a photo the worker just added.
+   *
+   * Soft delete, so the evidence trail keeps its history — and scoped to the
+   * UPLOADER unless the caller can manage the ticket, because a shared job
+   * should not let one worker delete another's site photos.
+   *
+   * Without this a blurred or wrong-stage shot was permanent: it stayed in the
+   * record and, if it was the only AFTER photo, satisfied the resolve gate with
+   * a picture of nothing useful.
+   */
+  async remove(ticketId: string, attachmentId: string, actor: AuthenticatedUser) {
+    await this.assertTicketAccess(ticketId);
+    const attachment = await this.prisma.ticketAttachment.findFirst({
+      where: { id: attachmentId, ticketId, deletedAt: null },
+    });
+    if (!attachment) throw new NotFoundException('Attachment not found');
+
+    const canManageAny = actor.permissions.includes(PERMISSIONS.TICKET_UPDATE);
+    if (attachment.uploadedById !== actor.id && !canManageAny) {
+      throw new ForbiddenException('You can only remove photos you added');
+    }
+
+    await this.prisma.ticketAttachment.update({
+      where: { id: attachmentId },
+      data: { deletedAt: new Date() },
+    });
+    return { id: attachmentId, deleted: true };
   }
 
   async list(ticketId: string) {
