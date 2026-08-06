@@ -35,6 +35,17 @@ export class SmtpEmailProvider implements EmailProvider {
     this.from = config.fromEmail
       ? `${config.fromName} <${config.fromEmail}>`
       : config.fallbackFrom;
+
+    // An unauthenticated session against a real mail host does not fail at
+    // connect — it fails later, at RCPT, as "Client host rejected: Access
+    // denied", which reads like a network or IP problem and sends operators
+    // hunting through firewall rules. Say the actual thing, once, at startup.
+    if (config.host && config.host !== 'localhost' && !config.username) {
+      this.logger.error(
+        `SMTP is pointed at ${config.host} with NO username — the session will not authenticate ` +
+          'and the server will refuse to relay. Set SMTP_USERNAME (or SMTP_USER) and SMTP_PASSWORD.',
+      );
+    }
     this.transporter = nodemailer.createTransport({
       host: config.host,
       port: config.port,

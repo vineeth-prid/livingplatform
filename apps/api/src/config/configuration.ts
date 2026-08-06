@@ -80,14 +80,24 @@ export function configuration() {
         host: env.SMTP_HOST ?? 'localhost',
         port: Number(env.SMTP_PORT ?? 1025),
         secure: String(env.SMTP_SECURE ?? '') === 'true' || Number(env.SMTP_PORT ?? 1025) === 465,
-        username: env.SMTP_USERNAME ?? env.SMTP_USER ?? '',
+        // `||`, NOT `??`. Every one of these vars has a class default in
+        // env.validation, so the validated object always carries `''` rather
+        // than undefined — and `?? ` only falls through on null/undefined. The
+        // alias was therefore unreachable: setting SMTP_USER left username
+        // empty, nodemailer was handed `auth: undefined`, the session never
+        // authenticated, and the mail server refused to relay with
+        // "Client host rejected: Access denied" — a message that points at the
+        // network and says nothing about the credentials being dropped.
+        username: env.SMTP_USERNAME || env.SMTP_USER || '',
         password: env.SMTP_PASSWORD ?? '',
         fromName: env.SMTP_FROM_NAME ?? 'Living',
         fromEmail: env.SMTP_FROM_EMAIL ?? '',
         replyTo: env.SMTP_REPLY_TO ?? '',
       },
       queue: {
-        concurrency: Number(env.NOTIFICATION_QUEUE_CONCURRENCY ?? env.EMAIL_QUEUE_CONCURRENCY ?? 5),
+        // Same alias trap as SMTP_USERNAME above — a class default makes the
+        // legacy name unreachable with `??`.
+        concurrency: Number(env.NOTIFICATION_QUEUE_CONCURRENCY || env.EMAIL_QUEUE_CONCURRENCY || 5),
         attempts: Number(env.EMAIL_MAX_ATTEMPTS ?? 5),
         // Per-attempt delays (ms): 1m, 5m, 15m, 1h. Exhausting them → DLQ.
         backoffMs: (env.EMAIL_RETRY_BACKOFF_MS ?? '60000,300000,900000,3600000')
@@ -155,7 +165,7 @@ export function configuration() {
       bucket: env.STORAGE_BUCKET ?? 'living-local',
       publicUrl: env.STORAGE_PUBLIC_URL ?? 'http://localhost:4000/storage',
       // SIGNED_URL_EXPIRY is canonical; STORAGE_SIGNED_URL_TTL kept for back-compat.
-      signedUrlTtl: Number(env.SIGNED_URL_EXPIRY ?? env.STORAGE_SIGNED_URL_TTL ?? 900),
+      signedUrlTtl: Number(env.SIGNED_URL_EXPIRY || env.STORAGE_SIGNED_URL_TTL || 900),
       s3: {
         endpoint: env.MINIO_ENDPOINT ?? '',
         port: Number(env.MINIO_PORT ?? 9000),
