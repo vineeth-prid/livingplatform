@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@living/hooks';
 import type { Community, Staff, Vendor } from '@living/types';
@@ -38,15 +38,28 @@ interface WorkerValue {
   /** The login id — a work order this person RAISED is theirs to follow even
    *  before anyone is assigned to it. */
   userId: string | null;
+  /** Every community this worker holds a profile in. One is the common case. */
+  communities: Community[];
+  setCommunityId: (id: string) => void;
   isLinked: boolean;
   isLoading: boolean;
 }
 
 const Ctx = createContext<WorkerValue | null>(null);
 
+const STORAGE_KEY = 'living.workforce.community';
+
 export function WorkerProvider({ children }: { children: ReactNode }) {
   const { session, isAuthenticated } = useAuth();
   const uid = session?.user.id;
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => (typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null),
+  );
+
+  const setCommunityId = (id: string) => {
+    setSelectedId(id);
+    window.localStorage.setItem(STORAGE_KEY, id);
+  };
 
   const communityQ = useQuery({
     queryKey: ['communities'],
@@ -70,17 +83,32 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
   });
 
   const value = useMemo<WorkerValue>(() => {
-    const staff = staffQ.data?.items?.[0] ?? null;
+    const allStaff = staffQ.data?.items ?? [];
     const vendor = vendorQ.data?.items?.[0] ?? null;
     const communities = communityQ.data?.items ?? [];
 
-    // Prefer the staff member's OWN community; fall back to the tenant's first
-    // active one for vendors, who span communities and pin none.
+    /*
+      The community being worked, and the profile that belongs to it.
+
+      A staff member can now hold a profile in several communities — a
+      supervisor covering three sites, or someone who moved. Taking items[0]
+      pinned them to whichever came back first, so the other communities' jobs
+      and gate register were unreachable even though the API would serve them.
+
+      A remembered choice that is no longer theirs falls back rather than
+      leaving the app on a dead id.
+    */
+    const chosen = communities.find((c) => c.id === selectedId) ?? null;
     const community =
-      (staff && communities.find((c) => c.id === staff.communityId)) ??
+      chosen ??
+      (allStaff[0] && communities.find((c) => c.id === allStaff[0]!.communityId)) ??
       communities.find((c) => c.status === 'ACTIVE') ??
       communities[0] ??
       null;
+
+    // The staff profile FOR that community — the one whose jobs we show.
+    const staff =
+      (community && allStaff.find((s) => s.communityId === community.id)) ?? allStaff[0] ?? null;
 
     return {
       community,
@@ -90,10 +118,12 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
       staffId: staff?.id ?? null,
       vendorId: vendor?.id ?? null,
       userId: uid ?? null,
+      communities,
+      setCommunityId,
       isLinked: !!staff || !!vendor,
       isLoading: communityQ.isLoading || staffQ.isLoading || vendorQ.isLoading,
     };
-  }, [communityQ.data, communityQ.isLoading, staffQ.data, staffQ.isLoading, vendorQ.data, vendorQ.isLoading]);
+  }, [communityQ.data, communityQ.isLoading, staffQ.data, staffQ.isLoading, vendorQ.data, vendorQ.isLoading, selectedId, uid]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -6,6 +6,8 @@ import { useAuth } from '@living/hooks';
 import { LoadingState } from '@living/ui';
 import { cn } from '@living/utils';
 
+import { CommunitySwitcher } from './community-switcher';
+
 import { GateAlerts } from './gate/gate-alerts';
 import { InstallBanner } from './pwa/install';
 
@@ -88,11 +90,17 @@ function BottomNav({ pathname }: { pathname: string }) {
 export function ScreenHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
   return (
     <header className="flex items-end justify-between gap-3 px-4 pb-3 pt-6">
-      <div>
+      <div className="min-w-0">
         {subtitle && <p className="text-2xs font-semibold uppercase tracking-wider text-subtle">{subtitle}</p>}
-        <h1 className="font-display text-h2 leading-none tracking-tight text-strong">{title}</h1>
+        <h1 className="truncate font-display text-h2 leading-none tracking-tight text-strong">{title}</h1>
       </div>
-      {right}
+      {/* Lives in the shared header so EVERY screen can switch, not just the
+          one that happened to get the control. Renders nothing for the single-
+          community resident, which is almost everybody. */}
+      <div className="flex shrink-0 items-center gap-2">
+        <CommunitySwitcher />
+        {right}
+      </div>
     </header>
   );
 }

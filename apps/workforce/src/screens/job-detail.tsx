@@ -69,7 +69,7 @@ export function JobDetailScreen() {
    * the "waiting for approval" banner and the suppression of a second raise.
    */
   const pendingWoQ = useQuery({
-    queryKey: ['job', kind, id, 'pending-wo'],
+    queryKey: ['job', kind, id, 'pending-wo', communityId],
     queryFn: () => living.workOrder.list(communityId!, { limit: 20, status: 'PENDING_APPROVAL' }),
     enabled: !!communityId && kind !== 'work-order',
   });

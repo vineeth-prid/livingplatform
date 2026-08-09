@@ -15,24 +15,43 @@ import { living } from './lib/living';
  */
 export function useMyResident() {
   const { session } = useAuth();
+  const { communityId } = useResidentCommunity();
   const q = useQuery({
     queryKey: ['my-resident', session?.user.id],
     queryFn: () => living.people.myResident(),
     enabled: !!session?.user.id,
   });
 
-  const residents = q.data?.residents ?? [];
+  const all = q.data?.residents ?? [];
+
+  /*
+    Only the profiles in the community being viewed.
+
+    Taking residents[0] was right while a person could only belong to one
+    community. Now an owner with flats in two societies holds a profile in each,
+    and the switcher has to move EVERYTHING — the residentId that visitors and
+    bookings are created against, the units, the household. Left unfiltered, a
+    resident could switch community and still invite a guest to their other flat.
+  */
+  const residents = communityId
+    ? all.filter((r) => r.communityId === communityId)
+    : all;
   const primary = residents[0] ?? null;
   const units = residents
     .map((r) => r.unitAssignment?.unit)
     .filter((u): u is NonNullable<typeof u> => !!u);
+
+  const residentIds = new Set(residents.map((r) => r.id));
 
   return {
     resident: primary,
     residentId: primary?.id ?? null,
     residents,
     units,
-    family: q.data?.family ?? [],
+    // The household of the flats being viewed, not every flat they own.
+    family: (q.data?.family ?? []).filter(
+      (f) => !communityId || residentIds.size === 0 || f.communityId === communityId,
+    ),
     isLoading: q.isLoading,
   };
 }
