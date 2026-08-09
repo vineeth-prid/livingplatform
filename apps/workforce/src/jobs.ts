@@ -131,6 +131,19 @@ export function useJob(kind: JobKind, id: string) {
       kind === 'work-order' ? living.workOrder.get(id)
         : kind === 'service-request' ? living.serviceRequest.get(id)
         : living.ticket.get(id),
+    /*
+      A job's status changes under the worker's feet — a manager verifies it, or
+      approves the work order that was blocking it — and this screen stays open
+      on site for long stretches. With the shared default of no focus refetch,
+      the app kept showing the status from whenever the screen was opened: staff
+      were still offered "Start work" on an order the admin had already verified,
+      and tapping it produced an error the worker could do nothing about.
+
+      The available actions are computed from this status, so it has to be the
+      CURRENT one whenever the worker looks at it.
+    */
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
   });
 }
 
@@ -151,7 +164,14 @@ export function useJobStatus(kind: JobKind, id: string) {
       if (previous) qc.setQueryData<JobEntity>(key, { ...previous, status } as JobEntity);
       return { previous };
     },
-    onError: (_e, _v, ctx) => { if (ctx?.previous) qc.setQueryData(key, ctx.previous); },
+    onError: (_e, _v, ctx) => {
+      // Roll back the optimistic value, then go and find out what the status
+      // ACTUALLY is. A rejected transition usually means the server moved on
+      // without us, and restoring the stale value would offer the same doomed
+      // button again.
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      void qc.refetchQueries({ queryKey: key });
+    },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: key });
       void qc.invalidateQueries({ queryKey: ['jobs'] });

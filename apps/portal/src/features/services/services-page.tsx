@@ -330,7 +330,14 @@ function ServiceDrawer({
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent open={open} title={editing ? `Edit ${service!.name}` : 'New service'}>
+      {/* Wider than the 420px default: a service carries a description, pricing
+          and a list of priced options, and the options were unusable at that
+          width. */}
+      <SheetContent
+        open={open}
+        className="w-[min(94vw,560px)]"
+        title={editing ? `Edit ${service!.name}` : 'New service'}
+      >
         <div className="space-y-6">
           <FormSection title="Service" description="What residents see when they browse and book.">
             <FormGrid>
@@ -455,21 +462,41 @@ function VariantEditor({
           No options — every resident pays the list price above.
         </p>
       ) : (
+        /*
+          One card per option, fields STACKED.
+          These were four controls on a single row inside a 420px drawer, which
+          left about 100px for the name — every field was too narrow to read
+          what you had typed, and the row overflowed. An option is a small form,
+          not a spreadsheet row, so it gets the full width.
+        */
         rows.map((row, index) => (
-          <div key={row.id ?? `new-${index}`} className="flex items-end gap-2">
-            <div className="flex-1">
-              <Input
-                label={index === 0 ? 'Option' : undefined}
-                value={row.name}
-                placeholder="SUV"
-                onChange={(e) =>
-                  setRows((rs) => rs.map((r, i) => (i === index ? { ...r, name: e.target.value } : r)))
-                }
-              />
+          <div
+            key={row.id ?? `new-${index}`}
+            className="flex flex-col gap-3 rounded-card border border-border-subtle bg-sunken/40 p-3"
+          >
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <Input
+                  label="Option"
+                  value={row.name}
+                  placeholder="SUV"
+                  onChange={(e) =>
+                    setRows((rs) => rs.map((r, i) => (i === index ? { ...r, name: e.target.value } : r)))
+                  }
+                />
+              </div>
+              <Button
+                variant="ghost"
+                className="mt-6 shrink-0"
+                aria-label={`Remove ${row.name || 'option'}`}
+                onClick={() => setRows((rs) => rs.filter((_, i) => i !== index))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="w-28">
+            <div className="grid grid-cols-2 gap-3">
               <Input
-                label={index === 0 ? 'Price (₹)' : undefined}
+                label="Price (₹)"
                 type="number"
                 inputMode="decimal"
                 value={row.price}
@@ -477,13 +504,11 @@ function VariantEditor({
                   setRows((rs) => rs.map((r, i) => (i === index ? { ...r, price: e.target.value } : r)))
                 }
               />
-            </div>
-            <div className="w-28">
               <Input
-                label={index === 0 ? 'Minutes' : undefined}
+                label="Minutes"
                 type="number"
                 inputMode="numeric"
-                placeholder="—"
+                placeholder="Default"
                 value={row.durationMinutes}
                 onChange={(e) =>
                   setRows((rs) =>
@@ -492,13 +517,6 @@ function VariantEditor({
                 }
               />
             </div>
-            <Button
-              variant="ghost"
-              aria-label={`Remove ${row.name || 'option'}`}
-              onClick={() => setRows((rs) => rs.filter((_, i) => i !== index))}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         ))
       )}
@@ -513,7 +531,15 @@ function VariantEditor({
         >
           <Plus className="h-4 w-4" /> Add option
         </Button>
-        <Button size="sm" loading={save.isPending} disabled={!valid} onClick={() => save.mutate()}>
+        <Button
+          size="sm"
+          loading={save.isPending}
+          disabled={!valid}
+          // Say WHY it is disabled. A greyed-out Save with no explanation is
+          // indistinguishable from a broken one.
+          title={valid ? undefined : 'Give every option a name and a price first'}
+          onClick={() => save.mutate()}
+        >
           Save options
         </Button>
       </div>

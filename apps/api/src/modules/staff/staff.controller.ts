@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Delete,
   Get,
   Param,
@@ -66,6 +68,15 @@ export class StaffController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.staff.update(id, dto, user);
+  }
+
+  /** Provision a login for a staff member who has none. */
+  @Post('staff/:id/login')
+  @RequirePermissions(PERMISSIONS.USER_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create the login account for a staff member who has none' })
+  createLogin(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.staff.createLogin(id, user);
   }
 
   @Delete('staff/:id')

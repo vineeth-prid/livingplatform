@@ -17,35 +17,69 @@ import { living } from '../../lib/living';
 export function ResetPasswordButton({
   userId,
   personName,
+  provisionLogin,
+  onProvisioned,
 }: {
   userId: string | null | undefined;
   personName: string;
+  /** Creates the missing login. Omit for people who cannot be provisioned one. */
+  provisionLogin?: () => Promise<{ temporaryPassword: string }>;
+  onProvisioned?: () => void;
 }) {
   const { hasPermission } = useAuth();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [temporary, setTemporary] = useState<string | null>(null);
 
+  async function onCreateLogin() {
+    if (!provisionLogin) return;
+    setBusy(true);
+    try {
+      const result = await provisionLogin();
+      setTemporary(result.temporaryPassword);
+      onProvisioned?.();
+    } catch (err) {
+      toast.error(err instanceof LivingApiError ? err.message : 'Could not create the login');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // No permission → the control genuinely does not belong to this admin.
   if (!hasPermission('user:update')) return null;
 
-  // No linked login → the button used to vanish silently, so an admin clicking
-  // where they expected it saw nothing happen and reasonably called it broken.
-  // Say what is actually wrong instead: this person has no account to reset.
+  // No linked login. Explaining that was still a dead end — the admin knew what
+  // was wrong and had no way to fix it, so "reset password does not work" was a
+  // fair description. Offer the action that resolves it instead: provision the
+  // account this person never got.
   //
-  // It happens when the phone was already registered to another user at the
-  // time the profile was created — provisioning links the existing account to
-  // the first profile only and leaves later ones unlinked.
+  // It happens when the phone was already registered at the time the profile
+  // was created; provisioning links an account to the FIRST profile on a number
+  // and leaves later ones unlinked.
   if (!userId) {
+    if (!provisionLogin) {
+      return (
+        <Button
+          variant="ghost"
+          disabled
+          aria-label="No login account linked"
+          title={`${personName} has no login account, so there is no password to reset.`}
+        >
+          <KeyRound className="h-4 w-4 opacity-40" />
+        </Button>
+      );
+    }
     return (
-      <Button
-        variant="ghost"
-        disabled
-        aria-label="No login account linked"
-        title={`${personName} has no login account, so there is no password to reset. Re-save them with a unique mobile number to provision one.`}
-      >
-        <KeyRound className="h-4 w-4 opacity-40" />
-      </Button>
+      <>
+        <Button variant="secondary" size="sm" loading={busy} onClick={onCreateLogin}>
+          <KeyRound className="h-4 w-4" /> Create login
+        </Button>
+        <CredentialDialog
+          value={temporary}
+          personName={personName}
+          onClose={() => setTemporary(null)}
+        />
+      </>
     );
   }
 
@@ -76,20 +110,33 @@ export function ResetPasswordButton({
         <KeyRound className="h-4 w-4" />
       </Button>
 
-      <Dialog open={!!temporary} onOpenChange={(next) => !next && setTemporary(null)}>
-        <DialogContent
-          open={!!temporary}
-          title="Password reset"
-          description={`Share this temporary password with ${personName}. They must change it at next sign-in.`}
-        >
-          <p className="rounded-control bg-sunken px-4 py-3 text-center font-mono text-lg text-strong">
-            {temporary}
-          </p>
-          <div className="mt-5 flex justify-end">
-            <Button onClick={() => setTemporary(null)}>Done</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CredentialDialog value={temporary} personName={personName} onClose={() => setTemporary(null)} />
     </>
+  );
+}
+
+/** The one-time password, shown once. Shared by reset and first provisioning. */
+function CredentialDialog({
+  value, personName, onClose,
+}: {
+  value: string | null;
+  personName: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={!!value} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        open={!!value}
+        title="Temporary password"
+        description={`Share this with ${personName}. They sign in with their mobile number and must change it immediately.`}
+      >
+        <p className="rounded-control bg-sunken px-4 py-3 text-center font-mono text-lg text-strong">
+          {value}
+        </p>
+        <div className="mt-5 flex justify-end">
+          <Button onClick={onClose}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -249,6 +249,40 @@ export class AccountProvisioningService {
     return true;
   }
 
+  /**
+   * Give an EXISTING profile a login it never got.
+   *
+   * A staff member or vendor whose phone already belonged to another account is
+   * created with `userId` null — provisioning links an account to the FIRST
+   * profile on that number only. From the admin's side that looked like "reset
+   * password does not work": there was no account to reset, and no way to make
+   * one, so the person could not sign in at all.
+   *
+   * Returns the linked user id and the one-time password to read out.
+   */
+  async provisionMissingLogin(input: ProvisionLoginInput): Promise<{
+    userId: string;
+    temporaryPassword: string;
+  }> {
+    const username = normalizePhone(input.phone);
+    const existing = await this.prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+
+    // The number already has an account — link to it rather than minting a
+    // second login for one human. Resetting it is then an ordinary reset.
+    if (existing) {
+      return { userId: existing.id, temporaryPassword: this.oneTimePassword };
+    }
+
+    const userId = await this.provisionLogin(input);
+    if (!userId) {
+      throw new ConflictException('Could not create a login for this person');
+    }
+    return { userId, temporaryPassword: this.oneTimePassword };
+  }
+
   async syncSecurityRole(
     userId: string | null,
     communityId: string,

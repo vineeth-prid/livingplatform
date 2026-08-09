@@ -43,7 +43,26 @@ export function WorkOrderAttachments({ workOrderId }: { workOrderId: string }) {
         <ul className="flex flex-col gap-1">
           {attachments.map((a) => (
             <li key={a.id} className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-sunken">
-              <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+              {/* Thumbnail, not a paperclip. Site evidence is the point of these
+                  rows — a verifier comparing before and after should not have to
+                  open each file in a new tab to see which is which. */}
+              {a.contentType?.startsWith('image/') && a.downloadUrl ? (
+                <a
+                  href={a.downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 overflow-hidden rounded-md focus-visible:shadow-ring"
+                >
+                  <img
+                    src={a.downloadUrl}
+                    alt={a.fileName}
+                    loading="lazy"
+                    className="h-10 w-10 object-cover"
+                  />
+                </a>
+              ) : (
+                <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate text-sm font-medium text-strong">
                   <span className="truncate">{a.fileName}</span>

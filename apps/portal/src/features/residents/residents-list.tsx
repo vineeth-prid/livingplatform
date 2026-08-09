@@ -36,20 +36,36 @@ const columns: ListColumn<Resident>[] = [
   },
   {
     key: 'occupancy', header: 'Occupancy',
+    /*
+      Every occupancy value, not just the two originally shipped.
+      Family members added by a resident from their own app arrive as
+      FAMILY_MEMBER, and this rendered them as "—" — so the register listed
+      people with no indication of who they were or why they were on the unit.
+    */
     cell: (r) => {
-      const role = r.unitAssignment?.role;
-      return role === 'OWNER' || role === 'TENANT'
-        ? <span className="text-sm">{role === 'OWNER' ? 'Owner' : 'Tenant'}</span>
+      const label = OCCUPANCY_LABEL[r.unitAssignment?.role ?? ''];
+      return label
+        ? <span className="text-sm">{label}</span>
         : <span className="text-subtle">—</span>;
     },
   },
   { key: 'status', header: 'Status', sortKey: 'status', cell: (r) => <StatusBadge status={r.status} /> },
 ];
 
+/** Every ResidentRole the register can show, in the words an admin uses. */
+const OCCUPANCY_LABEL: Record<string, string> = {
+  OWNER: 'Owner',
+  TENANT: 'Tenant',
+  PRIMARY: 'Primary',
+  SECONDARY: 'Co-occupant',
+  FAMILY_MEMBER: 'Family member',
+};
+
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'OWNER', label: 'Owners' },
   { key: 'TENANT', label: 'Tenants' },
+  { key: 'FAMILY_MEMBER', label: 'Family' },
 ];
 
 export function ResidentsListPage() {

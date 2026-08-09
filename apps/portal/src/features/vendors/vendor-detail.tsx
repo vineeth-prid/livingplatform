@@ -55,7 +55,12 @@ export function VendorDetailPage() {
                 {hasPermission('vendor:update') && (
                   <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Edit</Button>
                 )}
-                <ResetPasswordButton userId={v.userId} personName={v.name} />
+                <ResetPasswordButton
+                  userId={v.userId}
+                  personName={v.name}
+                  provisionLogin={() => living.people.createVendorLogin(v.id)}
+                  onProvisioned={() => void q.refetch()}
+                />
                 {hasPermission('vendor:delete') && (
                   <Button variant="ghost" onClick={onArchive} aria-label="Archive"><Archive className="h-4 w-4" /></Button>
                 )}

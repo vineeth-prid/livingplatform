@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Delete,
   Get,
   Param,
@@ -62,6 +64,15 @@ export class VendorController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.vendors.update(id, dto, user);
+  }
+
+  /** Provision a login for a vendor who has none. */
+  @Post(':id/login')
+  @RequirePermissions(PERMISSIONS.USER_UPDATE)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create the login account for a vendor who has none' })
+  createLogin(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.vendors.createLogin(id, user);
   }
 
   @Delete(':id')

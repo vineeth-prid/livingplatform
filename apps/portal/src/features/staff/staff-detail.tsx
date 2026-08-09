@@ -57,7 +57,12 @@ export function StaffDetailPage() {
                 {hasPermission('staff:update') && (
                   <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Edit</Button>
                 )}
-                <ResetPasswordButton userId={s.userId} personName={`${s.firstName} ${s.lastName}`} />
+                <ResetPasswordButton
+                  userId={s.userId}
+                  personName={`${s.firstName} ${s.lastName}`}
+                  provisionLogin={() => living.people.createStaffLogin(s.id)}
+                  onProvisioned={() => void q.refetch()}
+                />
                 {hasPermission('staff:delete') && (
                   <Button variant="ghost" onClick={onArchive} aria-label="Archive"><Archive className="h-4 w-4" /></Button>
                 )}

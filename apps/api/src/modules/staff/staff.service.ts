@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
@@ -194,6 +194,49 @@ export class StaffService {
     );
 
     return this.present(staff);
+  }
+
+  /**
+   * Create the login this staff member never got.
+   *
+   * Provisioning links an account to the FIRST profile on a phone number, so a
+   * second person sharing one is created with `userId` null and can never sign
+   * in. Nothing in the portal could fix that — which is what "reset password
+   * does not work for staff" actually was: no account to reset, and no way to
+   * make one.
+   */
+  async createLogin(id: string, actor: AuthenticatedUser) {
+    const staff = await this.findOne(id);
+    if (staff.userId) {
+      throw new BadRequestException('This person already has a login — reset it instead');
+    }
+    const community = await this.access.assert(staff.communityId);
+    const result = await this.accounts.provisionMissingLogin({
+      kind: 'staff',
+      tenantId: community.tenantId,
+      communityId: staff.communityId,
+      phone: staff.phone,
+      firstName: staff.firstName,
+      lastName: staff.lastName,
+      email: staff.email,
+      actorId: actor.id,
+    });
+    await this.prisma.staff.update({
+      where: { id },
+      data: { userId: result.userId, updatedById: actor.id },
+    });
+    // A guard provisioned late still needs gate access.
+    await this.accounts.syncSecurityRole(
+      result.userId,
+      staff.communityId,
+      AccountProvisioningService.isSecurityJobRole(staff.role),
+      actor.id,
+    );
+    return {
+      userId: result.userId,
+      username: staff.phone,
+      temporaryPassword: result.temporaryPassword,
+    };
   }
 
   async remove(id: string, actor: AuthenticatedUser) {

@@ -71,6 +71,18 @@ export class PeopleResource {
   myVendor(): Promise<{ items: Vendor[] }> {
     return this.http.get('/vendors/me');
   }
+  /**
+   * Create the login for a staff member or vendor who has none.
+   *
+   * Provisioning links an account to the FIRST profile on a phone number, so
+   * a later one is created unlinked and cannot sign in at all.
+   */
+  createStaffLogin(id: string): Promise<{ userId: string; username: string; temporaryPassword: string }> {
+    return this.http.post(`/staff/${id}/login`, {});
+  }
+  createVendorLogin(id: string): Promise<{ userId: string; username: string; temporaryPassword: string }> {
+    return this.http.post(`/vendors/${id}/login`, {});
+  }
   createVendor(input: Body): Promise<Vendor> {
     return this.http.post('/vendors', input);
   }

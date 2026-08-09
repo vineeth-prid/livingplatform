@@ -194,6 +194,37 @@ export class VendorService {
     });
   }
 
+  /**
+   * Create the login this vendor never got. Same gap as staff: provisioning
+   * links an account to the FIRST profile on a phone number, leaving any later
+   * one unable to sign in with nothing in the portal able to fix it.
+   */
+  async createLogin(id: string, actor: AuthenticatedUser) {
+    const vendor = await this.findOne(id);
+    if (vendor.userId) {
+      throw new BadRequestException('This vendor already has a login — reset it instead');
+    }
+    const result = await this.accounts.provisionMissingLogin({
+      kind: 'vendor',
+      tenantId: vendor.tenantId,
+      communityId: null,
+      phone: vendor.phone,
+      firstName: vendor.name,
+      lastName: vendor.companyName ?? '',
+      email: vendor.email,
+      actorId: actor.id,
+    });
+    await this.prisma.vendor.update({
+      where: { id },
+      data: { userId: result.userId, updatedById: actor.id },
+    });
+    return {
+      userId: result.userId,
+      username: vendor.phone,
+      temporaryPassword: result.temporaryPassword,
+    };
+  }
+
   async remove(id: string, actor: AuthenticatedUser) {
     await this.findOne(id);
     await this.prisma.vendor.update({
