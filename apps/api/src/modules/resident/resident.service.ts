@@ -347,9 +347,12 @@ export class ResidentService {
       throw new BadRequestException('Unit does not belong to this community');
     }
 
+    const role = dto.role ?? 'PRIMARY';
+    await this.assertUnitAvailable(dto.unitId, residentId, role);
+
     const data = {
       unitId: dto.unitId,
-      role: dto.role ?? 'PRIMARY',
+      role,
       moveInDate: dto.moveInDate,
       moveOutDate: dto.moveOutDate,
       status: dto.status ?? 'ACTIVE',
@@ -367,6 +370,46 @@ export class ResidentService {
       data: { residentCode: resident.residentCode, unitId: dto.unitId },
     });
     return assignment;
+  }
+
+  /**
+   * One resident per unit — plus their household.
+   *
+   * A unit holds exactly ONE occupant record that represents the resident
+   * (owner, tenant, primary, co-occupant) and any number of FAMILY_MEMBERs
+   * underneath them. Two unrelated residents on one flat is a data-entry
+   * mistake, not a scenario: it makes "whose flat is this" unanswerable and
+   * sends notifications, gate approvals and maintenance bills to the wrong
+   * household.
+   *
+   * The inverse is untouched: one resident may hold many units, which is how an
+   * owner with several flats works. Only the unit side is exclusive.
+   */
+  private async assertUnitAvailable(
+    unitId: string,
+    residentId: string,
+    role: string,
+  ): Promise<void> {
+    // A family member is added UNDER the existing resident, so they never
+    // conflict — the whole point is that a household shares one flat.
+    if (role === 'FAMILY_MEMBER') return;
+
+    const occupant = await this.prisma.residentUnit.findFirst({
+      where: {
+        unitId,
+        residentId: { not: residentId },
+        role: { not: 'FAMILY_MEMBER' },
+        resident: { deletedAt: null },
+      },
+      select: { resident: { select: { firstName: true, lastName: true } } },
+    });
+    if (!occupant) return;
+
+    const name = `${occupant.resident.firstName} ${occupant.resident.lastName}`.trim();
+    throw new BadRequestException(
+      `This unit is already occupied by ${name}. Move them out first, or add this person ` +
+        'as a family member of that household.',
+    );
   }
 
   /** Remove the current unit assignment (no history kept). */
