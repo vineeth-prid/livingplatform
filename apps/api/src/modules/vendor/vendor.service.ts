@@ -271,13 +271,17 @@ export class VendorService {
     return `V-${String(count + 1).padStart(6, '0')}`;
   }
 
+  // Every tenant the caller can reach, not just their home one — a person may
+  // hold communities in several, and each community is its own tenant.
   private tenantWhere(): Prisma.VendorWhereInput {
     if (this.tenant.isPlatform) return {};
-    return { tenantId: this.tenant.tenantId ?? '__no_tenant__' };
+    const tenantIds = this.tenant.tenantIds;
+    if (tenantIds.length === 0) return { tenantId: '__no_tenant__' };
+    return tenantIds.length === 1 ? { tenantId: tenantIds[0] } : { tenantId: { in: tenantIds } };
   }
 
   private assertTenant(tenantId: string): void {
-    if (!this.tenant.isPlatform && tenantId !== this.tenant.tenantId) {
+    if (!this.tenant.canAccessTenant(tenantId)) {
       throw new NotFoundException('Vendor not found');
     }
   }

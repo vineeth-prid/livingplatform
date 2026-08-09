@@ -12,12 +12,19 @@ import type { TenantContextService } from './tenant-context.service';
 describe('CommunityAccessService (tenant isolation)', () => {
   const makeService = (
     community: { id: string; tenantId: string } | null,
-    ctx: { tenantId: string | null; isPlatform: boolean },
+    ctx: { tenantId: string | null; isPlatform: boolean; tenantIds?: string[] },
   ) => {
     const prisma = {
       community: { findFirst: jest.fn().mockResolvedValue(community) },
     } as unknown as PrismaService;
-    const tenant = ctx as unknown as TenantContextService;
+    // Mirrors the real context: reachable tenants default to the home tenant.
+    const tenantIds = ctx.tenantIds ?? (ctx.tenantId ? [ctx.tenantId] : []);
+    const tenant = {
+      ...ctx,
+      tenantIds,
+      canAccessTenant: (id: string | null | undefined) =>
+        ctx.isPlatform || (!!id && tenantIds.includes(id)),
+    } as unknown as TenantContextService;
     return new CommunityAccessService(prisma, tenant);
   };
 
@@ -58,5 +65,42 @@ describe('CommunityAccessService (tenant isolation)', () => {
   it('does not scope list queries for platform callers', () => {
     const svc = makeService(null, { tenantId: null, isPlatform: true });
     expect(svc.tenantWhere()).toEqual({});
+  });
+
+  /**
+   * One human, one login, several communities.
+   *
+   * Each community is its own tenant, so an owner with flats in two societies —
+   * or staff covering three — legitimately spans tenants. Isolation still holds:
+   * they reach the tenants they hold a grant in and nothing else.
+   */
+  describe('a person who belongs to several communities', () => {
+    it('reaches a community in ANY tenant they hold a grant in', async () => {
+      const svc = makeService(
+        { id: 'c2', tenantId: 't2' },
+        { tenantId: 't1', isPlatform: false, tenantIds: ['t1', 't2'] },
+      );
+      await expect(svc.assert('c2')).resolves.toEqual({ id: 'c2', tenantId: 't2' });
+    });
+
+    it('is still shut out of a tenant they hold nothing in', async () => {
+      const svc = makeService(
+        { id: 'c9', tenantId: 't9' },
+        { tenantId: 't1', isPlatform: false, tenantIds: ['t1', 't2'] },
+      );
+      await expect(svc.assert('c9')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('scopes list queries to every tenant they can reach', () => {
+      const svc = makeService(null, {
+        tenantId: 't1', isPlatform: false, tenantIds: ['t1', 't2'],
+      });
+      expect(svc.tenantWhere()).toEqual({ tenantId: { in: ['t1', 't2'] } });
+    });
+
+    it('a caller with no tenant at all matches nothing, rather than everything', () => {
+      const svc = makeService(null, { tenantId: null, isPlatform: false, tenantIds: [] });
+      expect(svc.tenantWhere()).toEqual({ tenantId: '__no_tenant__' });
+    });
   });
 });

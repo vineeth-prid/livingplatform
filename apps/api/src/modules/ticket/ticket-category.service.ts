@@ -232,11 +232,8 @@ export class TicketCategoryService {
     if (category.tenantId === null && !this.tenant.isPlatform) {
       throw new ForbiddenException('System categories are managed by the platform');
     }
-    if (
-      category.tenantId !== null &&
-      !this.tenant.isPlatform &&
-      category.tenantId !== this.tenant.tenantId
-    ) {
+    // Any tenant the caller can reach; they may hold communities in several.
+    if (category.tenantId !== null && !this.tenant.canAccessTenant(category.tenantId)) {
       throw new NotFoundException('Category not found');
     }
     return category;

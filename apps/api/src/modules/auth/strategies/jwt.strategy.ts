@@ -32,6 +32,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       id: payload.sub,
       email: payload.email,
       tenantId: payload.tenantId,
+      // Older tokens predate multi-community access; fall back to the home
+      // tenant so a live session keeps working until it refreshes.
+      tenantIds: payload.tenantIds ?? (payload.tenantId ? [payload.tenantId] : []),
       roles: payload.roles,
       permissions: payload.permissions,
       impersonatedBy: payload.impersonatedBy ?? null,

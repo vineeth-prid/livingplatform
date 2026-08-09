@@ -45,6 +45,7 @@ const RESIDENT: AuthenticatedUser = {
   id: 'user-res-1',
   email: 'aisha@living.local',
   tenantId: 't-1',
+  tenantIds: ['t-1'],
   roles: [],
   permissions: [],
 };

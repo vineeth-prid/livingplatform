@@ -154,6 +154,7 @@ export class TokensService {
       sub: principal.id,
       email: principal.email,
       tenantId: principal.tenantId,
+      tenantIds: principal.tenantIds,
       roles: principal.roles,
       permissions: principal.permissions,
       type: 'access',

@@ -33,16 +33,23 @@ export class CommunityAccessService {
       select: { id: true, tenantId: true },
     });
     if (!community) throw new NotFoundException('Community not found');
-    if (!this.tenant.isPlatform && community.tenantId !== this.tenant.tenantId) {
+    // Any tenant the caller can reach — their home tenant, or one they hold a
+    // community grant in. A person legitimately spans communities (an owner
+    // with flats in two, staff covering three), and each community is its own
+    // tenant, so a single-tenant check locked them out of their own places.
+    if (!this.tenant.canAccessTenant(community.tenantId)) {
       throw new NotFoundException('Community not found');
     }
     return community;
   }
 
   /** Tenant filter for community-level list/read queries. */
-  tenantWhere(): { tenantId?: string } {
+  tenantWhere(): { tenantId?: string | { in: string[] } } {
     if (this.tenant.isPlatform) return {};
-    // A non-platform principal always has a tenant; guard with an impossible id.
-    return { tenantId: this.tenant.tenantId ?? '__no_tenant__' };
+    const tenantIds = this.tenant.tenantIds;
+    // Guard with an impossible id rather than an empty `in`, which matches
+    // nothing in Postgres but reads like a missing filter.
+    if (tenantIds.length === 0) return { tenantId: '__no_tenant__' };
+    return tenantIds.length === 1 ? { tenantId: tenantIds[0] } : { tenantId: { in: tenantIds } };
   }
 }

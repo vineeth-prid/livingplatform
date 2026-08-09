@@ -66,9 +66,45 @@ export class RbacService {
       id: user.id,
       email: user.email,
       tenantId: user.tenantId,
+      tenantIds: await this.reachableTenants(user.tenantId, roles),
       roles,
       permissions,
     };
+  }
+
+  /**
+   * Every tenant this person can operate in: their home tenant plus the tenant
+   * of each community they hold a grant in.
+   *
+   * A community is its own tenant here, so a supervisor covering three
+   * communities, or an owner with flats in two, legitimately spans tenants. The
+   * alternative was a separate login per community — duplicate humans in the
+   * data and a password per gate.
+   *
+   * Authorization is unchanged and still per community; this only widens which
+   * tenants their community grants are allowed to resolve inside.
+   */
+  private async reachableTenants(
+    homeTenantId: string | null,
+    roles: AssignedRole[],
+  ): Promise<string[]> {
+    const communityIds = [
+      ...new Set(roles.map((r) => r.communityId).filter((id): id is string => !!id)),
+    ];
+    if (communityIds.length === 0) {
+      return homeTenantId ? [homeTenantId] : [];
+    }
+
+    const communities = await this.prisma.community.findMany({
+      where: { id: { in: communityIds }, deletedAt: null },
+      select: { tenantId: true },
+    });
+    return [
+      ...new Set([
+        ...(homeTenantId ? [homeTenantId] : []),
+        ...communities.map((c) => c.tenantId),
+      ]),
+    ];
   }
 
   listRoles() {

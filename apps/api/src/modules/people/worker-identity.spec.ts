@@ -8,6 +8,7 @@ const CALLER: AuthenticatedUser = {
   id: 'user-1',
   email: 'guard@living.local',
   tenantId: 't-1',
+  tenantIds: ['t-1'],
   roles: [],
   permissions: [],
 };

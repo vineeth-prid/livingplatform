@@ -379,7 +379,8 @@ export class ServiceCatalogService {
           'editing it gives your community its own copy automatically.',
       );
     }
-    if (service.tenantId !== this.tenant.tenantId) {
+    // Any tenant the caller can reach; they may hold communities in several.
+    if (!this.tenant.canAccessTenant(service.tenantId)) {
       throw new NotFoundException('Service not found');
     }
   }

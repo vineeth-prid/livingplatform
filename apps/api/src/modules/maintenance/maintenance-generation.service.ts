@@ -202,6 +202,7 @@ export class MaintenanceGenerationService {
       id: 'system:preventive-maintenance',
       email: 'preventive-maintenance@living.system',
       tenantId,
+      tenantIds: [tenantId],
       roles: [{ key: 'SYSTEM', scope: 'PLATFORM', communityId: null }],
       permissions: [],
     };

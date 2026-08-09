@@ -15,7 +15,7 @@ jest.mock('argon2', () => ({
 }));
 
 const principal: AuthenticatedUser = {
-  id: 'u1', email: 'admin@community.test', tenantId: 't1', roles: [], permissions: [],
+  id: 'u1', email: 'admin@community.test', tenantId: 't1', tenantIds: ['t1'], roles: [], permissions: [],
 };
 
 function setup() {

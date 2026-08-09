@@ -103,6 +103,44 @@ export class AccountProvisioningService {
     });
 
     if (existing) {
+      /*
+        One human, one login — across every community they belong to.
+
+        This used to throw whenever the number was already known: a different
+        kind of profile, or the same person in another community. Both are
+        ordinary. An owner holds flats in two societies, a supervisor covers
+        three, a resident moves and keeps their phone. Refusing simply blocked
+        the admin from adding them at all.
+
+        Each community is its own tenant here, so "let them in" means granting
+        the role against THIS community on their existing account. Access stays
+        per community — the grant is what carries it — and the account keeps one
+        password, one identity, one place to change a number.
+      */
+      const role = await this.prisma.role.findFirst({
+        where: { tenantId: null, key: ROLE_FOR_KIND[input.kind] },
+        select: { id: true },
+      });
+      if (role) {
+        // find-then-create rather than upsert: the compound unique includes a
+        // NULLABLE communityId (vendors are tenant-wide), and Postgres does not
+        // treat two nulls as equal, so an upsert on it cannot match.
+        const held = await this.prisma.userRole.findFirst({
+          where: { userId: existing.id, roleId: role.id, communityId: input.communityId },
+          select: { id: true },
+        });
+        if (!held) {
+          await this.prisma.userRole.create({
+            data: {
+              userId: existing.id,
+              roleId: role.id,
+              communityId: input.communityId,
+              assignedById: input.actorId,
+            },
+          });
+        }
+      }
+
       const linkedKind: ProfileKind | null = existing.residentProfile
         ? 'resident'
         : existing.staffProfile
@@ -110,14 +148,11 @@ export class AccountProvisioningService {
           : existing.vendorProfile
             ? 'vendor'
             : null;
-      // An owner may own multiple flats — same phone, another resident row.
-      if (input.kind === 'resident' && (linkedKind === 'resident' || linkedKind === null) && existing.tenantId === input.tenantId) {
-        return linkedKind === null ? existing.id : null;
-      }
-      if (linkedKind === null && existing.tenantId === input.tenantId) {
-        return existing.id;
-      }
-      throw new ConflictException('This phone number is already registered to another user');
+
+      // Link this profile to the account only when nothing else claims that
+      // slot. A second resident row for a multi-flat owner shares the account
+      // without being the linked one, which is unchanged.
+      return linkedKind === null ? existing.id : null;
     }
 
     const role = await this.prisma.role.findFirst({

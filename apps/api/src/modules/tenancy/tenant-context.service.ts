@@ -25,8 +25,35 @@ export class TenantContextService {
     return this.request.user;
   }
 
+  /**
+   * The caller's HOME tenant — where their account lives, and the default for
+   * anything created without a community context. NOT the limit of what they
+   * can reach: use `canAccessTenant` for that.
+   */
   get tenantId(): string | null {
     return this.request.user?.tenantId ?? null;
+  }
+
+  /**
+   * Every tenant the caller can operate in.
+   *
+   * One person may hold communities across several tenants — an owner with
+   * flats in two, staff working across three, a resident who moved. Falls back
+   * to the home tenant for tokens minted before this existed, so a session
+   * issued by the previous build keeps working until it refreshes.
+   */
+  get tenantIds(): string[] {
+    const user = this.request.user;
+    if (!user) return [];
+    if (user.tenantIds?.length) return user.tenantIds;
+    return user.tenantId ? [user.tenantId] : [];
+  }
+
+  /** May the caller operate inside this tenant? Platform admins always may. */
+  canAccessTenant(tenantId: string | null | undefined): boolean {
+    if (this.isPlatform) return true;
+    if (!tenantId) return false;
+    return this.tenantIds.includes(tenantId);
   }
 
   /** True for platform-level principals that may cross tenant boundaries. */
