@@ -27,14 +27,24 @@ export function Timeline({ items, className }: { items: TimelineItem[]; classNam
             <span className="relative z-10 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-tint text-brand">
               {item.icon ?? <span className="h-2 w-2 rounded-full bg-brand" />}
             </span>
-            <div className="flex-1 pt-0.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm text-strong">{item.title}</p>
+            {/*
+              `min-w-0` and a wrapping row.
+              The timestamp was `shrink-0` next to a title that could not
+              shrink either, so a long entry pushed the time out of the card
+              instead of wrapping — which is what made the gate audit trail
+              look ragged. Now the title takes the space it needs and the time
+              drops below it when there is not enough.
+            */}
+            <div className="min-w-0 flex-1 pt-0.5">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <p className="min-w-0 text-sm text-strong">{item.title}</p>
                 {item.timestamp && (
-                  <time className="shrink-0 text-xs text-subtle">{item.timestamp}</time>
+                  <time className="text-xs text-subtle">{item.timestamp}</time>
                 )}
               </div>
-              {item.meta && <div className="mt-0.5 text-sm text-muted">{item.meta}</div>}
+              {item.meta && (
+                <div className="mt-0.5 break-words text-sm text-muted">{item.meta}</div>
+              )}
             </div>
           </li>
         );

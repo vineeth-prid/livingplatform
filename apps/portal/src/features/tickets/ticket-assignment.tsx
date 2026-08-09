@@ -4,7 +4,7 @@ import { useAuth } from '@living/hooks';
 import { LivingApiError } from '@living/living-sdk';
 import {
   Avatar, Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, toast,
+  DropdownMenuLabel, DropdownMenuTrigger, toast,
 } from '@living/ui';
 import type { Assignee } from '@living/types';
 
@@ -12,7 +12,7 @@ import { useAssignees, useTicketMutations } from './queries';
 
 /**
  * Assignment control: shows the current assignee, and (with ticket:assign) a
- * picker of community staff or covering vendors. Assign/reassign only — the
+ * picker of community STAFF. Assign/reassign only — the
  * backend has no unassign for tickets.
  */
 export function TicketAssignment({
@@ -24,7 +24,8 @@ export function TicketAssignment({
 }) {
   const { hasPermission } = useAuth();
   const { assign } = useTicketMutations(ticketId);
-  const { staff, vendors } = useAssignees(communityId);
+  // Staff only — a ticket is in-house work; vendors come in via a work order.
+  const { staff } = useAssignees(communityId);
   const [open, setOpen] = useState(false);
   const canAssign = hasPermission('ticket:assign');
 
@@ -61,24 +62,26 @@ export function TicketAssignment({
               <UserPlus className="h-4 w-4" /> {assignee ? 'Reassign' : 'Assign'}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="max-h-80 overflow-y-auto">
-            <DropdownMenuLabel>Staff</DropdownMenuLabel>
+          {/* STAFF only. A ticket is a complaint about the property and is
+              in-house work; vendors are engaged through a work order, which is
+              where the cost and approval live. Offering both here let an admin
+              hand a complaint straight to a vendor with no work order behind
+              it, and no record of what it would cost. */}
+          <DropdownMenuContent className="max-h-80 w-64 overflow-y-auto">
+            <DropdownMenuLabel>Assign to staff</DropdownMenuLabel>
             {(staff.data?.items ?? []).map((s) => (
               <DropdownMenuItem key={s.id} onSelect={() => void pick({ staffId: s.id })}>
-                {s.firstName} {s.lastName}
-                <span className="ml-auto text-xs text-subtle">{s.role.toLowerCase().replace(/_/g, ' ')}</span>
+                <span className="truncate">{s.firstName} {s.lastName}</span>
+                <span className="ml-auto shrink-0 pl-2 text-xs text-subtle">
+                  {s.role.toLowerCase().replace(/_/g, ' ')}
+                </span>
               </DropdownMenuItem>
             ))}
-            {staff.data?.items.length === 0 && <p className="px-2.5 py-2 text-sm text-subtle">No staff</p>}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Vendors</DropdownMenuLabel>
-            {(vendors.data?.items ?? []).map((v) => (
-              <DropdownMenuItem key={v.id} onSelect={() => void pick({ vendorId: v.id })}>
-                {v.companyName || v.name}
-                <span className="ml-auto text-xs text-subtle">{v.category.toLowerCase()}</span>
-              </DropdownMenuItem>
-            ))}
-            {vendors.data?.items.length === 0 && <p className="px-2.5 py-2 text-sm text-subtle">No vendors</p>}
+            {staff.data?.items.length === 0 && (
+              <p className="px-2.5 py-2 text-sm text-subtle">
+                No staff yet — add one under People.
+              </p>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bike, Check, Package, PhoneCall, ShieldCheck, X } from 'lucide-react';
 import { LivingApiError, type GateEntry, type RealtimeEvent } from '@living/living-sdk';
@@ -53,8 +53,24 @@ export function GateAlerts() {
     };
   }, []);
 
+  /*
+    Entries this resident has already dealt with in THIS session — decided, or
+    deliberately deferred.
+
+    Closing the popup sets `active` to null and invalidates the gate queries,
+    but the poll's cached list still contains the entry until the refetch lands.
+    The effect below would see it, find nothing on screen, and re-raise the SAME
+    popup instantly. Approve, reject, "decide later" — all three looked like a
+    modal that refused to close and only a full page reload cleared it.
+
+    A ref, not state: this must not itself trigger a render, and it is read
+    inside the raise path rather than compared.
+  */
+  const handled = useRef<Set<string>>(new Set());
+
   const raise = useCallback(
     (entry: GateEntry) => {
+      if (handled.current.has(entry.id)) return;
       setActive((current) => {
         // Never replace a popup the resident is already deciding on.
         if (current) return current;
@@ -94,6 +110,10 @@ export function GateAlerts() {
     <GateDecisionDialog
       entry={active}
       onClose={() => {
+        // Mark it handled BEFORE clearing, or the stale poll list re-raises it.
+        // Deferring is a decision too: "decide later" means leave it at the
+        // gate, and the entry stays in "Waiting for you" to act on there.
+        if (active) handled.current.add(active.id);
         setActive(null);
         void qc.invalidateQueries({ queryKey: ['gate'] });
       }}
@@ -117,7 +137,11 @@ export function GateDecisionDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const { community } = useResidentCommunity();
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  // The gate desk has no number of its own on the record, so security is
+  // reached on the community's published contact line.
+  const securityNumber = community?.contactPhone ?? null;
 
   const decide = useMutation({
     mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
@@ -197,16 +221,33 @@ export function GateDecisionDialog({
           </Button>
         </div>
 
-        {/* Specified as future scope — shown disabled so the affordance exists
-            and residents are not surprised when it lights up later. */}
-        <div className="mt-3 flex gap-3">
-          <Button block variant="ghost" size="sm" disabled>
-            <ShieldCheck className="h-4 w-4" /> Call security
-          </Button>
-          <Button block variant="ghost" size="sm" disabled>
-            <PhoneCall className="h-4 w-4" /> Call delivery
-          </Button>
-        </div>
+        {/*
+          Real `tel:` links now. These were placeholders wired to nothing, which
+          is worse than absent: a resident deciding whether to accept a delivery
+          taps "Call delivery" and the app does nothing at all.
+
+          The delivery rider's number is on the gate entry; security's is the
+          gate's own number. Each button appears only when there is something to
+          dial — an enabled button that cannot call is the bug being fixed.
+        */}
+        {(entry.mobileNumber || securityNumber) && (
+          <div className="mt-3 flex gap-3">
+            {securityNumber && (
+              <Button block variant="ghost" size="sm" asChild>
+                <a href={`tel:${securityNumber}`}>
+                  <ShieldCheck className="h-4 w-4" /> Call security
+                </a>
+              </Button>
+            )}
+            {entry.mobileNumber && (
+              <Button block variant="ghost" size="sm" asChild>
+                <a href={`tel:${entry.mobileNumber}`}>
+                  <PhoneCall className="h-4 w-4" /> Call delivery
+                </a>
+              </Button>
+            )}
+          </div>
+        )}
 
         <button
           type="button"

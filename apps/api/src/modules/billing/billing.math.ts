@@ -97,18 +97,35 @@ export function lateFeeFor(
 ): number {
   if (input.outstanding <= 0) return 0;
   const grace = Math.max(0, rates.gracePeriodDays ?? 0);
-  const graceEnd = new Date(input.dueDate.getTime() + grace * 86_400_000);
-  if (input.asOf.getTime() <= graceEnd.getTime()) return 0;
+  // Grace is counted in the same calendar days as `daysOverdue`, or a 3-day
+  // grace would expire on a different day from the one the invoice reports.
+  if (daysOverdue(input.dueDate, input.asOf) <= grace) return 0;
 
   const flat = rates.lateFeeAmount ?? 0;
   const pct = ((rates.lateFeePercent ?? 0) / 100) * input.outstanding;
   return round2(flat + pct);
 }
 
-/** Days a bill is overdue as of `asOf` (0 when not yet due). */
+/** Midnight UTC on the calendar day of `d` — the unit "days overdue" counts in. */
+function startOfDay(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/**
+ * Days a bill is overdue as of `asOf` (0 when not yet due).
+ *
+ * Counted in CALENDAR days, not elapsed milliseconds. `dueDateFor` stamps the
+ * due date at 23:59:59.999 so the whole due day counts as on time — subtracting
+ * raw instants then measured from the END of that day, so a bill a day late
+ * reported 0 and only reached "1 day" after nearly two. Every bill in the system
+ * under-reported by a day, and the same arithmetic decides late fees.
+ *
+ * Normalising both sides to midnight makes the answer the one a person would
+ * give by counting on a calendar: due the 10th, on the 11th it is 1 day late.
+ */
 export function daysOverdue(dueDate: Date, asOf: Date): number {
-  const diff = asOf.getTime() - dueDate.getTime();
-  return diff <= 0 ? 0 : Math.floor(diff / 86_400_000);
+  const diff = startOfDay(asOf) - startOfDay(dueDate);
+  return diff <= 0 ? 0 : Math.round(diff / 86_400_000);
 }
 
 /**

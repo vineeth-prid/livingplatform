@@ -129,8 +129,8 @@ function AuditLogTable() {
         <p className="px-4 py-10 text-center text-sm text-subtle">No audit events recorded yet.</p>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <div className="w-full overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
               <thead><tr className="text-left text-2xs uppercase tracking-wider text-subtle">
                 {['Time', 'User', 'Action', 'Module', 'IP address', 'Status'].map((h) => <th key={h} className="px-4 py-2 font-semibold">{h}</th>)}
               </tr></thead>
@@ -139,9 +139,9 @@ function AuditLogTable() {
                   const ok = (r.statusCode ?? 200) < 400;
                   return (
                     <tr key={r.id} className="border-t border-border-subtle">
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted">{new Date(r.createdAt).toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-strong">{r.actorEmail ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-muted">{r.action}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-muted">{new Date(r.createdAt).toLocaleString()}</td>
+                      <td className="max-w-[220px] truncate px-4 py-2.5 text-strong" title={r.actorEmail ?? undefined}>{r.actorEmail ?? '—'}</td>
+                      <td className="max-w-[260px] truncate px-4 py-2.5 text-muted" title={r.action}>{r.action}</td>
                       <td className="px-4 py-2.5"><Badge tone="neutral" size="sm">{r.resource}</Badge></td>
                       <td className="px-4 py-2.5 font-mono text-xs text-muted">{r.ipAddress ?? '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={ok ? 'success' : 'danger'} size="sm">{r.statusCode ?? '—'}</Badge></td>
@@ -149,7 +149,7 @@ function AuditLogTable() {
                   );
                 })}
               </tbody>
-            </table></div>
+            </table>
           </div>
           {q.data!.meta.total > q.data!.meta.limit && (
             <Pagination meta={q.data!.meta} onPageChange={setPage} />

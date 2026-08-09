@@ -1,4 +1,5 @@
-import { forwardRef, useId, type ReactNode } from 'react';
+import { forwardRef, useId, useState, type ReactNode } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@living/utils';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -11,9 +12,19 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 /** Labelled field with hint, error and leading/trailing adornments. */
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, hint, error, leading, trailing, id, disabled, ...props }, ref) => {
+  ({ className, label, hint, error, leading, trailing, id, disabled, type, ...props }, ref) => {
     const generatedId = useId();
     const inputId = id ?? generatedId;
+    const [revealed, setRevealed] = useState(false);
+
+    /*
+      Every password field gets a reveal toggle, here rather than at each call
+      site — a one-time password read off a screen and typed on a phone is the
+      common case in this product, and there were no toggles anywhere.
+      Typing stays masked by default; revealing is a deliberate act.
+    */
+    const isPassword = type === 'password';
+    const effectiveType = isPassword && revealed ? 'text' : type;
     const describedBy = error
       ? `${inputId}-error`
       : hint
@@ -41,6 +52,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             disabled={disabled}
+            type={effectiveType}
             aria-invalid={!!error}
             aria-describedby={describedBy}
             className={cn(
@@ -50,6 +62,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             )}
             {...props}
           />
+          {isPassword && (
+            <button
+              type="button"
+              onClick={() => setRevealed((v) => !v)}
+              aria-label={revealed ? 'Hide password' : 'Show password'}
+              aria-pressed={revealed}
+              tabIndex={-1}
+              className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-strong focus-visible:shadow-ring"
+            >
+              {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          )}
           {trailing && <span className="text-muted shrink-0">{trailing}</span>}
         </div>
         {error ? (

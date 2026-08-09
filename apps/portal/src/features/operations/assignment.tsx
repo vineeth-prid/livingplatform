@@ -29,13 +29,22 @@ export function useAssignees(communityId: string | null) {
  * Assign / reassign to a staff member or vendor (staff XOR vendor, per backend).
  */
 export function OperationsAssignment({
-  communityId, assignee, canAssign, pending, onAssign,
+  communityId, assignee, canAssign, pending, onAssign, only = 'both',
 }: {
   communityId: string | null;
   assignee?: Assignee | null;
   canAssign: boolean;
   pending?: boolean;
   onAssign: (input: { staffId?: string; vendorId?: string }) => void;
+  /**
+   * Who may take this work.
+   *
+   * A SERVICE is bought from the vendor catalogue, so its picker lists vendors
+   * only — offering staff there produced assignments the pricing and catalogue
+   * model has no account of. A WORK ORDER genuinely can go either way, so it
+   * keeps both.
+   */
+  only?: 'staff' | 'vendor' | 'both';
 }) {
   const { staff, vendors } = useAssignees(communityId);
   const [open, setOpen] = useState(false);
@@ -64,24 +73,42 @@ export function OperationsAssignment({
               <UserPlus className="h-4 w-4" /> {assignee ? 'Reassign' : 'Assign'}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="max-h-80 overflow-y-auto">
-            <DropdownMenuLabel>Staff</DropdownMenuLabel>
-            {(staff.data?.items ?? []).map((s) => (
-              <DropdownMenuItem key={s.id} onSelect={() => { onAssign({ staffId: s.id }); setOpen(false); }}>
-                {s.firstName} {s.lastName}
-                <span className="ml-auto text-xs text-subtle">{s.role.toLowerCase().replace(/_/g, ' ')}</span>
-              </DropdownMenuItem>
-            ))}
-            {staff.data?.items.length === 0 && <p className="px-2.5 py-2 text-sm text-subtle">No staff</p>}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Vendors</DropdownMenuLabel>
-            {(vendors.data?.items ?? []).map((v) => (
-              <DropdownMenuItem key={v.id} onSelect={() => { onAssign({ vendorId: v.id }); setOpen(false); }}>
-                {v.companyName || v.name}
-                <span className="ml-auto text-xs text-subtle">{v.category.toLowerCase()}</span>
-              </DropdownMenuItem>
-            ))}
-            {vendors.data?.items.length === 0 && <p className="px-2.5 py-2 text-sm text-subtle">No vendors</p>}
+          <DropdownMenuContent className="max-h-80 w-64 overflow-y-auto">
+            {only !== 'vendor' && (
+              <>
+                <DropdownMenuLabel>{only === 'staff' ? 'Assign to staff' : 'Staff'}</DropdownMenuLabel>
+                {(staff.data?.items ?? []).map((s) => (
+                  <DropdownMenuItem key={s.id} onSelect={() => { onAssign({ staffId: s.id }); setOpen(false); }}>
+                    <span className="truncate">{s.firstName} {s.lastName}</span>
+                    <span className="ml-auto shrink-0 pl-2 text-xs text-subtle">
+                      {s.role.toLowerCase().replace(/_/g, ' ')}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+                {staff.data?.items.length === 0 && (
+                  <p className="px-2.5 py-2 text-sm text-subtle">No staff yet — add one under People.</p>
+                )}
+              </>
+            )}
+
+            {only === 'both' && <DropdownMenuSeparator />}
+
+            {only !== 'staff' && (
+              <>
+                <DropdownMenuLabel>{only === 'vendor' ? 'Assign to vendor' : 'Vendors'}</DropdownMenuLabel>
+                {(vendors.data?.items ?? []).map((v) => (
+                  <DropdownMenuItem key={v.id} onSelect={() => { onAssign({ vendorId: v.id }); setOpen(false); }}>
+                    <span className="truncate">{v.companyName || v.name}</span>
+                    <span className="ml-auto shrink-0 pl-2 text-xs text-subtle">{v.category.toLowerCase()}</span>
+                  </DropdownMenuItem>
+                ))}
+                {vendors.data?.items.length === 0 && (
+                  <p className="px-2.5 py-2 text-sm text-subtle">
+                    No vendors covering this community yet.
+                  </p>
+                )}
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

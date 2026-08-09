@@ -56,10 +56,13 @@ export function GateEntryDetailPage() {
     return {
       id: row.id,
       title: ACTION_LABEL[row.action] ?? humanize(row.action),
-      meta: [row.note, row.actorName, row.channel && `via ${row.channel}`]
+      meta: [row.note, row.actorName, row.channel && `via ${row.channel}`, timeAgo(row.createdAt)]
         .filter(Boolean)
         .join(' · '),
-      timestamp: `${formatDateTime(row.createdAt)} (${timeAgo(row.createdAt)})`,
+      // Absolute time only. Pairing it with the relative form doubled the
+      // string and pushed it out of the row; "2 hours ago" belongs with the
+      // other context, not competing with the title for the same line.
+      timestamp: formatDateTime(row.createdAt),
       icon: <Icon className="h-3.5 w-3.5" />,
     };
   });

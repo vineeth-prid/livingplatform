@@ -152,3 +152,54 @@ describe('round2', () => {
     expect(round2(1234.005)).toBe(1234.01);
   });
 });
+
+/**
+ * Days overdue, counted the way a person counts on a calendar.
+ *
+ * `dueDateFor` stamps the due date at 23:59:59.999 so the whole due day is on
+ * time. Subtracting raw instants then measured from the END of that day, so a
+ * bill one day late reported 0 and only reached "1 day" after nearly two. Every
+ * invoice under-reported by a day, and the same arithmetic gates late fees.
+ */
+describe('daysOverdue — calendar days, not elapsed time', () => {
+  const due = dueDateFor({ start: new Date(Date.UTC(2026, 7, 1)), end: new Date(Date.UTC(2026, 7, 31)) }, 10);
+  const at = (day: number, hour = 9) => new Date(Date.UTC(2026, 7, day, hour));
+
+  it('is 0 on the due day itself, whatever the hour', () => {
+    expect(daysOverdue(due, at(10, 0))).toBe(0);
+    expect(daysOverdue(due, at(10, 23))).toBe(0);
+  });
+
+  it('is 1 the day after — this is the case that reported 0', () => {
+    expect(daysOverdue(due, at(11, 0))).toBe(1);
+    expect(daysOverdue(due, at(11, 23))).toBe(1);
+  });
+
+  it('counts each further day exactly once', () => {
+    expect(daysOverdue(due, at(12))).toBe(2);
+    expect(daysOverdue(due, at(20))).toBe(10);
+  });
+
+  it('is 0 before the due date', () => {
+    expect(daysOverdue(due, at(9))).toBe(0);
+    expect(daysOverdue(due, at(1))).toBe(0);
+  });
+});
+
+describe('late fee grace uses the same day count as the invoice', () => {
+  const due = dueDateFor({ start: new Date(Date.UTC(2026, 7, 1)), end: new Date(Date.UTC(2026, 7, 31)) }, 10);
+  const rates = { gracePeriodDays: 3, lateFeeAmount: 100, lateFeePercent: 0 } as never;
+  const at = (day: number) => new Date(Date.UTC(2026, 7, day, 9));
+
+  it('charges nothing through the last day of grace', () => {
+    expect(lateFeeFor(rates, { outstanding: 5000, dueDate: due, asOf: at(13) })).toBe(0);
+  });
+
+  it('charges on the day AFTER grace expires', () => {
+    expect(lateFeeFor(rates, { outstanding: 5000, dueDate: due, asOf: at(14) })).toBe(100);
+  });
+
+  it('never charges a settled bill', () => {
+    expect(lateFeeFor(rates, { outstanding: 0, dueDate: due, asOf: at(30) })).toBe(0);
+  });
+});

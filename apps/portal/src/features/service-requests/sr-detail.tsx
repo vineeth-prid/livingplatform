@@ -87,7 +87,7 @@ export function ServiceRequestDetailPage() {
                 </FieldGrid>
               </DetailSection>
               <DetailSection title="Assignment">
-                <OperationsAssignment communityId={communityId} assignee={r.assignee} canAssign={hasPermission('service:assign')} pending={assign.isPending} onAssign={onAssign} />
+                <OperationsAssignment only="vendor" communityId={communityId} assignee={r.assignee} canAssign={hasPermission('service:assign')} pending={assign.isPending} onAssign={onAssign} />
               </DetailSection>
               <PlaceholderSection title="Related ticket" note={r.ticketId ? `Linked to ticket ${r.ticketId}` : 'No linked ticket.'} />
             </div>

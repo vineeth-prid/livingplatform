@@ -245,10 +245,10 @@ function HistoryTab() {
                 <tbody>
                   {(deliveries.data?.items ?? []).map((d) => (
                     <tr key={d.id} className="border-t border-border-subtle">
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted">{new Date(d.createdAt).toLocaleString()}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-muted">{new Date(d.createdAt).toLocaleString()}</td>
                       <td className="px-4 py-2.5"><Badge tone="brand" size="sm">{d.channel.toUpperCase()}</Badge></td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted">{d.recipients[0] ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-strong">{d.subject || '—'}</td>
+                      <td className="max-w-[220px] truncate px-4 py-2.5 font-mono text-xs text-muted" title={d.recipients[0]}>{d.recipients[0] ?? '—'}</td>
+                      <td className="max-w-[280px] truncate px-4 py-2.5 text-strong" title={d.subject || undefined}>{d.subject || '—'}</td>
                       <td className="px-4 py-2.5 text-muted">{d.provider}</td>
                       <td className="px-4 py-2.5"><Badge tone={tone(d.status)} size="sm">{d.status}</Badge></td>
                     </tr>

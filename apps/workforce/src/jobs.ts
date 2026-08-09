@@ -101,9 +101,24 @@ export function useMyJobs() {
       active,
       inProgress: active.filter((j) => j.status === 'IN_PROGRESS'),
       overdue: active.filter((j) => { const d = dueMs(j); return d != null && d < dayStart; }),
+      /*
+        Due today, OR assigned today, OR carrying no date at all.
+
+        This used to require a due date in today's window, with the single
+        exception of an undated job already IN_PROGRESS. So work assigned this
+        morning with no due date — which is most of it — landed in NO bucket:
+        not overdue, not today, not upcoming. The worker's own screen showed
+        nothing while the job sat in their queue.
+
+        An undated job is work with nothing scheduling it away from now, so now
+        is when it belongs.
+      */
       today: active.filter((j) => {
         const d = dueMs(j);
-        return (d != null && d >= dayStart && d <= dayEnd) || (d == null && j.status === 'IN_PROGRESS');
+        if (d == null) return true;
+        if (d >= dayStart && d <= dayEnd) return true;
+        const created = new Date(j.createdAt).getTime();
+        return created >= dayStart && created <= dayEnd;
       }),
       upcoming: active.filter((j) => { const d = dueMs(j); return d != null && d > dayEnd; }),
       priority: active.filter((j) => j.priority === 'HIGH' || j.priority === 'CRITICAL'),

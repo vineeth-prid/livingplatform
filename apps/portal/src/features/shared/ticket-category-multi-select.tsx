@@ -14,7 +14,7 @@ import { living } from '../../lib/living';
 export function TicketCategoryMultiSelect({
   values,
   onChange,
-  label = 'Categories handled',
+  label = 'Category handled',
 }: {
   values: string[];
   onChange: (values: string[]) => void;
@@ -27,11 +27,21 @@ export function TicketCategoryMultiSelect({
 
   const rows = categories.data ?? [];
   const toggle = (key: string) =>
-    onChange(values.includes(key) ? values.filter((v) => v !== key) : [...values, key]);
+    onChange(
+      values.includes(key)
+        ? values.filter((v) => v !== key)
+        // SINGLE select. One staff member handles one category — that is the
+        // rule auto-assignment routes on, and a plumber who is also tagged
+        // "Electrical" gets sent electrical work. Picking a second category
+        // REPLACES the first rather than adding to it, so the control cannot
+        // express a state the model does not allow.
+        : [key],
+    );
 
   return (
     <div>
       <span className="text-sm font-medium text-strong">{label}</span>
+      <p className="mt-0.5 text-xs text-subtle">One category per person — it is what routes work to them.</p>
       <div className="mt-1.5 flex flex-wrap gap-1.5 rounded-control border border-border bg-raised p-2">
         {categories.isLoading ? (
           <span className="text-xs text-subtle">Loading categories…</span>
