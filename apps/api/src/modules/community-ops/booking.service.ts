@@ -41,6 +41,9 @@ export class BookingService {
       select: {
         id: true, isBookable: true, status: true, capacity: true, operatingHours: true,
         bookingWindowDays: true, maxBookingMinutes: true,
+        // Opening hours are this community's wall clock, so the check needs its
+        // timezone — not the server's.
+        community: { select: { timezone: true } },
       },
     });
     if (!amenity) throw new BadRequestException('Amenity does not belong to this community');
@@ -50,7 +53,12 @@ export class BookingService {
 
     assertValidTimeRange(dto.startTime, dto.endTime);
     assertFutureWithinWindow(dto.startTime, amenity.bookingWindowDays, new Date());
-    assertWithinOperatingHours(dto.startTime, dto.endTime, amenity.operatingHours as unknown as OperatingHours | null);
+    assertWithinOperatingHours(
+      dto.startTime,
+      dto.endTime,
+      amenity.operatingHours as unknown as OperatingHours | null,
+      amenity.community.timezone,
+    );
     assertWithinMaxDuration(dto.startTime, dto.endTime, amenity.maxBookingMinutes);
 
     // Capacity: how many active bookings already overlap this slot?

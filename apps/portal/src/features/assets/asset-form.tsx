@@ -16,7 +16,8 @@ export interface AssetValues {
 export interface AssetFormOptions {
   categories: { value: string; label: string }[];
   blocks: { value: string; label: string }[];
-  floors: { value: string; label: string }[];
+  /** `blockId` scopes the floor to its block — see the Floor field below. */
+  floors: { value: string; label: string; blockId?: string }[];
 }
 
 const FIELD_KEYS: (keyof AssetValues)[] = [
@@ -25,6 +26,17 @@ const FIELD_KEYS: (keyof AssetValues)[] = [
   'purchaseDate', 'installationDate', 'expectedLifeMonths', 'warrantyExpiry',
   'status', 'criticality', 'condition',
 ];
+
+/**
+ * Floors offered for a block. With no block chosen the list is empty rather
+ * than "everything": a floor only means something inside its block, and an
+ * unscoped list is what let an asset be filed on another tower's floor.
+ * Options with no `blockId` are kept so an older caller still works.
+ */
+function floorsInBlock(floors: AssetFormOptions['floors'], blockId: string | undefined) {
+  if (!blockId) return floors.filter((f) => !f.blockId);
+  return floors.filter((f) => !f.blockId || f.blockId === blockId);
+}
 
 const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
 const optionsOf = (values: readonly string[]) => values.map((v) => ({ value: v, label: humanize(v) }));
@@ -151,8 +163,21 @@ export function AssetForm({ mode, options, initial, submitting, onSubmit, onCanc
 
       <Section title="Location" description="Where the asset physically sits.">
         <Grid>
-          <SelectField label="Block" value={values.blockId} onChange={(v) => set('blockId', v)} options={options.blocks} placeholder="No block" />
-          <SelectField label="Floor" value={values.floorId} onChange={(v) => set('floorId', v)} options={options.floors} placeholder="No floor" />
+          <SelectField label="Block" value={values.blockId} onChange={(v) => {
+            set('blockId', v);
+            // A floor belongs to exactly one block, so a floor picked under the
+            // previous block is now wrong. Clearing beats silently submitting a
+            // floor that sits in a different tower.
+            if (values.floorId && !floorsInBlock(options.floors, v).some((f) => f.value === values.floorId)) {
+              set('floorId', '');
+            }
+          }} options={options.blocks} placeholder="No block" />
+          {/* Only this block's floors. The list was previously every floor in
+              the community, so picking "Tower A" still offered Tower B's floors
+              — and the unit importer's auto-created ones on top. */}
+          <SelectField label="Floor" value={values.floorId} onChange={(v) => set('floorId', v)}
+            options={floorsInBlock(options.floors, values.blockId)}
+            placeholder={values.blockId ? 'No floor' : 'Select a block first'} />
           <div className="sm:col-span-2">
             <Input label="Location description" value={values.locationDescription} onChange={(e) => set('locationDescription', e.target.value)}
               placeholder="Basement 1 — DG room" />

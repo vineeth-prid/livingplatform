@@ -111,6 +111,17 @@ export class RejectWorkOrderDto {
 }
 
 export class QueryWorkOrderDto extends ListQueryDto {
+  /**
+   * Narrow a self-scoped list (`/work-orders/mine`) to one community.
+   *
+   * A resident can hold flats in more than one community, and `findMine` matched
+   * on their unit ids alone — so the list mixed every community's work together
+   * regardless of which one the app was showing. The community-scoped list
+   * routes take the id from the path and ignore this.
+   */
+  @ApiPropertyOptional({ description: 'Restrict to one community (self-scoped lists)' })
+  @IsOptional() @IsString() communityId?: string;
+
   @ApiPropertyOptional({ enum: WorkOrderStatus }) @IsOptional() @IsEnum(WorkOrderStatus) status?: WorkOrderStatus;
   @ApiPropertyOptional({ enum: TicketPriority }) @IsOptional() @IsEnum(TicketPriority) priority?: TicketPriority;
   @ApiPropertyOptional({ enum: WorkOrderOriginType }) @IsOptional() @IsEnum(WorkOrderOriginType) originType?: WorkOrderOriginType;

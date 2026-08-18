@@ -2,11 +2,12 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 
 import { CryptoModule } from './common/crypto/crypto.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { ClientIpThrottlerGuard } from './common/guards/client-ip-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ModuleEnabledGuard } from './common/guards/module-enabled.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -164,7 +165,7 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
   ],
   providers: [
     // Guard chain: rate-limit → authenticate → authorize (permissions, roles).
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: ClientIpThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

@@ -1,43 +1,70 @@
 import { FormDrawer, type FieldDef } from '../master-data';
-import { VISITOR_TYPE, useVisitorMutations } from './lib';
+import { useVisitorMutations } from './lib';
 
-const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
-
-/** Invite / edit a visitor. Managers may act for any resident. */
+/**
+ * Invite a visitor on a resident's behalf.
+ *
+ * The host is now chosen as a UNIT, not a resident. A gate entry is always for a
+ * flat — that is what the guard checks and what the notification is addressed
+ * against — and the resident to notify is resolved from the unit's primary
+ * occupant. Picking a resident instead was how a visit could be recorded with no
+ * flat attached, which is also why "invite by unit number" was impossible.
+ */
 export function VisitorForm({
-  open, onOpenChange, communityId, residents, visitor, onSaved,
+  open, onOpenChange, communityId, units, visitor, onSaved,
 }: {
-  open: boolean; onOpenChange: (o: boolean) => void; communityId: string;
-  residents: { value: string; label: string }[];
-  visitor?: { id: string; residentId: string; visitorName: string; mobileNumber: string; vehicleNumber?: string | null; visitorType: string; purpose?: string | null; expectedArrival: string; notes?: string | null };
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  communityId: string;
+  units: { value: string; label: string }[];
+  visitor?: {
+    id: string;
+    unitId: string;
+    personName: string;
+    mobileNumber: string | null;
+    vehicleNumber: string | null;
+    remarks: string | null;
+    expectedArrival: string | null;
+  };
   onSaved?: () => void;
 }) {
   const { create, update } = useVisitorMutations(visitor?.id);
   const editing = !!visitor;
+  const today = new Date().toISOString().slice(0, 10);
 
   const fields: FieldDef[] = [
-    { name: 'residentId', label: 'Host resident', type: 'select', required: !editing, options: residents, placeholder: 'Select a resident' },
-    { name: 'visitorName', label: 'Visitor name', required: true, half: true },
-    { name: 'mobileNumber', label: 'Mobile', type: 'tel', required: true, half: true },
-    { name: 'visitorType', label: 'Type', type: 'select', options: VISITOR_TYPE.map((t) => ({ value: t, label: humanize(t) })), half: true },
+    // Not offered when editing: moving a recorded arrival to another flat would
+    // rewrite who was notified and who approved it.
+    ...(editing
+      ? []
+      : [{ name: 'unitId', label: 'Visiting which unit', type: 'select', required: true, options: units, placeholder: 'Select a unit' } as FieldDef]),
+    { name: 'personName', label: 'Visitor name', required: true, half: true },
+    { name: 'mobileNumber', label: 'Mobile', type: 'tel', half: true },
     { name: 'vehicleNumber', label: 'Vehicle (optional)', half: true },
-    { name: 'expectedArrival', label: 'Expected arrival', type: 'date', required: true, half: true },
-    { name: 'purpose', label: 'Purpose', type: 'textarea' },
-    { name: 'notes', label: 'Notes', type: 'textarea' },
+    { name: 'expectedArrival', label: 'Expected arrival', type: 'date', required: !editing, half: true, min: today },
+    { name: 'remarks', label: 'Purpose', type: 'textarea' },
   ];
 
-  const initial: Record<string, string> = visitor ? {
-    residentId: visitor.residentId, visitorName: visitor.visitorName, mobileNumber: visitor.mobileNumber,
-    vehicleNumber: visitor.vehicleNumber ?? '', visitorType: visitor.visitorType, purpose: visitor.purpose ?? '',
-    expectedArrival: visitor.expectedArrival.slice(0, 10), notes: visitor.notes ?? '',
-  } : {};
+  const initial: Record<string, string> = visitor
+    ? {
+        personName: visitor.personName,
+        mobileNumber: visitor.mobileNumber ?? '',
+        vehicleNumber: visitor.vehicleNumber ?? '',
+        remarks: visitor.remarks ?? '',
+        expectedArrival: visitor.expectedArrival?.slice(0, 10) ?? '',
+      }
+    : {};
 
   async function onSubmit(values: Record<string, string>) {
     const body: Record<string, unknown> = { ...values };
     if (values.expectedArrival) body.expectedArrival = new Date(values.expectedArrival).toISOString();
-    let result;
-    if (editing) result = await update.mutateAsync(body);
-    else result = await create.mutateAsync({ communityId, ...body });
+    // Empty strings are "not provided", not "set it to blank".
+    for (const k of ['mobileNumber', 'vehicleNumber', 'remarks']) {
+      if (!body[k]) delete body[k];
+    }
+    const result = editing
+      ? await update.mutateAsync(body)
+      : await create.mutateAsync({ communityId, ...body });
     onSaved?.();
     return result;
   }

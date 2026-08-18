@@ -68,12 +68,16 @@ export function AdminCommunitiesPage() {
   // Swap into the community admin's session; a full reload re-bootstraps the app
   // as that admin. The banner (dashboard shell) offers the return trip.
   const loginAs = async (id: string, name: string) => {
+    if (loggingInId) return; // a second click while the swap is in flight
     setLoggingInId(id);
+    // Stash first: the call below replaces our tokens, so this is the last
+    // moment the platform-admin session can be captured.
     beginImpersonation(name);
     try {
       await living.platform.loginAsCommunity(id);
       window.location.assign('/');
     } catch (err) {
+      // Restores the platform tokens, not just the stash — see cancelImpersonation.
       cancelImpersonation();
       setLoggingInId(null);
       toast.error(err instanceof LivingApiError ? err.message : 'Could not sign in as this community');

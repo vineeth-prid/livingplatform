@@ -59,6 +59,10 @@ export interface GateEntry {
   decidedById: string | null;
   decisionNote: string | null;
   completedAt: string | null;
+  /** Set for a pre-announced visit; null for a walk-up arrival. */
+  expectedArrival: string | null;
+  /** The code the visitor presents at the gate. Visitors only. */
+  passCode: string | null;
   notificationFailed: boolean;
   createdAt: string;
   updatedAt: string;
@@ -86,6 +90,7 @@ export interface CreateGateEntryInput {
   mobileNumber?: string;
   vehicleNumber?: string;
   remarks?: string;
+  expectedArrival?: string;
   photoKey?: string;
 }
 
@@ -123,6 +128,22 @@ export class GateResource {
 
   list(communityId: string, params?: Query): Promise<Paginated<GateEntry>> {
     return this.http.get('/gate/deliveries', { communityId, ...params });
+  }
+
+  /**
+   * A resident invites a visitor to one of their own flats.
+   *
+   * Self-scoped: no community id, no residentId, and the unit must be one
+   * the caller occupies. The invitation becomes an ordinary VISITOR gate
+   * entry, so security and the admin portal both see it immediately.
+   */
+  inviteVisitor(input: InviteVisitorInput): Promise<GateEntry> {
+    return this.http.post('/gate/deliveries/visitors', input);
+  }
+
+  /** Units the caller may invite a visitor to. */
+  myUnits(): Promise<MyUnit[]> {
+    return this.http.get('/gate/deliveries/my-units');
   }
 
   /** The signed-in resident's own entries — needs no gate permission. */
@@ -203,4 +224,22 @@ export class GateResource {
   deleteGate(communityId: string, id: string): Promise<unknown> {
     return this.http.delete(`/communities/${communityId}/gates/${id}`);
   }
+}
+
+/** A resident announcing their own visitor. No gate, no residentId, no photo. */
+export interface InviteVisitorInput {
+  unitId: string;
+  personName: string;
+  mobileNumber?: string;
+  vehicleNumber?: string;
+  remarks?: string;
+  /** ISO instant. */
+  expectedArrival: string;
+}
+
+export interface MyUnit {
+  id: string;
+  unitNumber: string;
+  communityId: string;
+  block?: { name: string } | null;
 }

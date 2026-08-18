@@ -17,6 +17,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
   ApproveWorkOrderDto,
   AssignWorkOrderDto,
@@ -48,6 +49,7 @@ export class WorkOrderService {
     private readonly timeline: WorkOrderTimelineService,
     private readonly storage: StorageService,
     private readonly events: DomainEventsService,
+    private readonly autoAssign: VendorAutoAssignService,
   ) {}
 
   /**
@@ -144,7 +146,75 @@ export class WorkOrderService {
     // arrived, so hand it back to the person waiting on it.
     await this.resumeOrigin(workOrder, actor, 'approved');
     this.publish(DomainEventName.WorkOrderApproved, updated, actor);
-    return this.present(updated);
+    // Approval is the moment the work becomes real, so it is the moment to find
+    // it an owner. Doing this at recommend() would assign a vendor to spending
+    // nobody has agreed to yet.
+    const assigned = await this.tryAutoAssign(updated, actor);
+    return this.present(assigned ?? updated);
+  }
+
+  /**
+   * Give an unassigned work order to the least-loaded vendor who covers this
+   * community and services this kind of asset.
+   *
+   * Preventive maintenance generates work orders from an asset with nobody to
+   * do them, and they sat unassigned until someone noticed — tickets and
+   * service requests have been auto-assigned since Sprint B, work orders were
+   * simply never wired to the same picker.
+   *
+   * Categories come from the linked asset's category, which is the only signal
+   * a maintenance work order carries about what trade it needs. No asset, or no
+   * matching vendor, means it stays unassigned for a human — never an error:
+   * losing the assignment must never lose the work order.
+   */
+  private async tryAutoAssign(
+    workOrder: { id: string; communityId: string; assetId: string | null; assignedStaffId: string | null; assignedVendorId: string | null },
+    actor: AuthenticatedUser,
+  ) {
+    if (workOrder.assignedStaffId || workOrder.assignedVendorId) return null;
+    if (!workOrder.assetId) return null;
+    try {
+      const asset = await this.prisma.asset.findUnique({
+        where: { id: workOrder.assetId },
+        select: { category: { select: { name: true } }, community: { select: { tenantId: true } } },
+      });
+      const categoryName = asset?.category?.name;
+      const tenantId = asset?.community?.tenantId;
+      if (!categoryName || !tenantId) return null;
+
+      const picked = await this.autoAssign.pick({
+        tenantId,
+        communityId: workOrder.communityId,
+        categories: [categoryName],
+      });
+      if (!picked) {
+        this.logger.debug(`No vendor matched for work order ${workOrder.id} — left unassigned`);
+        return null;
+      }
+
+      const updated = await this.prisma.workOrder.update({
+        where: { id: workOrder.id },
+        data: {
+          assignedVendorId: picked.vendorId,
+          assignedAt: new Date(),
+          // assignedById stays null: no person made this call.
+          status: W.ASSIGNED,
+        },
+      });
+      await this.timeline.record({
+        workOrderId: workOrder.id,
+        type: WorkOrderEventType.ASSIGNED,
+        actorId: actor.id,
+        metadata: { vendorId: picked.vendorId, auto: true, workload: picked.openWorkload },
+      });
+      this.logger.log(
+        `Auto-assigned work order ${workOrder.id} → vendor ${picked.vendorId} (workload ${picked.openWorkload})`,
+      );
+      return updated;
+    } catch (err) {
+      this.logger.error(`Auto-assign failed for work order ${workOrder.id}`, err as Error);
+      return null;
+    }
   }
 
   /**
@@ -291,8 +361,18 @@ export class WorkOrderService {
    * work is happening and where it has got to, not the contractor's pricing.
    */
   async findMine(query: QueryWorkOrderDto, actor: AuthenticatedUser): Promise<Paginated<unknown>> {
+    // Scope to the community being asked about. One person can hold flats in
+    // several communities, so matching on their unit ids alone returned every
+    // community's work at once — and the resident app, showing one community,
+    // listed the wrong one's maintenance.
     const assignments = await this.prisma.residentUnit.findMany({
-      where: { resident: { userId: actor.id, deletedAt: null } },
+      where: {
+        resident: {
+          userId: actor.id,
+          deletedAt: null,
+          ...(query.communityId ? { communityId: query.communityId } : {}),
+        },
+      },
       select: { unitId: true },
     });
     const unitIds = [...new Set(assignments.map((a) => a.unitId))];
@@ -301,6 +381,7 @@ export class WorkOrderService {
     const where: Prisma.WorkOrderWhereInput = {
       deletedAt: null,
       unitId: { in: unitIds },
+      ...(query.communityId ? { communityId: query.communityId } : {}),
       ...(query.status ? { status: query.status } : {}),
     };
 

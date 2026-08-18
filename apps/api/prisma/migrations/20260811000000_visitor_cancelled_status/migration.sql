@@ -1,0 +1,11 @@
+-- A cancelled visit is history, not a deletion.
+--
+-- `cancel()` soft-deleted the row, and every list filters `deletedAt IS NULL`, so
+-- a cancelled visit disappeared from the resident's list AND the admin's — with
+-- no way to answer "who was expected and what happened to them". Rejection was
+-- already kept visible; only cancellation vanished.
+--
+-- CANCELLED cannot reuse REJECTED: they are different acts by different people
+-- (the host withdrew the invitation vs. it was refused), and the gate log has to
+-- distinguish them.
+ALTER TYPE "VisitorStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';

@@ -62,9 +62,14 @@ export function useMyRequests() {
         // Maintenance raised against this resident's flat. Self-scoped
         // server-side (residents hold no work-order permission), so unlike the
         // two lists above it needs no client-side ownership filter.
-        queryKey: ['my', 'work-orders'],
-        queryFn: () => living.workOrder.mine({ limit: 50, sortBy: 'createdAt', sortDir: 'desc' }),
-        enabled: !!uid,
+        // communityId belongs in the key AND in the request. Without it in the
+        // key this never refetched on a community switch, so a resident with
+        // flats in two communities kept seeing the first one's work orders while
+        // the two lists above correctly reloaded — the "All" tab showed tickets
+        // and requests for one community next to work orders from the other.
+        queryKey: ['my', 'work-orders', communityId],
+        queryFn: () => living.workOrder.mine({ communityId: communityId!, limit: 50, sortBy: 'createdAt', sortDir: 'desc' }),
+        enabled,
       },
     ],
   });

@@ -37,11 +37,14 @@ export class CreateServiceDto {
 
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() isActive?: boolean;
 
-  @ApiPropertyOptional({
-    description: 'List price for one delivery (₹). Used to price packages and show savings.',
+  @ApiProperty({
+    description:
+      'List price for one delivery (₹). Required — packages sum these to compute ' +
+      'the advertised saving, and an unpriced member voided the whole total. ' +
+      'Use 0 for a service the community provides free of charge.',
   })
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
-  basePrice?: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+  basePrice!: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional() @Type(() => Number) @IsInt() @Min(0)
@@ -58,6 +61,18 @@ export class SetServiceStatusDto {
 }
 
 export class QueryServiceDto {
+  /**
+   * Which community's catalog to return.
+   *
+   * Each community is its own tenant, and services are scoped per tenant with
+   * per-tenant activation overrides. Without this the list fell back to the
+   * caller's HOME tenant from the token — so a resident who belongs to two
+   * communities saw the first one's catalog no matter which community the app
+   * was showing.
+   */
+  @ApiPropertyOptional({ description: "Return this community's catalog (defaults to the caller's home tenant)" })
+  @IsOptional() @IsString() communityId?: string;
+
   @ApiPropertyOptional({ description: 'Only active services', default: false })
   @IsOptional() @Type(() => Boolean) @IsBoolean()
   activeOnly?: boolean;

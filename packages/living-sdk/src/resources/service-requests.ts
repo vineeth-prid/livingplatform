@@ -54,7 +54,8 @@ export class ServiceRequestResource {
   }
 
   // Catalog
-  listServices(params?: { activeOnly?: boolean; search?: string }): Promise<Service[]> {
+  /** `communityId` selects that community's catalog; omit for the caller's home tenant. */
+  listServices(params?: { communityId?: string; activeOnly?: boolean; search?: string }): Promise<Service[]> {
     return this.http.get('/services', params);
   }
   createService(input: Body): Promise<Service> {

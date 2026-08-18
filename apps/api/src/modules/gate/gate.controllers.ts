@@ -16,6 +16,7 @@ import {
   CreateGateEntryDto,
   GateDecisionDto,
   GateStatisticsQueryDto,
+  InviteVisitorDto,
   QueryGateEntryDto,
   UpdateGateEntryDto,
 } from './dto/gate-entry.dto';
@@ -79,6 +80,27 @@ export class GateDeliveryController {
   @ApiOperation({ summary: 'My own gate entries (resident self-service)' })
   mine(@Query() query: QueryGateEntryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.entries.findMine(query, user);
+  }
+
+  /**
+   * A resident invites a visitor to their own flat.
+   *
+   * No `@RequirePermissions`: residents deliberately hold no gate permission,
+   * and the authorisation is the unit assignment itself (same posture as the
+   * `/mine` route above). The service refuses any unit the caller does not
+   * occupy.
+   */
+  @Post('visitors')
+  @ApiOperation({ summary: 'Invite a visitor to one of my units (resident self-service)' })
+  inviteVisitor(@Body() dto: InviteVisitorDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.entries.inviteVisitor(dto, user);
+  }
+
+  /** The units a resident may invite a visitor to. */
+  @Get('my-units')
+  @ApiOperation({ summary: 'Units I occupy, for the visitor invite form' })
+  myUnits(@CurrentUser() user: AuthenticatedUser) {
+    return this.entries.myUnits(user);
   }
 
   @Get('units/:unitId/occupants')

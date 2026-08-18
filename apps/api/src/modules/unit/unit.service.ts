@@ -100,6 +100,10 @@ export class UnitService {
             parkingSlots: row.parkingSlots ?? 0,
             builtUpArea: row.builtUpArea,
             ownership: row.ownership ?? 'UNKNOWN',
+            // Honour the row's status. Everything imported previously took the
+            // schema's VACANT default, which then read as an empty flat during
+            // maintenance billing even when the row named an owner.
+            ...(row.status ? { status: row.status } : {}),
             ownerName: row.ownerName,
             ownerPhone: row.ownerPhone,
             createdById: actor.id,
@@ -165,8 +169,16 @@ export class UnitService {
       where: { blockId, level, deletedAt: null },
       select: { id: true },
     });
+    // Name it. An unnamed floor falls back to `Level ${level}` in every picker,
+    // so an admin who only ever imported units saw floors they had not created
+    // and could not find in the Floors list to rename. Storing the label makes
+    // the row explicit and editable instead of a computed ghost.
     const id = found?.id ?? (await this.prisma.floor.create({
-      data: { communityId, blockId, level, createdById: actor.id, updatedById: actor.id },
+      data: {
+        communityId, blockId, level,
+        name: `Level ${level}`,
+        createdById: actor.id, updatedById: actor.id,
+      },
       select: { id: true },
     })).id;
     cache.set(key, id);

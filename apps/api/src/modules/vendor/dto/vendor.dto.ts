@@ -9,6 +9,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { IsMobileNumber } from '../../../common/decorators/is-mobile-number.decorator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
@@ -52,7 +53,7 @@ export class CreateVendorDto {
   serviceCategories?: string[];
 
   @ApiProperty({ example: '+91 90000 11111' })
-  @IsString() @MinLength(4) @MaxLength(40)
+  @IsString() @IsMobileNumber()
   phone!: string;
 
   @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;

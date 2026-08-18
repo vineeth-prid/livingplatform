@@ -7,14 +7,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ROLE_KEYS, type RoleKey } from '../rbac/rbac.constants';
 import type { ProfileKind } from './user-link.service';
 
-/**
- * Fallback one-time password for provisioned people accounts. The ACTIVE value
- * comes from AUTH_DEFAULT_PASSWORD (see configuration.ts) — this constant is
- * only the documented default so a dev environment works out of the box. The
- * portal forces a change on first login (users.mustChangePassword).
- */
-export const ONE_TIME_PASSWORD = 'Living@123';
-
 /** An Indian mobile number is 10 digits; anything before that is a country code. */
 const MOBILE_DIGITS = 10;
 

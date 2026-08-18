@@ -15,6 +15,8 @@ export interface FieldDef {
   options?: { value: string; label: string }[];
   /** Two-column layout on wider screens. */
   half?: boolean;
+  /** Lower bound for a date/number input — e.g. no arrival before today. */
+  min?: string;
   /** Read-only display (still submitted). */
   readOnly?: boolean;
   /**
@@ -128,6 +130,7 @@ export function FormDrawer({
                     value={values[f.name] ?? ''}
                     onChange={(e) => set(f.name, e.target.value)}
                     placeholder={f.placeholder}
+                    min={f.min}
                     error={errors[f.name]}
                     readOnly={f.readOnly}
                     disabled={f.readOnly}

@@ -7,6 +7,8 @@ import type { StorageService } from '../storage/storage.service';
 import type { DomainEventsService } from '../events/domain-events.service';
 import type { RbacService } from '../rbac/rbac.service';
 import type { TokensService } from '../auth/tokens.service';
+import type { AuthService } from '../auth/auth.service';
+import type { MailService } from '../mail/mail.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 
 /**
@@ -34,7 +36,9 @@ describe('ProvisioningService.loginAsCommunity', () => {
     } as unknown as TokensService;
     const storage = {} as StorageService;
     const events = {} as DomainEventsService;
-    return new ProvisioningService(prisma, tenant, storage, events, rbac, tokens);
+    const auth = {} as unknown as AuthService;
+    const mail = {} as unknown as MailService;
+    return new ProvisioningService(prisma, tenant, storage, events, rbac, tokens, auth, mail);
   };
 
   it('rejects a non-platform caller', async () => {
@@ -95,6 +99,7 @@ describe('ProvisioningService.communityAdmin', () => {
     return new ProvisioningService(
       prisma, tenant, {} as StorageService, {} as DomainEventsService,
       {} as RbacService, {} as TokensService,
+      {} as AuthService, {} as MailService,
     );
   };
 

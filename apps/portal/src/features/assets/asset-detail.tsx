@@ -199,7 +199,7 @@ function AssetEditDrawer({ asset, open, onOpenChange, onSaved }: {
           options={{
             categories: (categoriesQ.data?.items ?? []).map((c) => ({ value: c.id, label: c.name })),
             blocks: blocks.map((b) => ({ value: b.id, label: b.name })),
-            floors: floors.map((f) => ({ value: f.id, label: f.name ?? `Level ${f.level}` })),
+            floors: floors.map((f) => ({ value: f.id, label: f.name ?? `Level ${f.level}`, blockId: f.blockId })),
           }}
           submitting={update.isPending}
           onSubmit={onSubmit}

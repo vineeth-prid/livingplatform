@@ -1,30 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, type BadgeProps } from '@living/ui';
 
 import { living } from '../../lib/living';
 
-type Tone = NonNullable<BadgeProps['tone']>;
-
-export const VISITOR_STATUS = ['PENDING', 'APPROVED', 'CHECKED_IN', 'CHECKED_OUT', 'REJECTED'] as const;
-export const VISITOR_TYPE = ['GUEST', 'DELIVERY', 'SERVICE', 'CAB', 'OTHER'] as const;
-
-const STATUS_TONE: Record<string, Tone> = {
-  PENDING: 'info', APPROVED: 'brand', CHECKED_IN: 'warning', CHECKED_OUT: 'success', REJECTED: 'danger',
-};
-const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
-
-export function VisitorStatusBadge({ status, size = 'sm' }: { status: string; size?: BadgeProps['size'] }) {
-  return <Badge tone={STATUS_TONE[status] ?? 'neutral'} size={size} dot>{humanize(status)}</Badge>;
-}
-export function VisitorTypeBadge({ type, size = 'sm' }: { type: string; size?: BadgeProps['size'] }) {
-  return <Badge tone="neutral" size={size}>{humanize(type)}</Badge>;
-}
+/**
+ * Visitors are VISITOR gate entries.
+ *
+ * They used to live in their own `visitors` table with its own statuses and
+ * lifecycle, which the security console never read — so an invitation approved
+ * here changed nothing at the gate. Everything below now speaks to the gate
+ * engine, and the badges/status list come from `gate-lib` so the portal, the
+ * guard's console and the resident app describe the same record identically.
+ */
+export { GATE_STATUS as VISITOR_STATUS, GateStatusBadge as VisitorStatusBadge, humanize } from '../gate/gate-lib';
 
 export function useVisitor(id: string) {
-  return useQuery({ queryKey: ['visitor', id], queryFn: () => living.visitors.get(id) });
+  return useQuery({ queryKey: ['gate-entry', id], queryFn: () => living.gate.get(id) });
 }
 
-/** Resident options for the resident filter + create form. */
+/** Units for the invite form. A visit is always to a flat. */
+export function useUnitOptions(communityId: string | null) {
+  return useQuery({
+    queryKey: ['units', communityId, 'options'],
+    queryFn: () => living.community.listUnits(communityId!, { limit: 500, sortBy: 'unitNumber', sortDir: 'asc' }),
+    enabled: !!communityId,
+  });
+}
+
+/** Resident options for the resident filter. */
 export function useResidentOptions(communityId: string | null) {
   return useQuery({
     queryKey: ['residents', communityId, 'options'],
@@ -35,16 +37,27 @@ export function useResidentOptions(communityId: string | null) {
 
 export function useVisitorMutations(id?: string) {
   const qc = useQueryClient();
-  const invalidate = () => { void qc.invalidateQueries({ queryKey: ['visitors'] }); if (id) void qc.invalidateQueries({ queryKey: ['visitor', id] }); };
-  const act = (fn: () => Promise<unknown>) => ({ mutationFn: fn, onSuccess: invalidate });
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['gate-entries'] });
+    void qc.invalidateQueries({ queryKey: ['visitors'] });
+    if (id) void qc.invalidateQueries({ queryKey: ['gate-entry', id] });
+  };
 
   return {
-    create: useMutation({ mutationFn: (input: Record<string, unknown>) => living.visitors.create(input), onSuccess: invalidate }),
-    update: useMutation({ mutationFn: (input: Record<string, unknown>) => living.visitors.update(id!, input), onSuccess: invalidate }),
-    approve: useMutation(act(() => living.visitors.approve(id!))),
-    reject: useMutation({ mutationFn: (reason?: string) => living.visitors.reject(id!, reason), onSuccess: invalidate }),
-    checkIn: useMutation(act(() => living.visitors.checkIn(id!))),
-    checkOut: useMutation(act(() => living.visitors.checkOut(id!))),
-    cancel: useMutation(act(() => living.visitors.cancel(id!))),
+    /** Admin invites on a resident's behalf — an ordinary VISITOR gate entry. */
+    create: useMutation({
+      mutationFn: ({ communityId, ...input }: Record<string, unknown> & { communityId: string }) =>
+        living.gate.create(communityId, { entryType: 'VISITOR', ...input } as never),
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: (input: Record<string, unknown>) => living.gate.update(id!, input as never),
+      onSuccess: invalidate,
+    }),
+    approve: useMutation({ mutationFn: (note?: string) => living.gate.approve(id!, note), onSuccess: invalidate }),
+    reject: useMutation({ mutationFn: (note?: string) => living.gate.reject(id!, note), onSuccess: invalidate }),
+    /** The visitor has come and gone. Replaces the old check-in/check-out pair. */
+    complete: useMutation({ mutationFn: () => living.gate.complete(id!), onSuccess: invalidate }),
+    cancel: useMutation({ mutationFn: (note?: string) => living.gate.cancel(id!, note), onSuccess: invalidate }),
   };
 }

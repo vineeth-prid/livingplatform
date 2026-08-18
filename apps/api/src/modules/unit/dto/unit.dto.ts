@@ -95,6 +95,12 @@ export class BulkUnitRowDto {
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) parkingSlots?: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0) builtUpArea?: number;
   @ApiPropertyOptional({ enum: OwnershipType }) @IsOptional() @IsEnum(OwnershipType) ownership?: OwnershipType;
+  /**
+   * Per-row occupancy status. The importer had no way to state this, so every
+   * imported unit landed on the VACANT default — including flats whose owner
+   * details were in the same row.
+   */
+  @ApiPropertyOptional({ enum: UnitStatus }) @IsOptional() @IsEnum(UnitStatus) status?: UnitStatus;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) ownerName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) ownerPhone?: string;
 }

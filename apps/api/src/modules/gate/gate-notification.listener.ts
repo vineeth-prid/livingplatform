@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
-import { NotificationEvent } from '@prisma/client';
+import { GateEntryType, NotificationEvent } from '@prisma/client';
 
 import type { AppConfig } from '../../config/configuration';
 import { DomainEventName, type GateEntryEvent } from '../events/domain-events';
@@ -88,6 +88,7 @@ export class GateNotificationListener {
       select: {
         id: true, entryNumber: true, personName: true, vendorName: true,
         deliveryType: true, mobileNumber: true, createdAt: true,
+        entryType: true, passCode: true,
         gate: { select: { name: true } },
       },
     });
@@ -98,11 +99,35 @@ export class GateNotificationListener {
       select: { unitNumber: true },
     });
 
+    // Wording per entry type. The template used to be written for deliveries
+    // alone, so a visitor a resident had personally invited arrived as "Your
+    // delivery has arrived" from "A delivery" — which reads as a mistake and
+    // buries the one thing that matters, that somebody is waiting at the gate.
+    const isVisitor = entry.entryType === GateEntryType.VISITOR;
+    const wording = isVisitor
+      ? {
+          arrivalNoun: 'Visitor',
+          headline: entry.personName,
+          leadIn: 'Your visitor has arrived at the gate.',
+          personLabel: 'Visitor',
+          holdNoun: 'your visitor',
+        }
+      : {
+          arrivalNoun: 'Delivery',
+          headline: entry.vendorName ?? 'A delivery',
+          leadIn: 'Your delivery has arrived at the gate.',
+          personLabel: 'Delivery person',
+          holdNoun: 'the delivery',
+        };
+
     const gateName = entry.gate?.name ?? 'Main Gate';
     const variables = {
       residentName: '',
       gateName,
-      vendorName: entry.vendorName ?? 'A delivery',
+      ...wording,
+      // Only a delivery has a brand; the template hides the row when absent.
+      vendorName: entry.vendorName,
+      passCode: entry.passCode,
       personName: entry.personName,
       deliveryType: entry.deliveryType ?? null,
       mobileNumber: entry.mobileNumber ?? null,

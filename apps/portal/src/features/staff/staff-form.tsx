@@ -30,7 +30,9 @@ const fields: FieldDef[] = [
   {
     // Moved here from the vendor form. On a vendor it duplicated the service
     // list; on a staff member it is what routes a request to the right person.
-    name: 'categories', label: 'Categories handled', type: 'custom',
+    // Required: with no category this staff member matches nothing and every
+    // request that should reach them falls back to manual assignment.
+    name: 'categories', label: 'Categories handled', type: 'custom', required: true,
     render: (value, set) => (
       <TicketCategoryMultiSelect
         values={value ? value.split(',').filter(Boolean) : []}

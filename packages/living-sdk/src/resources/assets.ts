@@ -60,6 +60,9 @@ export class AssetResource {
   addPhoto(id: string, input: Body): Promise<AssetPhoto> {
     return this.http.post(`/assets/${id}/photos`, input);
   }
+  removePhoto(id: string, photoId: string): Promise<unknown> {
+    return this.http.delete(`/assets/${id}/photos/${photoId}`);
+  }
 }
 
 /** Asset categories: the community-scoped, self-nesting taxonomy. */

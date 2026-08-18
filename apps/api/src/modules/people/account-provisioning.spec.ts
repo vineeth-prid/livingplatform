@@ -1,4 +1,4 @@
-import { normalizePhone, ONE_TIME_PASSWORD } from './account-provisioning.service';
+import { normalizePhone } from './account-provisioning.service';
 
 describe('normalizePhone', () => {
   it('reduces a number to the 10 digits that identify it', () => {
@@ -22,9 +22,5 @@ describe('normalizePhone', () => {
   it('leaves a too-short value alone rather than padding it into a valid-looking key', () => {
     // Rejected upstream as a username; reshaping it here would hide a bad input.
     expect(normalizePhone('12345')).toBe('12345');
-  });
-
-  it('the one-time password is the documented shared secret', () => {
-    expect(ONE_TIME_PASSWORD).toBe('Living@123');
   });
 });

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Check, PackageCheck, Plus, Radio, Send, Truck, X } from 'lucide-react';
 import { LivingApiError, type GateEntry, type RealtimeEvent } from '@living/living-sdk';
 import { useAuth, useRealtime } from '@living/hooks';
-import { cn, timeAgo } from '@living/utils';
+import { cn, formatDateTime, timeAgo } from '@living/utils';
 import {
   Badge, type BadgeProps, Button, EmptyState, Input, SearchInput, Sheet, SheetContent,
   Skeleton, toast,
@@ -26,9 +26,13 @@ const COMMON_VENDORS = ['Swiggy', 'Zomato', 'Amazon', 'Flipkart', 'Blinkit', 'Ze
 const DELIVERY_TYPES = ['FOOD', 'COURIER', 'GROCERY', 'MEDICINE', 'OTHER'];
 
 /**
- * Gate → Deliveries. The guard records an arrival, the resident is notified by
+ * Gate → arrivals. The guard records an arrival, the resident is notified by
  * the Notification Engine, and their decision lands back on this screen over
  * the realtime stream — no refresh, no polling loop.
+ *
+ * Shows every entry type, not only deliveries: a visitor a resident invited in
+ * advance is a VISITOR gate entry on the same list, which is what makes an
+ * invitation visible here at all.
  */
 export function GateDeliveriesScreen() {
   const { communityId } = useWorker();
@@ -129,8 +133,8 @@ export function GateDeliveriesScreen() {
         ) : empty ? (
           <EmptyState
             icon={Truck}
-            title="No deliveries today"
-            description={canCreate ? 'Record one when it arrives at the gate.' : undefined}
+            title="Nothing at the gate today"
+            description={canCreate ? 'Record a delivery or visitor when they arrive.' : undefined}
           />
         ) : (
           <>
@@ -215,6 +219,23 @@ function DeliveryCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
         </div>
         <Badge tone={TONE[entry.status] ?? 'neutral'} size="sm" dot>{humanize(entry.status)}</Badge>
       </div>
+
+      {/* A pre-announced visitor: the guard needs the pass to check against
+          what the person at the gate says, and the expected time to know
+          whether they are early. Deliveries have neither. */}
+      {entry.entryType === 'VISITOR' && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-2xs">
+          <span className="rounded-pill bg-brand/10 px-2 py-0.5 font-medium text-brand">Visitor</span>
+          {entry.passCode && (
+            <span className="rounded-md bg-sunken px-2 py-0.5 font-mono font-bold tracking-widest text-brand">
+              {entry.passCode}
+            </span>
+          )}
+          {entry.expectedArrival && (
+            <span className="text-subtle">Expected {formatDateTime(entry.expectedArrival)}</span>
+          )}
+        </div>
+      )}
 
       {/* The one thing a guard must not miss: nobody was actually reached. */}
       {entry.notificationFailed && waiting && (

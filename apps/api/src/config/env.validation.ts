@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Min,
   MinLength,
   ValidateIf,
   validateSync,
@@ -14,6 +15,14 @@ export enum NodeEnv {
   Test = 'test',
   Production = 'production',
 }
+
+/**
+ * Documented one-time password for provisioned accounts, so a dev environment
+ * works out of the box. Production must override it via AUTH_DEFAULT_PASSWORD —
+ * enforced below, because a default published in this repo is claimable by
+ * anyone who logs in before the real user does.
+ */
+export const DOCUMENTED_DEFAULT_PASSWORD = 'Living@123';
 
 export enum EmailProvider {
   Ses = 'ses',
@@ -42,6 +51,19 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CORS_ORIGINS = 'http://localhost:5173';
+
+  /**
+   * How many reverse proxies sit in front of this process, counted from the
+   * socket outwards. Rate limiting keys on the client IP, so this has to match
+   * the real chain: nginx alone is 1, Cloudflare in front of nginx is 2, no
+   * proxy at all is 0. Too low collapses every user into one shared rate-limit
+   * bucket; too high lets a client forge X-Forwarded-For and pick its own key.
+   */
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  TRUST_PROXY = 0;
 
   /** Force-enable Swagger in production ('true'); disabled there by default. */
   @IsString()
@@ -97,7 +119,7 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(8, { message: 'AUTH_DEFAULT_PASSWORD must be at least 8 characters' })
   @IsOptional()
-  AUTH_DEFAULT_PASSWORD = 'Living@123';
+  AUTH_DEFAULT_PASSWORD = DOCUMENTED_DEFAULT_PASSWORD;
 
   /** Number of previous passwords that may not be reused (0 disables). */
   @Type(() => Number)
@@ -466,6 +488,16 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
       .map((e) => Object.values(e.constraints ?? {}).join(', '))
       .join('\n  - ');
     throw new Error(`Invalid environment configuration:\n  - ${details}`);
+  }
+  if (
+    validated.NODE_ENV === NodeEnv.Production &&
+    validated.AUTH_DEFAULT_PASSWORD === DOCUMENTED_DEFAULT_PASSWORD
+  ) {
+    throw new Error(
+      'Invalid environment configuration:\n  - AUTH_DEFAULT_PASSWORD must be overridden in production; ' +
+        'the fallback is published in this repository, so every provisioned account would be claimable ' +
+        'by whoever logs in first.',
+    );
   }
   return validated;
 }

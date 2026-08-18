@@ -30,7 +30,7 @@ export function AssetCreatePage() {
 
   const categories = (categoriesQ.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }));
   const blockOpts = blocks.map((b) => ({ value: b.id, label: b.name }));
-  const floorOpts = floors.map((f) => ({ value: f.id, label: f.name ?? `Level ${f.level}` }));
+  const floorOpts = floors.map((f) => ({ value: f.id, label: f.name ?? `Level ${f.level}`, blockId: f.blockId }));
 
   if (!hasPermission('asset:create')) {
     return (

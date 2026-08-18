@@ -67,6 +67,20 @@ export class PlatformResource {
   }
 
   /**
+   * Reset the community admin's password, optionally emailing it to them.
+   *
+   * Prefer this over `auth.adminResetPassword` for a community admin: the
+   * temporary password is only knowable at this moment, and `sendEmail` gets it
+   * to the account holder rather than relying on someone copying it off screen.
+   */
+  resetCommunityAdminPassword(
+    communityId: string,
+    sendEmail = true,
+  ): Promise<{ temporaryPassword: string; email: string; emailedTo: string | null; message: string }> {
+    return this.http.post(`/admin/communities/${communityId}/admin/reset-password`, { sendEmail });
+  }
+
+  /**
    * "Log in as" a community's Association Admin (Platform Admin only). Swaps the
    * client's tokens to the community admin's session — the caller is responsible
    * for stashing the platform tokens first if it wants to return.

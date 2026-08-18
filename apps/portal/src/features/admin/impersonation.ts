@@ -23,8 +23,29 @@ export function beginImpersonation(communityName: string): void {
   }
 }
 
-/** Undo the stash if the swap failed. */
+/**
+ * Undo a failed swap — and put the platform-admin tokens back.
+ *
+ * `loginAsCommunity` replaces the client's tokens as part of its own call, so by
+ * the time anything downstream can fail the session is ALREADY a community
+ * admin's. Only clearing the stash left the platform admin holding a community
+ * session on the platform-admin page: the community list then returned just
+ * that one community, and "Log in as admin" answered 403 — which is the
+ * "no other communities listed, button stuck" state. Restoring is the whole
+ * point of having stashed them.
+ */
 export function cancelImpersonation(): void {
+  const raw = localStorage.getItem(KEY);
+  if (raw) {
+    try {
+      const { platform } = JSON.parse(raw) as Stash;
+      if (platform?.accessToken && platform?.refreshToken) {
+        living.tokenStore.set(platform);
+      }
+    } catch {
+      /* nothing to restore */
+    }
+  }
   localStorage.removeItem(KEY);
 }
 

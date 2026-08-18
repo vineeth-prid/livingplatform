@@ -376,6 +376,9 @@ enum VisitorStatus {
   CHECKED_IN
   CHECKED_OUT
   REJECTED
+  /// Withdrawn by the host (or a manager). Kept in the list as history —
+  /// distinct from REJECTED, which is a refusal by someone else.
+  CANCELLED
 }
 
 enum VisitorType {
@@ -1402,9 +1405,10 @@ model Service {
   isActive                 Boolean  @default(true)
   isSystem                 Boolean  @default(false)
   sortOrder                Int      @default(0)
-  /// List price for one delivery. Optional — a community may run a service
-  /// free of charge; packages use it to compute the advertised saving.
-  basePrice                Decimal? @db.Decimal(14, 2)
+  /// List price for one delivery. Required — a package sums these to compute
+  /// its advertised saving, and one unpriced member used to void the whole
+  /// total. Zero is the way to express "free of charge".
+  basePrice                Decimal  @default(0) @db.Decimal(14, 2)
 
   requests        ServiceRequest[]
   packageItems    ServicePackageItem[]
@@ -2796,6 +2800,12 @@ model GateEntry {
   mobileNumber      String?
   vehicleNumber     String?
   remarks           String?
+  /// When the visitor is expected. Set for a VISITOR entry a resident raises
+  /// in advance; null for a walk-up arrival logged at the gate.
+  expectedArrival   DateTime?
+  /// Short gate pass shown to the visitor, unique within the community. Only
+  /// pre-announced visits carry one — a delivery has nothing to present.
+  passCode          String?
   /// Storage key of the gate photo (StorageService), null when none taken.
   photoKey          String?
 
@@ -2823,6 +2833,7 @@ model GateEntry {
   updatedById String?
 
   @@unique([communityId, entryNumber])
+  @@unique([communityId, passCode])
   @@index([communityId, status])
   @@index([communityId, entryType, createdAt])
   @@index([communityId, createdAt])

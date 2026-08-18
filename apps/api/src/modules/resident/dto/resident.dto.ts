@@ -11,6 +11,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { IsMobileNumber } from '../../../common/decorators/is-mobile-number.decorator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
@@ -37,7 +38,7 @@ export class CreateResidentDto {
   lastName!: string;
 
   @ApiProperty({ example: '+91 98765 43210' })
-  @IsString() @MinLength(4) @MaxLength(40)
+  @IsString() @IsMobileNumber()
   mobile!: string;
 
   @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;
@@ -76,7 +77,7 @@ export class UpdateResidentDto extends PartialType(CreateResidentDto) {}
 export class BulkResidentRowDto {
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) firstName!: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) lastName!: string;
-  @ApiProperty() @IsString() @MinLength(4) @MaxLength(40) mobile!: string;
+  @ApiProperty({ example: '+91 98765 43210' }) @IsString() @IsMobileNumber() mobile!: string;
   @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;
   @ApiPropertyOptional({ enum: ResidentRole }) @IsOptional() @IsEnum(ResidentRole) occupiedBy?: ResidentRole;
   @ApiPropertyOptional({ description: 'Unit number to map to' }) @IsOptional() @IsString() @MaxLength(40) unit?: string;
@@ -120,7 +121,7 @@ export class CreateFamilyMemberDto {
   lastName?: string;
 
   @ApiProperty({ example: '+91 98765 43210', description: 'Becomes their login username' })
-  @IsString() @MinLength(4) @MaxLength(40)
+  @IsString() @IsMobileNumber()
   mobile!: string;
 
   @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;

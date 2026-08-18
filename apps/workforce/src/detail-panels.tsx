@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Camera, CheckCircle2, Gauge, ImagePlus, Lock, MessageSquare, Paperclip, X,
@@ -273,7 +273,12 @@ export function PhotoPanel({
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [staged, setStaged] = useState<File[]>([]);
-  const q = useQuery({ queryKey, queryFn: api.list });
+  // The stage is part of the key. Both panels read the same endpoint, so with a
+  // shared key they were two observers of one cache entry — either could win
+  // the queryFn, and a refetch triggered by one settled state for both. Keying
+  // per stage keeps "before" and "after" independent; the extra fetch is one
+  // small request against data that is already loaded.
+  const q = useQuery({ queryKey: [...queryKey, stage ?? 'all'], queryFn: api.list });
   // Both panels read the same endpoint, so each shows only its own stage —
   // otherwise "before" and "after" would list identical photos and neither
   // would mean anything.
@@ -282,7 +287,19 @@ export function PhotoPanel({
     ? all.filter((a) => (a as { stage?: string }).stage === stage)
     : all;
 
+  /**
+   * Thumbnails for the staged (not yet uploaded) files.
+   *
+   * Every object URL here pins its File in memory until it is explicitly
+   * revoked — the browser cannot collect it while the URL exists. These were
+   * created on every change to `staged` and never revoked, so each capture,
+   * upload and removal leaked another full-resolution frame. On a phone that
+   * accumulates until the file input silently stops returning anything, which
+   * is why a photo could not be re-added without reloading the page: the reload
+   * was freeing the leak, not resetting any state.
+   */
   const previews = useMemo(() => staged.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [staged]);
+  useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
 
   const upload = useMutation({
     mutationFn: async (files: File[]) => {

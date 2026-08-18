@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { PersonStatus } from '@prisma/client';
 import {
+  ArrayNotEmpty,
   IsArray,
   IsEmail,
   IsEnum,
@@ -9,6 +10,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { IsMobileNumber } from '../../../common/decorators/is-mobile-number.decorator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
@@ -35,14 +37,22 @@ export class CreateStaffDto {
   /**
    * Ticket-category keys this staff member handles. Drives auto-assignment —
    * a request in a matching category is routed to them instead of sitting in
-   * one undifferentiated queue. Empty means manual assignment only.
+   * one undifferentiated queue.
+   *
+   * Required, not optional. A staff member with no categories matches nothing,
+   * so every request they should have picked up went to manual assignment
+   * instead — invisibly, because nothing about the record said it was
+   * incomplete. Making it mandatory at creation is the only point where that is
+   * cheap to fix.
    */
-  @ApiPropertyOptional({ type: [String], example: ['PLUMBING', 'ELECTRICAL'] })
-  @IsOptional() @IsArray() @IsString({ each: true })
-  categories?: string[];
+  @ApiProperty({ type: [String], example: ['PLUMBING', 'ELECTRICAL'] })
+  @IsArray() @IsString({ each: true }) @ArrayNotEmpty({
+    message: 'Select at least one category this staff member handles — it is what routes work to them',
+  })
+  categories!: string[];
 
   @ApiProperty({ example: '+91 90000 22222' })
-  @IsString() @MinLength(4) @MaxLength(40)
+  @IsString() @IsMobileNumber()
   phone!: string;
 
   @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;

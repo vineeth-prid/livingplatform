@@ -10,9 +10,11 @@ import * as argon2 from 'argon2';
 
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { slugify } from '../../common/utils/slug';
+import { AuthService } from '../auth/auth.service';
 import { TokensService } from '../auth/tokens.service';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacService } from '../rbac/rbac.service';
 import { ROLE_KEYS } from '../rbac/rbac.constants';
@@ -47,6 +49,8 @@ export class ProvisioningService {
     private readonly events: DomainEventsService,
     private readonly rbac: RbacService,
     private readonly tokens: TokensService,
+    private readonly auth: AuthService,
+    private readonly mail: MailService,
   ) {}
 
   async provisionCommunity(dto: ProvisionCommunityDto, actor: AuthenticatedUser) {
@@ -132,6 +136,48 @@ export class ProvisioningService {
     return {
       community: this.present(community),
       admin: { ...admin, temporaryPassword },
+    };
+  }
+
+  /**
+   * Reset the community admin's password and (by default) email it to them.
+   *
+   * The password is only ever knowable at this moment — it is stored as an
+   * argon2 hash — so it is both returned to the caller and sent to the account.
+   * The email is awaited rather than fired and forgotten: a platform admin who
+   * is told "sent" has already dismissed the only screen showing the credential,
+   * so a swallowed SMTP failure would strand the community admin locked out.
+   */
+  async resetCommunityAdminPassword(communityId: string, actor: AuthenticatedUser, sendEmail: boolean) {
+    if (!this.tenant.isPlatform) {
+      throw new ForbiddenException('Only a Platform Admin can reset a community admin password');
+    }
+    const community = await this.prisma.community.findFirst({
+      where: { id: communityId, deletedAt: null },
+      select: { id: true, tenantId: true, name: true },
+    });
+    if (!community) throw new NotFoundException('Community not found');
+
+    const admin = await this.findAssociationAdmin(community.tenantId, true);
+    if (!admin) throw new NotFoundException('This community has no association admin');
+
+    const reset = await this.auth.adminResetPassword(admin.id, actor);
+
+    let emailedTo: string | null = null;
+    if (sendEmail) {
+      await this.mail.sendAdminTemporaryPassword({
+        to: admin.email,
+        username: admin.email,
+        temporaryPassword: reset.temporaryPassword,
+        communityName: community.name,
+      });
+      emailedTo = admin.email;
+    }
+
+    return {
+      ...reset,
+      email: admin.email,
+      emailedTo,
     };
   }
 

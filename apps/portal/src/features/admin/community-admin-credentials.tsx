@@ -4,7 +4,7 @@ import { LivingApiError } from '@living/living-sdk';
 import {
   Badge, Button, Dialog, DialogContent, EmptyState, LoadingState, toast, useConfirm,
 } from '@living/ui';
-import { Copy, KeyRound } from 'lucide-react';
+import { Copy, KeyRound, Mail } from 'lucide-react';
 
 import { living } from '../../lib/living';
 
@@ -32,6 +32,8 @@ export function CommunityAdminCredentials({
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [temporary, setTemporary] = useState<string | null>(null);
+  /** Set when the reset also emailed the password, so the dialog can say so. */
+  const [emailedTo, setEmailedTo] = useState<string | null>(null);
 
   const account = useQuery({
     queryKey: ['admin', 'community-admin', communityId],
@@ -44,31 +46,48 @@ export function CommunityAdminCredentials({
     void navigator.clipboard.writeText(text).then(() => toast.success('Copied'));
   };
 
-  async function onReset(userId: string, email: string) {
+  /**
+   * `sendEmail` decides whether the new password is also emailed to the admin.
+   *
+   * Both paths still show it here, because email can be slow, wrong or bounce
+   * and this dialog is the only other place it will ever exist.
+   */
+  async function onReset(email: string, sendEmail: boolean) {
     const ok = await confirm({
       title: `Reset the password for ${communityName}'s admin?`,
       description:
         `${email} will be signed out everywhere and must set a new password at next sign-in. ` +
-        'The temporary password is shown once — copy it before closing.',
-      confirmLabel: 'Reset password',
+        (sendEmail
+          ? `The temporary password will be emailed to ${email}, and shown here once as well.`
+          : 'The temporary password is shown once — copy it before closing.'),
+      confirmLabel: sendEmail ? 'Reset and email' : 'Reset password',
       tone: 'danger',
     });
     if (!ok) return;
 
     setBusy(true);
     try {
-      const result = await living.auth.adminResetPassword(userId);
+      const result = await living.platform.resetCommunityAdminPassword(communityId, sendEmail);
       setTemporary(result.temporaryPassword);
+      setEmailedTo(result.emailedTo);
+      if (result.emailedTo) toast.success(`Password reset and emailed to ${result.emailedTo}`);
+      else toast.success('Password reset');
       void account.refetch();
     } catch (err) {
-      toast.error(err instanceof LivingApiError ? err.message : 'Could not reset the password');
+      // A failure here may mean the password WAS reset but the email did not go
+      // out, so say so rather than implying nothing happened.
+      toast.error(
+        err instanceof LivingApiError
+          ? `${err.message} — if the reset went through, use "Reset without email" and copy the password.`
+          : 'Could not reset the password',
+      );
     } finally {
       setBusy(false);
     }
   }
 
   const close = (next: boolean) => {
-    if (!next) setTemporary(null);
+    if (!next) { setTemporary(null); setEmailedTo(null); }
     onOpenChange(next);
   };
 
@@ -122,7 +141,9 @@ export function CommunityAdminCredentials({
                   </Button>
                 </div>
                 <p className="text-xs text-subtle">
-                  Shown once. Copy it now — closing this dialog is the last you will see of it.
+                  {emailedTo
+                    ? `Emailed to ${emailedTo}. Also shown once here — copy it if you would rather hand it over directly.`
+                    : 'Shown once. Copy it now — closing this dialog is the last you will see of it.'}
                 </p>
               </div>
             ) : (
@@ -133,14 +154,17 @@ export function CommunityAdminCredentials({
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="secondary" onClick={() => close(false)}>Close</Button>
-              <Button
-                loading={busy}
-                onClick={() => onReset(account.data.id, account.data.email)}
-              >
-                <KeyRound className="h-4 w-4" />
-                {temporary ? 'Reset again' : 'Reset password'}
+              {/* Reset-without-email stays available: the stored address may be
+                  wrong or unreachable, and in that case emailing the credential
+                  achieves nothing while still invalidating the old password. */}
+              <Button variant="ghost" loading={busy} onClick={() => onReset(account.data.email, false)}>
+                Reset without email
+              </Button>
+              <Button loading={busy} onClick={() => onReset(account.data.email, true)}>
+                <Mail className="h-4 w-4" />
+                {temporary ? 'Reset and email again' : 'Reset and email to admin'}
               </Button>
             </div>
           </div>

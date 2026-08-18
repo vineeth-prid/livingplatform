@@ -36,14 +36,44 @@ function parseHhMm(value?: string | null): number | null {
   return h * 60 + min;
 }
 
-const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+/**
+ * Wall-clock minutes past midnight, read in the community's own timezone.
+ *
+ * This used to be `d.getHours() * 60 + d.getMinutes()`, which reads the clock of
+ * whatever machine the API happens to run on. Bookings arrive as absolute UTC
+ * instants and opening hours are stored as local wall-clock strings ("06:00"),
+ * so on a UTC server every Indian morning was shifted back 5h30m: a 10:00 IST
+ * booking was evaluated as 04:30, landed before a 06:00 opening, and came back
+ * as "outside the amenity operating hours". The resident's own client-side
+ * check passed, because it compared the local strings — so the app said the
+ * slot was fine and the server then refused it.
+ */
+function minutesOfDay(d: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  // 24:00 is a legal en-GB rendering of midnight; normalise it to 0.
+  return (hour % 24) * 60 + minute;
+}
 
-/** Enforce the slot sits within the amenity's opening hours (no-op if unset). */
-export function assertWithinOperatingHours(start: Date, end: Date, hours?: OperatingHours | null): void {
+/**
+ * Enforce the slot sits within the amenity's opening hours (no-op if unset).
+ *
+ * `timezone` is the community's (schema default `Asia/Kolkata`) — the hours are
+ * that community's wall clock, not the server's.
+ */
+export function assertWithinOperatingHours(
+  start: Date,
+  end: Date,
+  hours?: OperatingHours | null,
+  timezone = 'Asia/Kolkata',
+): void {
   const open = parseHhMm(hours?.openingTime);
   const close = parseHhMm(hours?.closingTime);
   if (open == null || close == null) return; // unrestricted
-  if (minutesOfDay(start) < open || minutesOfDay(end) > close) {
+  if (minutesOfDay(start, timezone) < open || minutesOfDay(end, timezone) > close) {
     throw new BadRequestException('Booking falls outside the amenity operating hours');
   }
 }

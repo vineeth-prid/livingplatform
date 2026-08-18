@@ -87,6 +87,14 @@ export function AnnouncementsPage() {
 
 const dateInput = (iso?: string | null) => (iso ? iso.slice(0, 10) : '');
 
+/** Today, or the value already stored if that is earlier — so an existing
+ *  announcement stays editable without its own date being rejected. */
+const minDate = (existing?: string | null) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const stored = dateInput(existing);
+  return stored && stored < today ? stored : today;
+};
+
 function AnnouncementDrawer({ communityId, announcement, open, onClose, onSaved }: { communityId: string; announcement: Announcement | null; open: boolean; onClose: () => void; onSaved: () => void }) {
   const qc = useQueryClient();
   const editing = !!announcement;
@@ -125,8 +133,16 @@ function AnnouncementDrawer({ communityId, announcement, open, onClose, onSaved 
           </FormSection>
           <FormSection title="Schedule" description="Optional — leave blank to publish manually. Set an expiry to auto-hide.">
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Publish at" type="date" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
-              <Input label="Expires at" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              {/* An announcement cannot be published or expire in the past —
+                  a back-dated publish never reaches anyone, and a back-dated
+                  expiry hides it the moment it is saved. `min` on the native
+                  picker states the rule where it is being broken; editing an
+                  existing one keeps its own earlier date valid so a stored
+                  announcement can still be corrected. */}
+              <Input label="Publish at" type="date" min={minDate(announcement?.publishAt)}
+                value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
+              <Input label="Expires at" type="date" min={publishAt || minDate(announcement?.expiresAt)}
+                value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </div>
           </FormSection>
           <FormFooter submitLabel={editing ? 'Save changes' : 'Create draft'} submitting={save.isPending} onSubmit={submit} onCancel={onClose} />

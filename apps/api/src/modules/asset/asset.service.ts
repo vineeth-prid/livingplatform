@@ -125,10 +125,16 @@ export class AssetService {
     });
     if (!asset) throw new NotFoundException('Asset not found');
     await this.access.assert(asset.communityId);
+    // Signed URLs, not public ones: the bucket is private, so a public link
+    // 403s and the asset page shows every photo as "Preview unavailable".
     return {
       ...asset,
-      documents: asset.documents.map((d) => ({ ...d, downloadUrl: this.storage.resolveUrl(d.storageKey) })),
-      photos: asset.photos.map((p) => ({ ...p, url: this.storage.resolveUrl(p.storageKey) })),
+      documents: await Promise.all(
+        asset.documents.map(async (d) => ({ ...d, downloadUrl: (await this.storage.signDownload(d.storageKey)).url })),
+      ),
+      photos: await Promise.all(
+        asset.photos.map(async (p) => ({ ...p, url: (await this.storage.signDownload(p.storageKey)).url })),
+      ),
     };
   }
 

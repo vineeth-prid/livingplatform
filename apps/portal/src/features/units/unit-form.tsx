@@ -5,7 +5,7 @@ import type { Floor, Unit } from '@living/types';
 
 import { living } from '../../lib/living';
 import { FormDrawer, type FieldDef } from '../master-data';
-import { opt, UNIT_STATUS } from '../master-data/options';
+import { opt, OWNERSHIP, UNIT_STATUS } from '../master-data/options';
 
 /**
  * Floor picker scoped to the selected block.
@@ -110,6 +110,12 @@ export function UnitForm({
     { name: 'parkingSlots', label: 'Parking slots', type: 'number', half: true },
     { name: 'builtUpArea', label: 'Built-up area (sqft)', type: 'number', half: true },
     { name: 'status', label: 'Status', type: 'select', options: opt(UNIT_STATUS), half: true },
+    // How the unit is HELD — a property of the flat, and distinct from the
+    // "Occupied By" role noted below. The bulk importer has always accepted this
+    // column and the list both shows and filters on it, so leaving it off this
+    // form meant a unit added individually silently took the UNKNOWN default and
+    // could only be corrected by re-importing it.
+    { name: 'ownership', label: 'Ownership', type: 'select', options: opt(OWNERSHIP), half: true },
     // "Occupied By" removed: owner-vs-tenant is a property of the RESIDENT
     // mapped to the unit, not of the unit itself, and it is captured when a
     // resident is assigned. Two places to state the same fact meant they

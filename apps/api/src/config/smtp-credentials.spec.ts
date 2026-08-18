@@ -1,3 +1,5 @@
+import 'reflect-metadata'; // configuration.ts reaches env.validation.ts's decorators; main.ts does this at runtime.
+
 import { configuration } from './configuration';
 
 /**

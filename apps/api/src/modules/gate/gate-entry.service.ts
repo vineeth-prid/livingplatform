@@ -27,9 +27,11 @@ import {
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { generatePassCode } from '../community-ops/passcode';
 import {
   CreateGateEntryDto,
   GateDecisionDto,
+  InviteVisitorDto,
   QueryGateEntryDto,
   UpdateGateEntryDto,
 } from './dto/gate-entry.dto';
@@ -113,6 +115,8 @@ export class GateEntryService {
         mobileNumber: dto.mobileNumber?.trim() || null,
         vehicleNumber: dto.vehicleNumber?.trim() || null,
         remarks: dto.remarks?.trim() || null,
+        expectedArrival: dto.expectedArrival ?? null,
+        passCode: dto.entryType === GateEntryType.VISITOR ? await this.uniquePassCode(communityId) : null,
         photoKey: dto.photoKey || null,
         createdById: actor.id,
         updatedById: actor.id,
@@ -439,6 +443,70 @@ export class GateEntryService {
    * The signed-in resident's own entries. Self-scoped, so it carries no RBAC
    * permission — a resident holds none of the gate permissions by design.
    */
+
+  /**
+   * A resident announces a visitor to one of their own flats.
+   *
+   * Separate entry point from `create` because the authority is different.
+   * `create` is the gate desk logging an arrival and is gated on
+   * `gate:entry:create`; this is self-service and carries no permission at all,
+   * exactly like `/residents/me` — the resident's own unit assignments ARE the
+   * authorisation. That is also what stops a resident inviting someone to a flat
+   * they do not occupy: the unit has to be one of theirs or this throws.
+   *
+   * Everything after the check is the ordinary gate lifecycle, so the invitation
+   * reaches the security console and the admin portal the moment it exists, and
+   * either can approve or reject it. Before this, an invitation was written to a
+   * separate `visitors` table that the gate desk never read.
+   */
+  async inviteVisitor(dto: InviteVisitorDto, actor: AuthenticatedUser) {
+    const assignment = await this.prisma.residentUnit.findFirst({
+      where: {
+        unitId: dto.unitId,
+        resident: { userId: actor.id, deletedAt: null },
+      },
+      select: {
+        residentId: true,
+        unit: { select: { id: true, communityId: true, unitNumber: true } },
+      },
+    });
+    if (!assignment) {
+      throw new ForbiddenException(
+        'You can only invite a visitor to a unit you occupy',
+      );
+    }
+
+    return this.create(
+      assignment.unit.communityId,
+      {
+        entryType: GateEntryType.VISITOR,
+        unitId: assignment.unit.id,
+        residentId: assignment.residentId,
+        personName: dto.personName,
+        mobileNumber: dto.mobileNumber,
+        vehicleNumber: dto.vehicleNumber,
+        remarks: dto.remarks,
+        expectedArrival: dto.expectedArrival,
+      },
+      actor,
+    );
+  }
+
+  /** The units this resident may invite visitors to. */
+  async myUnits(actor: AuthenticatedUser) {
+    const rows = await this.prisma.residentUnit.findMany({
+      where: { resident: { userId: actor.id, deletedAt: null } },
+      select: {
+        unit: {
+          select: {
+            id: true, unitNumber: true, communityId: true,
+            block: { select: { name: true } },
+          },
+        },
+      },
+    });
+    return rows.map((r) => r.unit);
+  }
   async findMine(query: QueryGateEntryDto, actor: AuthenticatedUser): Promise<Paginated<unknown>> {
     const residentIds = await this.myResidentIds(actor);
     if (residentIds.length === 0) return paginate([], 0, query);
@@ -446,6 +514,10 @@ export class GateEntryService {
     const where: Prisma.GateEntryWhereInput = {
       deletedAt: null,
       residentId: { in: residentIds },
+      // A resident can hold flats in more than one community; without this the
+      // list mixes them and the app, showing one community, displays another's
+      // arrivals.
+      ...(query.communityId ? { communityId: query.communityId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.pendingOnly ? { status: { in: AWAITING } } : {}),
       ...(query.entryType ? { entryType: query.entryType } : {}),
@@ -487,6 +559,8 @@ export class GateEntryService {
   ): Promise<Prisma.GateEntryWhereInput> {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
     const where: Prisma.GateEntryWhereInput = {
       communityId,
@@ -504,7 +578,21 @@ export class GateEntryService {
       ...(query.deliveryType
         ? { deliveryType: { equals: query.deliveryType, mode: 'insensitive' } }
         : {}),
-      ...(query.todayOnly ? { createdAt: { gte: startOfToday } } : {}),
+      // "Today" means today's ARRIVALS, not today's records.
+      //
+      // Filtering on createdAt alone was right while every entry was a delivery
+      // logged as it turned up. A visitor is announced in advance, so an
+      // invitation raised last week for this afternoon was created outside the
+      // window and never reached the guard's screen — the resident had a gate
+      // pass for a visit security could not see.
+      ...(query.todayOnly
+        ? {
+            OR: [
+              { createdAt: { gte: startOfToday } },
+              { expectedArrival: { gte: startOfToday, lt: startOfTomorrow } },
+            ],
+          }
+        : {}),
       ...(!query.todayOnly && (query.dateFrom || query.dateTo)
         ? {
             createdAt: {
@@ -675,6 +763,25 @@ export class GateEntryService {
   }
 
   /** Sequential per-community reference: GE-000001. Gaps are acceptable. */
+
+  /**
+   * A gate pass the visitor can be told over the phone.
+   *
+   * Unique per community rather than globally: the code is only ever presented
+   * at one community's gate, and a global namespace would exhaust a 6-character
+   * alphabet far sooner across a large estate.
+   */
+  private async uniquePassCode(communityId: string): Promise<string> {
+    for (let i = 0; i < 6; i++) {
+      const code = generatePassCode();
+      const clash = await this.prisma.gateEntry.findFirst({
+        where: { communityId, passCode: code },
+        select: { id: true },
+      });
+      if (!clash) return code;
+    }
+    return generatePassCode(8); // vanishingly unlikely fallback
+  }
   private async nextEntryNumber(communityId: string): Promise<string> {
     const count = await this.prisma.gateEntry.count({ where: { communityId } });
     return `GE-${String(count + 1).padStart(6, '0')}`;

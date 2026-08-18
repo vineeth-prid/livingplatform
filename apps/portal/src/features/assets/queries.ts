@@ -65,13 +65,37 @@ export function useAssetMutations(id?: string) {
     onSuccess: invalidate,
   });
 
+  /**
+   * PUT the bytes, then register the row — in that order, so a record never
+   * exists without an object behind it.
+   *
+   * This step was missing: the portal asked for a signed URL, ignored it, and
+   * saved a photo pointing at something never stored. Every asset photo since
+   * has been an empty reference, which is why the gallery showed "Preview
+   * unavailable" for all of them. The workforce app had the identical bug and
+   * was fixed; this copy was left behind.
+   */
+  async function putBytes(uploadUrl: string, file: File, contentType: string) {
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: file,
+    });
+    if (!res.ok) throw new Error('Could not upload the file — check your connection');
+  }
+
   const addPhoto = useMutation({
     mutationFn: async ({ file, caption }: { file: File; caption?: string }) => {
-      const signed = await living.assets.photoUploadUrl(id!, { fileName: file.name, contentType: file.type || 'application/octet-stream' });
-      // Storage is a metadata-only stub — register the record; the byte PUT wires
-      // in when a real provider lands. Same pattern as work-order attachments.
+      const contentType = file.type || 'application/octet-stream';
+      const signed = await living.assets.photoUploadUrl(id!, { fileName: file.name, contentType });
+      await putBytes(signed.uploadUrl, file, contentType);
       return living.assets.addPhoto(id!, { storageKey: signed.key, caption });
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['asset', id, 'photos'] }),
+  });
+
+  const removePhoto = useMutation({
+    mutationFn: (photoId: string) => living.assets.removePhoto(id!, photoId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['asset', id, 'photos'] }),
   });
 
@@ -79,12 +103,13 @@ export function useAssetMutations(id?: string) {
     mutationFn: async (file: File) => {
       const contentType = file.type || 'application/octet-stream';
       const signed = await living.assets.documentUploadUrl(id!, { fileName: file.name, contentType });
+      await putBytes(signed.uploadUrl, file, contentType);
       return living.assets.addDocument(id!, { fileName: file.name, storageKey: signed.key, mimeType: contentType });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['asset', id, 'documents'] }),
   });
 
-  return { create, update, archive, addPhoto, addDocument };
+  return { create, update, archive, addPhoto, removePhoto, addDocument };
 }
 
 export type { Asset };

@@ -7,17 +7,29 @@ import type { AssetPhoto } from '@living/types';
 
 import { useAssetMutations, useAssetPhotos } from './queries';
 
-/**
- * Asset photo gallery: a responsive grid with an animated lightbox and upload.
- * Storage is a metadata-only stub, so image bytes may not resolve yet — the
- * grid degrades gracefully to a placeholder. No delete (the API has none).
- */
+/** Asset photo gallery: a responsive grid with an animated lightbox, upload
+ *  and per-photo removal. Bytes are signed URLs from the private bucket. */
 export function AssetPhotos({ assetId, canEdit }: { assetId: string; canEdit: boolean }) {
   const q = useAssetPhotos(assetId);
-  const { addPhoto } = useAssetMutations(assetId);
+  const { addPhoto, removePhoto } = useAssetMutations(assetId);
   const inputRef = useRef<HTMLInputElement>(null);
   const [active, setActive] = useState<AssetPhoto | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const photos = q.data ?? [];
+
+  async function onRemove(photoId: string) {
+    setRemovingId(photoId);
+    try {
+      await removePhoto.mutateAsync(photoId);
+      // Close the lightbox if it was showing the photo just removed.
+      setActive((cur) => (cur?.id === photoId ? null : cur));
+      toast.success('Photo removed');
+    } catch (err) {
+      toast.error(err instanceof LivingApiError ? err.message : 'Could not remove the photo');
+    } finally {
+      setRemovingId(null);
+    }
+  }
 
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -51,10 +63,25 @@ export function AssetPhotos({ assetId, canEdit }: { assetId: string; canEdit: bo
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {photos.map((p) => (
-            <button key={p.id} onClick={() => setActive(p)} aria-label={p.caption ?? 'Open photo'}
-              className="group relative aspect-square overflow-hidden rounded-card bg-sunken focus-visible:outline-none focus-visible:shadow-ring">
-              <PhotoImg photo={p} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none" />
-            </button>
+            <div key={p.id} className="group relative aspect-square overflow-hidden rounded-card bg-sunken">
+              <button onClick={() => setActive(p)} aria-label={p.caption ?? 'Open photo'}
+                className="h-full w-full focus-visible:outline-none focus-visible:shadow-ring">
+                <PhotoImg photo={p} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none" />
+              </button>
+              {/* A wrong or blurred shot was permanent — the gallery offered no
+                  way to take one back. */}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => void onRemove(p.id)}
+                  disabled={removingId === p.id}
+                  aria-label={`Remove ${p.caption ?? 'photo'}`}
+                  className="absolute right-1.5 top-1.5 z-10 rounded-full bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80 disabled:opacity-40"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -80,7 +107,8 @@ export function AssetPhotos({ assetId, canEdit }: { assetId: string; canEdit: bo
   );
 }
 
-/** An image that falls back to a placeholder when the (stub) bytes don't resolve. */
+/** An image that falls back to a placeholder when the bytes don't resolve —
+ *  a signed URL that has expired, or an object removed out from under the row. */
 function PhotoImg({ photo, className }: { photo: AssetPhoto; className?: string }) {
   const [broken, setBroken] = useState(false);
   if (broken || !photo.url) {

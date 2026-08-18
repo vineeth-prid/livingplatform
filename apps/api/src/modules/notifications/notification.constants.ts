@@ -38,6 +38,12 @@ export const NOTIFICATION_TEMPLATES = {
   // Sprint 13 — Gate Management. Used for the email/WhatsApp renderings of a
   // gate arrival; in-app and push carry a structured payload instead.
   GATE_ENTRY_ARRIVED: 'gate-entry-arrived',
+  /**
+   * An admin-issued temporary password, sent to the account it belongs to.
+   * The password was previously shown once on screen and nowhere else, so
+   * whoever reset it had to relay it out of band.
+   */
+  ADMIN_TEMPORARY_PASSWORD: 'admin-temporary-password',
 } as const;
 
 export type NotificationTemplateName =

@@ -53,11 +53,14 @@ export class AssetDocumentService {
       where: { assetId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
-    return items.map((d) => this.present(d));
+    return Promise.all(items.map((d) => this.present(d)));
   }
 
-  private present<T extends { storageKey: string }>(doc: T) {
-    return { ...doc, downloadUrl: this.storage.resolveUrl(doc.storageKey) };
+  /** Signed, not public — a private bucket 403s a public URL. See
+   *  ticket-attachment.service.ts for the full explanation. */
+  private async present<T extends { storageKey: string }>(doc: T) {
+    const signed = await this.storage.signDownload(doc.storageKey);
+    return { ...doc, downloadUrl: signed.url };
   }
 
   private publish(asset: { id: string; communityId: string; assetCode: string }, actor: AuthenticatedUser) {

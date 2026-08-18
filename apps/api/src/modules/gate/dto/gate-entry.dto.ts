@@ -3,6 +3,7 @@ import { GateEntryStatus, GateEntryType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsDate,
   IsEnum,
   IsInt,
   IsOptional,
@@ -57,6 +58,9 @@ export class CreateGateEntryDto {
   @IsOptional() @IsString() @MaxLength(40) vehicleNumber?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) remarks?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'When a pre-announced visitor is expected' })
+  @IsOptional() @Type(() => Date) @IsDate() expectedArrival?: Date;
 
   @ApiPropertyOptional({ description: 'Storage key of the gate photo' })
   @IsOptional() @IsString() @MaxLength(500) photoKey?: string;
@@ -160,4 +164,38 @@ export class CreateGateDto {
 
   @ApiPropertyOptional({ default: true })
   @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+/**
+ * A resident announcing a visitor of their own.
+ *
+ * Deliberately not `CreateGateEntryDto`: a resident may not name a `residentId`
+ * (it is always themselves), may not pick a gate, and may not attach a gate
+ * photo. `unitId` is required and checked against the units they actually
+ * occupy — a resident can invite someone to their own flat and nowhere else.
+ */
+export class InviteVisitorDto {
+  @ApiProperty({ description: 'One of your own units' })
+  @IsString() @MinLength(1)
+  unitId!: string;
+
+  @ApiProperty({ example: 'Aditi Rao', description: 'Who is visiting' })
+  @IsString() @MinLength(1) @MaxLength(120)
+  personName!: string;
+
+  @ApiPropertyOptional({ example: '+91 98765 43210' })
+  @IsOptional() @IsString() @MaxLength(40) mobileNumber?: string;
+
+  @ApiPropertyOptional({ example: 'KA01AB1234' })
+  @IsOptional() @IsString() @MaxLength(40) vehicleNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Why they are coming' })
+  @IsOptional() @IsString() @MaxLength(1000) remarks?: string;
+
+  // @IsDate is required for the value to survive the global ValidationPipe's
+  // whitelist — without it the field is stripped and then rejected as "should
+  // not exist". Same reason as booking.dto.ts.
+  @ApiProperty({ type: String, format: 'date-time', description: 'When they are expected' })
+  @Type(() => Date) @IsDate()
+  expectedArrival!: Date;
 }

@@ -176,4 +176,16 @@ export class AssetPhotoController {
   ) {
     return this.photos.add(id, dto, user);
   }
+
+  /** Remove a photo you added — same permission as adding one. */
+  @Delete(':id/photos/:photoId')
+  @RequirePermissions(PERMISSIONS.ASSET_PHOTO_CREATE)
+  @ApiOperation({ summary: 'Remove an asset photo (soft delete; uploader or asset manager)' })
+  remove(
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.photos.remove(id, photoId, user);
+  }
 }

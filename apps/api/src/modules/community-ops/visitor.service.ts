@@ -160,15 +160,27 @@ export class VisitorService {
     return updated;
   }
 
-  /** Resident (or manager) cancels a visit — soft-deletes it. */
+  /**
+   * Resident (or manager) cancels a visit — marks it CANCELLED, keeps the row.
+   *
+   * This used to soft-delete, and every list filters `deletedAt: null`, so the
+   * visit vanished from the resident's list and the admin's alike. A gate record
+   * is history: "who was expected, and what became of them" has to stay
+   * answerable after the fact. Rejection was already kept; cancellation is now
+   * treated the same way, under its own status so the two acts stay distinct.
+   */
   async cancel(id: string, actor: AuthenticatedUser) {
     const visitor = await this.loadOrThrow(id);
     await assertResidentOwnership(this.prisma, visitor.residentId, visitor.communityId, actor, PERMISSIONS.VISITOR_APPROVE);
     if (visitor.status === V.CHECKED_IN) {
       throw new ForbiddenException('A checked-in visitor cannot be cancelled — check them out instead');
     }
-    await this.prisma.visitor.update({ where: { id }, data: { deletedAt: new Date(), updatedById: actor.id } });
-    return { id, cancelled: true };
+    this.assertStatus(visitor.status, [V.PENDING, V.APPROVED], 'cancelled');
+    const updated = await this.prisma.visitor.update({
+      where: { id },
+      data: { status: V.CANCELLED, updatedById: actor.id },
+    });
+    return updated;
   }
 
   // ── internals ──────────────────────────────────────────────────────────────

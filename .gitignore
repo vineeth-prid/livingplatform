@@ -34,6 +34,12 @@ logs/
 npm-debug.log*
 pnpm-debug.log*
 
+# Local agent/tool scratch (claude-flow security audit, vector store)
+.claude-flow/
+.swarm/
+.claude/
+ruvector.db
+
 # Editor / OS
 .DS_Store
 Thumbs.db

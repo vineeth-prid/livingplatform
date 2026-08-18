@@ -8,6 +8,7 @@ import {
 import { Prisma, ServiceRequestStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { CommunityAccessService } from '../tenancy/community-access.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
 import {
   CreateServiceDto,
@@ -25,6 +26,7 @@ export class ServiceCatalogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
+    private readonly access: CommunityAccessService,
   ) {}
 
   /**
@@ -37,8 +39,13 @@ export class ServiceCatalogService {
    * resident app) sees the same effective list without knowing about it.
    */
   async list(query: QueryServiceDto) {
-    const tenantId = this.tenant.tenantId;
-    const scope = this.tenant.isPlatform
+    // A community, when named, decides the tenant — not the caller's home
+    // tenant. `assert` is what keeps that safe: it 404s a community the caller
+    // cannot reach, so this cannot be used to read another tenant's catalog.
+    const tenantId = query.communityId
+      ? (await this.access.assert(query.communityId)).tenantId
+      : this.tenant.tenantId;
+    const scope = this.tenant.isPlatform && !query.communityId
       ? []
       : [{ OR: [{ tenantId: null }, { tenantId }] }];
 
@@ -71,8 +78,8 @@ export class ServiceCatalogService {
     });
 
     // Platform callers see the raw rows — there is no single tenant to resolve
-    // an override against.
-    if (this.tenant.isPlatform || !tenantId) {
+    // an override against. Unless they named a community, which resolves one.
+    if ((this.tenant.isPlatform && !query.communityId) || !tenantId) {
       return query.activeOnly ? services.filter((s) => s.isActive) : services;
     }
 
@@ -213,7 +220,7 @@ export class ServiceCatalogService {
     service: {
       id: string; key: string; name: string; description: string | null;
       estimatedDurationMinutes: number | null; iconKey: string | null; color: string | null;
-      isActive: boolean; sortOrder: number; basePrice: Prisma.Decimal | null;
+      isActive: boolean; sortOrder: number; basePrice: Prisma.Decimal;
     },
     dto: UpdateServiceDto,
   ) {

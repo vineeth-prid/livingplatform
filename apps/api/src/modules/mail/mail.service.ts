@@ -33,6 +33,33 @@ export class MailService {
     await this.enqueue(NOTIFICATION_TEMPLATES.PASSWORD_RESET, to, { resetUrl });
   }
 
+  /**
+   * Send an admin-issued temporary password to the account it belongs to.
+   *
+   * Unlike the two above, this one must report failure: the caller offers it as
+   * an explicit "email the password" action, and silently swallowing an SMTP
+   * error would tell an admin the credential was delivered when it was not —
+   * and they have already closed the one screen that showed it.
+   */
+  async sendAdminTemporaryPassword(input: {
+    to: string;
+    username: string;
+    temporaryPassword: string;
+    communityName: string;
+  }): Promise<void> {
+    await this.notifications.dispatchTemplate(
+      'email',
+      NOTIFICATION_TEMPLATES.ADMIN_TEMPORARY_PASSWORD,
+      input.to,
+      {
+        username: input.username,
+        temporaryPassword: input.temporaryPassword,
+        communityName: input.communityName,
+        signInUrl: `${this.webAppUrl}/login`,
+      },
+    );
+  }
+
   private async enqueue(template: string, to: string, variables: Record<string, unknown>): Promise<void> {
     try {
       await this.notifications.dispatchTemplate('email', template, to, variables);

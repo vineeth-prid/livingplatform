@@ -27,6 +27,16 @@ export function AmenitiesPage() {
   const navigate = useNavigate();
   const [editing, setEditing] = useState<Amenity | null>(null);
   const [creating, setCreating] = useState(false);
+  /**
+   * Bumped every time "New amenity" is opened, so the drawer below gets a fresh
+   * `key` and a genuinely new component instance.
+   *
+   * The key used to be the constant 'new' for every create, so React reused the
+   * instance from last time and the drawer's `useState(amenity?.field ?? '')`
+   * initialisers — which only run on mount — never re-ran. The second amenity
+   * you added therefore opened pre-filled with the first one's details.
+   */
+  const [createNonce, setCreateNonce] = useState(0);
 
   const list = useListQuery<Amenity>({
     queryKey: ['amenities', communityId ?? ''],
@@ -59,9 +69,9 @@ export function AmenitiesPage() {
         filters={[{ key: 'status', placeholder: 'All statuses', options: STATUS }, { key: 'isBookable', placeholder: 'Any', options: BOOKABLE }]}
         createPermission="amenity:create"
         createLabel="New amenity"
-        onCreate={() => setCreating(true)}
+        onCreate={() => { setCreateNonce((n) => n + 1); setCreating(true); }}
       />
-      {communityId && <AmenityDrawer key={editing?.id ?? 'new'} communityId={communityId} amenity={editing} open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }} onSaved={() => list.refetch()} />}
+      {communityId && <AmenityDrawer key={editing?.id ?? `new-${createNonce}`} communityId={communityId} amenity={editing} open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }} onSaved={() => list.refetch()} />}
     </>
   );
 }

@@ -113,7 +113,7 @@ export function ServicesPage() {
       header: 'List price',
       cell: (s) => (
         <span className="text-sm text-body">
-          {s.basePrice != null ? `₹${Number(s.basePrice).toLocaleString('en-IN')}` : '—'}
+          {`₹${Number(s.basePrice ?? 0).toLocaleString('en-IN')}`}
         </span>
       ),
     },
@@ -314,7 +314,9 @@ function ServiceDrawer({
         name,
         description: description || undefined,
         estimatedDurationMinutes: duration ? Number(duration) : undefined,
-        basePrice: basePrice ? Number(basePrice) : undefined,
+        // Always sent: the price is required now, and '0' is a real answer
+        // (free of charge) that must not be turned into "unset".
+        basePrice: Number(basePrice || 0),
       };
       return editing
         ? living.serviceRequest.updateService(service!.id, input)
@@ -360,11 +362,12 @@ function ServiceDrawer({
               />
               <Input
                 label="List price (₹)"
+                required
                 type="number"
                 inputMode="decimal"
                 value={basePrice}
                 onChange={(e) => setBasePrice(e.target.value)}
-                hint="Used to price packages and show savings"
+                hint="Required. Enter 0 if this service is free — packages sum these to show the saving."
               />
               <FullWidth>
                 <TextAreaField label="Description" value={description} onChange={setDescription} />

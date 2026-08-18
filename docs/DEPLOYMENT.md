@@ -52,13 +52,23 @@ docker compose -f docker-compose.production.yml --env-file .env.production up -d
 ```
 
 The API container runs `prisma migrate deploy` on start (applies all migrations
-in order), then boots. First run also needs the seed (roles/permissions/demo):
+in order), then boots. First run also needs the seed — it is what creates the
+roles and permission grants, including SECURITY. No migration inserts roles.
 
 ```bash
-docker compose -f docker-compose.production.yml exec api \
+docker compose -f docker-compose.production.yml exec -e SEED_SKIP_DEMO=true api \
   node node_modules/prisma/build/index.js db seed
 # (or run `pnpm --filter @living/api db:seed` against DATABASE_URL from a shell)
 ```
+
+**`SEED_SKIP_DEMO=true` is the production path.** Without it the seed also
+creates the `living-demo` tenant and two accounts whose password is published
+in this repository (`admin@living.local` / `association@living.local`). Omit the
+flag only on a throwaway environment where you want the demo community.
+
+The seed is idempotent and safe to re-run — but grants are an *authoritative
+sync*: it revokes any permission no longer in the role definition. Always seed
+from the same commit you deployed, never an older checkout.
 
 ## 4. Cloudflare / DNS
 

@@ -11,7 +11,7 @@ import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
-import { AccountProvisioningService } from '../people/account-provisioning.service';
+import { AccountProvisioningService, normalizePhone } from '../people/account-provisioning.service';
 import { UserLinkService } from '../people/user-link.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -53,6 +53,17 @@ export class ResidentService {
     if (dto.userId) {
       await this.userLink.assertLinkable(dto.userId, community.tenantId);
     }
+
+    // Check the unit BEFORE anything is written. This used to run at the end,
+    // via assignUnit, by which point the login account and the resident row were
+    // already committed — so "this unit is already occupied" was returned to the
+    // admin while the resident appeared in the list anyway, unattached and
+    // duplicated on the next attempt. Nothing here is transactional across the
+    // account provisioning, so the only reliable fix is to fail before writing.
+    if (dto.unitId) {
+      await this.assertUnitAssignable(communityId, dto.unitId, dto.occupiedBy);
+    }
+    await this.assertMobileUnused(communityId, dto.mobile);
 
     // Login account: username = mobile, common one-time password. Owners with
     // multiple flats reuse their existing account (userId comes back null).
@@ -293,6 +304,9 @@ export class ResidentService {
     // clash fails the edit rather than leaving the resident on a number that
     // does not sign in.
     if (dto.mobile) {
+      // Same rule as create: an edit must not move this resident onto a number
+      // another resident in the community already holds.
+      await this.assertMobileUnused(existing.communityId, dto.mobile, id);
       await this.accounts.syncLoginPhone({
         userId: existing.userId,
         oldPhone: existing.mobile,
@@ -385,6 +399,66 @@ export class ResidentService {
    * The inverse is untouched: one resident may hold many units, which is how an
    * owner with several flats works. Only the unit side is exclusive.
    */
+  /**
+   * One mobile number, one resident, per community.
+   *
+   * The login layer deliberately REUSES an account when the number is already
+   * known — one human, one login, across every community they belong to (see
+   * account-provisioning.service.ts). That is right for an owner with flats in
+   * two societies. It is wrong here: entering an existing number while adding a
+   * *different* person in the *same* community produced a second resident record
+   * hanging off somebody else's login, and neither record was identifiable
+   * afterwards. Cross-community reuse is untouched — this only rejects a
+   * duplicate inside one community.
+   *
+   * Compared on the normalised number, so "+91 98765 43210" and "9876543210"
+   * are recognised as the same person rather than slipping past as two.
+   */
+  private async assertMobileUnused(
+    communityId: string,
+    mobile: string,
+    exceptResidentId?: string,
+  ): Promise<void> {
+    const normalized = normalizePhone(mobile);
+    const residents = await this.prisma.resident.findMany({
+      where: {
+        communityId,
+        deletedAt: null,
+        ...(exceptResidentId ? { id: { not: exceptResidentId } } : {}),
+      },
+      select: { id: true, firstName: true, lastName: true, mobile: true },
+    });
+    const clash = residents.find((r) => normalizePhone(r.mobile) === normalized);
+    if (!clash) return;
+
+    const name = `${clash.firstName} ${clash.lastName}`.trim();
+    throw new BadRequestException(
+      `${normalized} is already registered to ${name} in this community. ` +
+        'Use a different number, or add this person to that household as a family member.',
+    );
+  }
+
+  /**
+   * The same occupancy rule as `assertUnitAvailable`, for a resident that does
+   * not exist yet — so create() can refuse before it writes anything. Also
+   * checks the unit belongs to the community, which assignUnit does separately.
+   */
+  private async assertUnitAssignable(
+    communityId: string,
+    unitId: string,
+    role: string | undefined,
+  ): Promise<void> {
+    const unit = await this.prisma.unit.findFirst({
+      where: { id: unitId, deletedAt: null },
+      select: { communityId: true },
+    });
+    if (!unit || unit.communityId !== communityId) {
+      throw new BadRequestException('Unit does not belong to this community');
+    }
+    // '' is not a real resident id; it simply never matches the `not` filter.
+    await this.assertUnitAvailable(unitId, '', role ?? 'PRIMARY');
+  }
+
   private async assertUnitAvailable(
     unitId: string,
     residentId: string,

@@ -280,15 +280,24 @@ function PackageDrawer({
   const catalog = services.data ?? [];
   const byId = useMemo(() => new Map(catalog.map((s) => [s.id, s])), [catalog]);
 
-  /** Live saving preview, computed the same way the API freezes it on save. */
+  /**
+   * Live saving preview, computed the way the API freezes it on save.
+   *
+   * A service with no price used to abort the whole sum, so adding one default
+   * service silently blanked a total the user had already built up. Prices are
+   * mandatory now, so the only remaining reason to bail is a service the catalog
+   * has not loaded yet — an unknown price is genuinely unknowable, whereas an
+   * unpriced one is zero.
+   */
   const listPrice = useMemo(() => {
+    if (items.length === 0) return null;
     let total = 0;
     for (const item of items) {
-      const base = byId.get(item.serviceId)?.basePrice;
-      if (base == null) return null;
-      total += Number(base) * item.quantity;
+      const service = byId.get(item.serviceId);
+      if (!service) return null; // still loading — do not show a wrong number
+      total += Number(service.basePrice ?? 0) * item.quantity;
     }
-    return items.length > 0 ? total : null;
+    return total;
   }, [items, byId]);
   const savings = listPrice !== null && price ? Math.max(0, listPrice - Number(price)) : null;
 
@@ -422,7 +431,7 @@ function PackageDrawer({
                   }
                   options={available.map((s: Service) => ({
                     value: s.id,
-                    label: s.basePrice != null ? `${s.name} — ${inr(Number(s.basePrice))}` : s.name,
+                    label: `${s.name} — ${inr(Number(s.basePrice ?? 0))}`,
                   }))}
                   placeholder="Choose a service…"
                 />

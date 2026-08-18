@@ -70,7 +70,6 @@ const GateAnalyticsPage = lazy(() => import('./features/gate/gate-analytics').th
 const GateEntryDetailPage = lazy(() => import('./features/gate/gate-detail').then((m) => ({ default: m.GateEntryDetailPage })));
 
 const VisitorsPage = lazy(() => import('./features/visitors/visitors-list').then((m) => ({ default: m.VisitorsPage })));
-const VisitorDetailPage = lazy(() => import('./features/visitors/visitor-detail').then((m) => ({ default: m.VisitorDetailPage })));
 const AmenitiesPage = lazy(() => import('./features/amenities/amenities').then((m) => ({ default: m.AmenitiesPage })));
 const BookingsPage = lazy(() => import('./features/bookings/bookings').then((m) => ({ default: m.BookingsPage })));
 const DocumentsPage = lazy(() => import('./features/documents/documents').then((m) => ({ default: m.DocumentsPage })));
@@ -156,7 +155,6 @@ const routeTree = rootRoute.addChildren([
 
     // Community Operations (Frontend Sprint 9)
     createRoute({ getParentRoute: () => dashboardRoute, path: '/visitors', component: VisitorsPage, validateSearch: parseListSearch }),
-    createRoute({ getParentRoute: () => dashboardRoute, path: '/visitors/$visitorId', component: VisitorDetailPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/amenities', component: AmenitiesPage, validateSearch: parseListSearch }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/bookings', component: BookingsPage, validateSearch: parseListSearch }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/documents', component: DocumentsPage, validateSearch: parseListSearch }),

@@ -4,14 +4,15 @@ import { Button, Sheet, SheetContent, toast } from '@living/ui';
 import { Download, Upload } from 'lucide-react';
 
 import { living } from '../../lib/living';
+import { OWNERSHIP, UNIT_STATUS } from '../master-data/options';
 
 type Kind = 'units' | 'residents';
 
 /** Column spec per kind: CSV header → row field. Also drives the sample file. */
 const SPEC: Record<Kind, { headers: string[]; sample: string; numeric: string[] }> = {
   units: {
-    headers: ['unitNumber', 'type', 'block', 'phase', 'floorLevel', 'bedrooms', 'bathrooms', 'parkingSlots', 'builtUpArea', 'ownership', 'ownerName', 'ownerPhone'],
-    sample: 'A-101,2BHK,Tower A,Phase 1,1,2,2,1,1150,OWNER_OCCUPIED,Ravi Kumar,9876543210',
+    headers: ['unitNumber', 'type', 'block', 'phase', 'floorLevel', 'bedrooms', 'bathrooms', 'parkingSlots', 'builtUpArea', 'ownership', 'status', 'ownerName', 'ownerPhone'],
+    sample: 'A-101,2BHK,Tower A,Phase 1,1,2,2,1,1150,OWNER_OCCUPIED,OCCUPIED,Ravi Kumar,9876543210',
     numeric: ['floorLevel', 'bedrooms', 'bathrooms', 'parkingSlots', 'builtUpArea'],
   },
   residents: {
@@ -35,8 +36,16 @@ const RULES: Record<Kind, string[]> = {
     'The first row must be the column headers exactly as listed below.',
     '“unitNumber” is required and must be unique within the community — a repeat is rejected, not merged.',
     '“block” and “phase” must already exist. Create the hierarchy first; the importer never invents one.',
+    '“floorLevel” is the exception — a floor that does not exist yet is created for you, named “Level <n>”. It will then appear in the Floors list and anywhere floors are picked.',
     '“floorLevel”, “bedrooms”, “bathrooms”, “parkingSlots” and “builtUpArea” must be plain numbers — no “sq ft”, no commas.',
-    '“ownership” must be one of OWNER_OCCUPIED, RENTED or VACANT.',
+    // Listed from the same constant the Ownership filter and unit form use, so
+    // this can never again name a value the API rejects. It previously said
+    // “RENTED”, which is not in the enum at all — an admin who followed the
+    // instructions had every row of the file refused.
+    `“ownership” must be one of ${OWNERSHIP.join(', ')}.`,
+    // Omitting this used to fall through to the schema's VACANT default, which
+    // then read as an empty flat when maintenance charges were generated.
+    `“status” must be one of ${UNIT_STATUS.join(', ')}. Leave it empty only for a genuinely vacant unit — a row with owner details should say OCCUPIED.`,
     '“ownerPhone” is the 10-digit mobile. A country code is fine and is removed automatically.',
     'Leave a cell empty rather than writing “NA” or “-”; empty means “not set”, text means a value.',
   ],

@@ -78,8 +78,13 @@ export function ServicesScreen() {
   const [pickedPackage, setPickedPackage] = useState<ServicePackage | null>(null);
 
   const services = useQuery({
-    queryKey: ['services', 'active'],
-    queryFn: () => living.serviceRequest.listServices({ activeOnly: true }),
+    // Keyed and requested per community. Without either, a resident who belongs
+    // to two communities kept the first one's catalog after switching — the key
+    // never changed so nothing refetched, and the request had no community so
+    // the API answered for their home tenant regardless.
+    queryKey: ['services', 'active', communityId],
+    queryFn: () => living.serviceRequest.listServices({ communityId: communityId!, activeOnly: true }),
+    enabled: !!communityId,
   });
 
   const packages = useQuery({

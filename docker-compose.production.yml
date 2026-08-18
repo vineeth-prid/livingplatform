@@ -90,6 +90,16 @@ services:
       WEB_APP_URL: ${WEB_APP_URL}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      # Both are enforced at boot under NODE_ENV=production (see env.validation.ts).
+      # --env-file only feeds ${...} interpolation here; a var absent from this
+      # list never reaches the container, so the API would refuse to start.
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      AUTH_DEFAULT_PASSWORD: ${AUTH_DEFAULT_PASSWORD}
+      # Web Push. Optional — the push channel reports unhealthy and stands down
+      # when unset; every other notification channel is unaffected.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}

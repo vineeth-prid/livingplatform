@@ -1,4 +1,4 @@
-import { EnvironmentVariables } from './env.validation';
+import { DOCUMENTED_DEFAULT_PASSWORD, EnvironmentVariables } from './env.validation';
 
 /**
  * Structured, typed configuration derived from validated env vars.
@@ -11,6 +11,8 @@ export function configuration() {
     env: env.NODE_ENV,
     port: Number(env.PORT ?? 4000),
     apiPrefix: env.API_PREFIX ?? 'api',
+    /** Reverse-proxy hop count; see TRUST_PROXY. Rate limiting depends on it. */
+    trustProxy: Number(env.TRUST_PROXY ?? 0),
     corsOrigins: (env.CORS_ORIGINS ?? '')
       .split(',')
       .map((o) => o.trim())
@@ -30,7 +32,7 @@ export function configuration() {
       refreshTtlRemember: env.JWT_REFRESH_TTL_REMEMBER ?? '30d',
       // One-time password handed to provisioned people accounts. Configurable —
       // never hardcoded in the provisioning service.
-      defaultPassword: env.AUTH_DEFAULT_PASSWORD ?? 'Living@123',
+      defaultPassword: env.AUTH_DEFAULT_PASSWORD ?? DOCUMENTED_DEFAULT_PASSWORD,
       /** How many previous passwords a user may not reuse (0 disables). */
       passwordHistorySize: Number(env.AUTH_PASSWORD_HISTORY_SIZE ?? 5),
       /** Minimum password length enforced on change/reset. */
