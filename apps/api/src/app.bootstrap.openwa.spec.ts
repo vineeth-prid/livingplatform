@@ -2,6 +2,8 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { TestingModule } from '@nestjs/testing';
 
 import { createPrismaStub } from './common/testing/prisma-stub';
+import { createStorageStub } from './common/testing/storage-stub';
+import { STORAGE_PROVIDER } from './modules/storage/storage.interface';
 import { NOTIFICATION_DLQ, NOTIFICATION_QUEUE } from './modules/notifications/notification.constants';
 
 /**
@@ -62,6 +64,13 @@ describe('AppModule wiring · WHATSAPP_PROVIDER=openwa', () => {
       .useValue(stubQueue)
       .overrideProvider(NotificationProcessor)
       .useValue({ worker: { close: jest.fn() } })
+      // The storage provider is bound through an ASYNC factory that, for
+      // STORAGE_DRIVER=s3, constructs the real client and awaits init() — a
+      // bucket check and write probe against live object storage. Overriding
+      // the token bypasses the factory, so compiling the graph never reaches
+      // the network regardless of how the deployment is configured.
+      .overrideProvider(STORAGE_PROVIDER)
+      .useValue(createStorageStub())
       .overrideProvider(RealtimeService)
       .useValue({
         publish: jest.fn(),

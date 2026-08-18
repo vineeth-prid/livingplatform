@@ -23,8 +23,21 @@ describe('SMTP credential resolution', () => {
     process.env = { ...original };
   });
 
+  /**
+   * Build the config from a KNOWN baseline plus the vars under test.
+   *
+   * This used to spread the ambient environment, so the assertions inherited
+   * whatever the host had configured. On a server with SMTP_SECURE=true set for
+   * real, the port-587 case read that value and reported implicit TLS — the
+   * suite passed on a laptop and failed on the deployment, which is the one
+   * place the answer matters. Every SMTP_* key is cleared first so each case
+   * states its own inputs in full.
+   */
   function smtpConfig(vars: Record<string, string>) {
-    process.env = { ...original, ...vars };
+    const base = Object.fromEntries(
+      Object.entries(original).filter(([k]) => !k.startsWith('SMTP_')),
+    );
+    process.env = { ...base, ...vars } as NodeJS.ProcessEnv;
     return configuration().email.smtp;
   }
 

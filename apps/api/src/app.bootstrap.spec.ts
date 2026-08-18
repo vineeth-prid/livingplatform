@@ -5,6 +5,8 @@ import { AppModule } from './app.module';
 import { ModuleEnabledGuard } from './common/guards/module-enabled.guard';
 import { expectSingleton } from './common/testing/di-scope';
 import { createPrismaStub } from './common/testing/prisma-stub';
+import { createStorageStub } from './common/testing/storage-stub';
+import { STORAGE_PROVIDER } from './modules/storage/storage.interface';
 import { AmcExpiryService } from './modules/amc/amc-expiry.service';
 import { BillingSchedulerService } from './modules/billing/billing-scheduler.service';
 import { AnnouncementSchedulerService } from './modules/community-ops/announcement-scheduler.service';
@@ -66,6 +68,13 @@ describe('AppModule wiring', () => {
       // reason as RedisService above: without a server its reconnect timers
       // outlive the run. Consumers (InAppChannel, GateEntryService) are still
       // constructed for real and still have to resolve this dependency.
+      // The storage provider is bound through an ASYNC factory that, for
+      // STORAGE_DRIVER=s3, constructs the real client and awaits init() — a
+      // bucket check and write probe against live object storage. Overriding
+      // the token bypasses the factory, so compiling the graph never reaches
+      // the network regardless of how the deployment is configured.
+      .overrideProvider(STORAGE_PROVIDER)
+      .useValue(createStorageStub())
       .overrideProvider(RealtimeService)
       .useValue({
         publish: jest.fn(),
