@@ -5,7 +5,21 @@ import {
   assertWithinOperatingHours, bookingsOverlap,
 } from './booking.util';
 
-const at = (h: number, m = 0) => { const d = new Date('2026-08-01T00:00:00'); d.setHours(h, m, 0, 0); return d; };
+/**
+ * A fixed instant, written in UTC.
+ *
+ * This used to be `new Date(...); d.setHours(h)`, which builds a date on the
+ * HOST's clock. That was harmless while the rules were all relative — durations
+ * and overlaps compare two instants and do not care what wall clock produced
+ * them — but `assertWithinOperatingHours` reads a wall clock, so the same call
+ * meant 05:00 on a developer machine in IST and 05:00 UTC (10:30 IST) on the
+ * server. The suite passed here and failed there.
+ *
+ * The operating-hours cases below therefore pass 'UTC' explicitly, so the zone
+ * the instant was written in is the zone it is read back in.
+ */
+const at = (h: number, m = 0) => new Date(Date.UTC(2026, 7, 1, h, m, 0, 0));
+const UTC = 'UTC';
 
 describe('assertValidTimeRange', () => {
   it('accepts end after start; rejects otherwise', () => {
@@ -30,13 +44,13 @@ describe('assertFutureWithinWindow', () => {
 
 describe('assertWithinOperatingHours', () => {
   it('is a no-op when hours are unset', () => {
-    expect(() => assertWithinOperatingHours(at(2), at(4), null)).not.toThrow();
-    expect(() => assertWithinOperatingHours(at(2), at(4), { openingTime: 'bad', closingTime: null })).not.toThrow();
+    expect(() => assertWithinOperatingHours(at(2), at(4), null, UTC)).not.toThrow();
+    expect(() => assertWithinOperatingHours(at(2), at(4), { openingTime: 'bad', closingTime: null }, UTC)).not.toThrow();
   });
   it('enforces opening/closing bounds', () => {
-    expect(() => assertWithinOperatingHours(at(7), at(9), { openingTime: '06:00', closingTime: '22:00' })).not.toThrow();
-    expect(() => assertWithinOperatingHours(at(5), at(7), { openingTime: '06:00', closingTime: '22:00' })).toThrow(BadRequestException);
-    expect(() => assertWithinOperatingHours(at(21), at(23), { openingTime: '06:00', closingTime: '22:00' })).toThrow(BadRequestException);
+    expect(() => assertWithinOperatingHours(at(7), at(9), { openingTime: '06:00', closingTime: '22:00' }, UTC)).not.toThrow();
+    expect(() => assertWithinOperatingHours(at(5), at(7), { openingTime: '06:00', closingTime: '22:00' }, UTC)).toThrow(BadRequestException);
+    expect(() => assertWithinOperatingHours(at(21), at(23), { openingTime: '06:00', closingTime: '22:00' }, UTC)).toThrow(BadRequestException);
   });
 });
 
