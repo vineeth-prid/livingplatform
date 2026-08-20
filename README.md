@@ -45,6 +45,11 @@ auditing, observability, and the design-system integration path.
 The `Living Design System/` folder is the UI source of truth (tokens,
 components, brand). It is wired into the frontend in the next pass.
 
+**Start here — what the product does:**
+[`docs/APPLICATION_WORKFLOWS.md`](docs/APPLICATION_WORKFLOWS.md) — every role
+(Platform Admin, Association Admin, Facility Manager, Resident, Staff, Security,
+Vendor), what each can do, and how work moves between them end to end.
+
 **Architecture reviews:** [`docs/architecture.md`](docs/architecture.md)
 (Sprint 1), [`docs/architecture-sprint2.md`](docs/architecture-sprint2.md)
 (Community Foundation), [`docs/architecture-sprint3.md`](docs/architecture-sprint3.md) (People Foundation),
