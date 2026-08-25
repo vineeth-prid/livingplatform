@@ -88,7 +88,7 @@ export class GateNotificationListener {
       select: {
         id: true, entryNumber: true, personName: true, vendorName: true,
         deliveryType: true, mobileNumber: true, createdAt: true,
-        entryType: true, passCode: true,
+        entryType: true, passCode: true, expectedArrival: true,
         gate: { select: { name: true } },
       },
     });
@@ -104,11 +104,24 @@ export class GateNotificationListener {
     // delivery has arrived" from "A delivery" — which reads as a mistake and
     // buries the one thing that matters, that somebody is waiting at the gate.
     const isVisitor = entry.entryType === GateEntryType.VISITOR;
+    /*
+      An invitation raised in ADVANCE is not an arrival.
+
+      A visitor an admin adds for next Tuesday was announced to the resident as
+      "Your visitor has arrived at the gate" — so the one message that was
+      asking them to approve a gate pass read like something already happening,
+      and the request to approve it was nowhere in the text.
+    */
+    const expected = isVisitor && entry.expectedArrival
+      ? entry.expectedArrival.getTime() > Date.now() + 60 * 60 * 1000
+      : false;
     const wording = isVisitor
       ? {
           arrivalNoun: 'Visitor',
           headline: entry.personName,
-          leadIn: 'Your visitor has arrived at the gate.',
+          leadIn: expected
+            ? `A visitor is expected on ${entry.expectedArrival!.toLocaleString()}. Approve their gate pass.`
+            : 'Your visitor has arrived at the gate.',
           personLabel: 'Visitor',
           holdNoun: 'your visitor',
         }
@@ -124,6 +137,8 @@ export class GateNotificationListener {
     const variables = {
       residentName: '',
       gateName,
+      entryType: entry.entryType,
+      expected,
       ...wording,
       // Only a delivery has a brand; the template hides the row when absent.
       vendorName: entry.vendorName,
@@ -181,8 +196,27 @@ export class GateNotificationListener {
     // Realtime and push carry a structured payload the client renders as a
     // popup / system notification, so they bypass HTML templating.
     if (channel === 'inapp' || channel === 'push') {
-      const title = `Delivery at ${gateName}`;
-      const body = `${variables.vendorName as string} — ${variables.personName as string} is at the gate for ${variables.unitNumber as string}.`;
+      /*
+        Shaped by entry type, like the templated channels above.
+
+        This was hardcoded to "Delivery at <gate>" with the vendor brand as the
+        headline, so a visitor arrived on the resident's lock screen as
+        "Delivery at Main Gate — undefined is at the gate". The popup reads the
+        same payload, which is why the visitor prompt was indistinguishable from
+        a delivery one. `entryType` rides along so the client can render the two
+        differently rather than guessing from which fields happen to be null.
+      */
+      const isVisitor = variables.entryType === GateEntryType.VISITOR;
+      const upcoming = variables.expected === true;
+      const title = upcoming
+        ? 'Visitor pass to approve'
+        : `${isVisitor ? 'Visitor' : 'Delivery'} at ${gateName}`;
+      const who = isVisitor
+        ? (variables.personName as string)
+        : [variables.vendorName, variables.personName].filter(Boolean).join(' — ');
+      const body = upcoming
+        ? `${who} is expected at ${variables.unitNumber as string}. Approve their gate pass.`
+        : `${who} is at the gate for ${variables.unitNumber as string}.`;
       return this.dispatcher.dispatch(
         {
           channel,
@@ -202,12 +236,14 @@ export class GateNotificationListener {
               { action: 'reject', title: 'Reject' },
             ],
             // Everything the popup needs without a follow-up fetch.
+            entryType: variables.entryType,
             vendorName: variables.vendorName,
             personName: variables.personName,
             unitNumber: variables.unitNumber,
             gateName,
             mobileNumber: variables.mobileNumber,
             deliveryType: variables.deliveryType,
+            passCode: variables.passCode,
           },
         },
         ctx,

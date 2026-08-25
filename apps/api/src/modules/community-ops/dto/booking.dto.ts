@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsDate, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsDate, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength,
+} from 'class-validator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
 
@@ -26,6 +28,14 @@ export class CreateBookingDto {
 
   @ApiProperty({ type: String, format: 'date-time', description: 'Slot end (absolute)' })
   @Type(() => Date) @IsDate() endTime!: Date;
+
+  /**
+   * How many people are coming, the resident included. Capacity is a headcount,
+   * so without this the engine could only count bookings and a clubhouse for
+   * fifty accepted fifty parties of thirty.
+   */
+  @ApiPropertyOptional({ example: 4, default: 1, description: 'People attending, including you' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) headCount?: number;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) remarks?: string;
 }

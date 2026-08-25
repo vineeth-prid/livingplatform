@@ -16,7 +16,7 @@ import {
 } from '../master-data';
 import { OperationsAssignment, OperationsStatusMenu, OperationsTimeline, PriorityPill, StatusPill } from '../operations';
 import { WO_ORIGIN_LABEL, WO_ORIGIN_TONES, WO_TONES, woWorkflow } from './config';
-import { WorkOrderAttachments } from './wo-attachments';
+import { AttachmentPanel } from '../shared/attachment-panel';
 import { WorkOrderProgress } from './wo-progress';
 import { WorkOrderVerification } from './wo-verification';
 import { WorkOrderForm } from './wo-form';
@@ -94,7 +94,18 @@ export function WorkOrderDetailPage() {
             <div className="flex flex-col gap-6 lg:col-span-2">
               <DetailSection title="Description"><p className="whitespace-pre-wrap text-sm text-body">{w.description}</p></DetailSection>
               <DetailSection title="Progress"><WorkOrderProgress workOrderId={w.id} /></DetailSection>
-              <DetailSection title="Attachments"><WorkOrderAttachments workOrderId={w.id} /></DetailSection>
+              <DetailSection title="Attachments">
+                <AttachmentPanel
+                  queryKey={['work-order', w.id, 'attachments']}
+                  canAdd={hasPermission('workorder:update')}
+                  evidenceHint="A before photo is required to start work and an after photo to complete it."
+                  api={{
+                    list: () => living.workOrder.listAttachments(w.id),
+                    uploadUrl: (input) => living.workOrder.attachmentUploadUrl(w.id, input),
+                    add: (input) => living.workOrder.addAttachment(w.id, input),
+                  }}
+                />
+              </DetailSection>
             </div>
 
             {/* Context sidebar */}

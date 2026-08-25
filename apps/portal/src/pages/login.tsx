@@ -2,9 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
-import { Button, Card, Input, toast } from '@living/ui';
+import { Button, Card, ForgotPasswordDialog, Input, toast } from '@living/ui';
 
-import { ForgotPasswordDialog } from './forgot-password';
 
 /**
  * Authentication screen. Uses the SDK via the auth framework — no fetch, no

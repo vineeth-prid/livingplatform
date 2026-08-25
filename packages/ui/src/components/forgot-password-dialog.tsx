@@ -1,20 +1,29 @@
 import { useState, type FormEvent } from 'react';
 import { LivingApiError } from '@living/living-sdk';
-import { Button, Dialog, DialogContent, Input, toast } from '@living/ui';
+import { useLiving } from '@living/hooks';
 
-import { living } from '../lib/living';
+import { Button } from './button';
+import { Dialog, DialogContent } from './dialog';
+import { Input } from './input';
+import { toast } from '../providers/toast';
 
 type Step = 'identify' | 'otp' | 'link-sent';
 
 /**
- * Password recovery for a mobile-first platform.
+ * Password recovery, one implementation for every app.
  *
- * Residents log in with their mobile number, so recovery must work from that
- * number alone: the API sends a WhatsApp OTP and this sheet exchanges it for a
- * new password. Email accounts get the classic link, and the copy never reveals
- * which case applies until the server says so.
+ * It lived twice — once in the portal, once in the resident app — and the
+ * workforce app had none at all, because each copy was bound to its own module
+ * -level SDK client. Taking the client from `useLiving()` removes that binding,
+ * so a staff member can recover their own password instead of ringing an admin.
+ *
+ * Two paths, and the API says which: an emailed link for an account with no
+ * mobile number, a one-time code for everyone provisioned with a phone-number
+ * login. The code screen submits the SAME identifier that asked for the code —
+ * the account may have been found by email.
  */
 export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const living = useLiving();
   const [step, setStep] = useState<Step>('identify');
   const [identifier, setIdentifier] = useState('');
   const [code, setCode] = useState('');
@@ -33,7 +42,7 @@ export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose
     e.preventDefault();
     setBusy(true);
     try {
-      const result = await living.auth.forgotPassword(identifier);
+      const result = await living.auth.forgotPassword(identifier.trim());
       toast.success(result.message);
       setStep(result.channel === 'otp' ? 'otp' : 'link-sent');
     } catch (err) {
@@ -47,11 +56,13 @@ export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose
     e.preventDefault();
     setBusy(true);
     try {
-      await living.auth.resetPasswordWithOtp(identifier, code, password);
+      await living.auth.resetPasswordWithOtp(identifier.trim(), code.trim(), password);
       toast.success('Password changed — sign in with your new password');
       reset();
     } catch (err) {
-      toast.error(err instanceof LivingApiError ? err.message : 'That code is invalid or has expired');
+      toast.error(
+        err instanceof LivingApiError ? err.message : 'That code is invalid or has expired',
+      );
     } finally {
       setBusy(false);
     }
@@ -65,7 +76,7 @@ export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose
         title="Reset your password"
         description={
           step === 'identify'
-            ? 'Enter your mobile number (or email) and we will send you a code.'
+            ? 'Enter the email or mobile number you sign in with and we will send you a code.'
             : step === 'otp'
               ? `We sent a code to ${identifier}. Enter it below with your new password.`
               : undefined
@@ -74,10 +85,10 @@ export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose
         {step === 'identify' && (
           <form onSubmit={request} className="flex flex-col gap-4">
             <Input
-              label="Mobile number or email"
+              label="Email or mobile number"
               inputMode="text"
               autoComplete="username"
-              placeholder="9876543210"
+              placeholder="you@community.com or 9876543210"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
@@ -116,7 +127,7 @@ export function ForgotPasswordDialog({ open, onClose }: { open: boolean; onClose
               className="text-sm text-muted underline-offset-2 hover:underline"
               onClick={() => setStep('identify')}
             >
-              Use a different number
+              Use a different email or number
             </button>
           </form>
         )}

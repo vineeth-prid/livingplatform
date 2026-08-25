@@ -270,6 +270,7 @@ export function PhotoPanel({
    */
   stage?: 'BEFORE' | 'AFTER';
 }) {
+  const qc = useQueryClient();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [staged, setStaged] = useState<File[]>([]);
@@ -303,6 +304,7 @@ export function PhotoPanel({
 
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
+      const added: Attachment[] = [];
       for (const original of files) {
         const file = await shrinkImage(original);
         const contentType = file.type || 'application/octet-stream';
@@ -320,13 +322,34 @@ export function PhotoPanel({
         });
         if (!put.ok) throw new Error('Could not upload the photo — check your connection');
 
-        await api.add({
-          fileName: file.name, contentType, size: file.size, storageKey: signed.key,
-          ...(stage ? { stage } : {}),
-        });
+        added.push(
+          await api.add({
+            fileName: file.name, contentType, size: file.size, storageKey: signed.key,
+            ...(stage ? { stage } : {}),
+          }),
+        );
       }
+      return added;
     },
-    onSuccess: () => { setStaged([]); void q.refetch(); toast.success('Photos added'); },
+    /*
+      Show the saved photo straight away, then reconcile.
+
+      This cleared the staged thumbnails and waited for a refetch. On a phone
+      with a weak signal that request can be slow, fail, or return a cached list
+      — so the panel emptied and the worker saw "No photos yet" after an upload
+      that had actually succeeded, which reads as "the after photo will not
+      upload". Seeding the cache with the rows the API just returned means the
+      screen can only be wrong if the write was.
+    */
+    onSuccess: (added) => {
+      setStaged([]);
+      qc.setQueryData<Attachment[]>([...queryKey, stage ?? 'all'], (prev) => [
+        ...(prev ?? []),
+        ...added,
+      ]);
+      void q.refetch();
+      toast.success('Photos added');
+    },
     onError: (err) => toast.error(err instanceof LivingApiError ? err.message : 'Upload failed'),
   });
 

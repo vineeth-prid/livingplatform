@@ -178,21 +178,36 @@ tickets, service requests and any work orders raised against their flat.
 
 ### Booking an amenity
 
-Browse bookable amenities → pick a date and time. The app checks the rules the
-resident can already see — opening hours, maximum duration — before the
-round-trip, and the API enforces all of them again, including slot capacity.
-**Opening hours are evaluated in the community's timezone**, not the server's.
+Browse bookable amenities → pick a date, a time, and **how many people are
+coming**. The app checks the rules the resident can already see — opening
+hours, maximum duration, capacity — before the round-trip, and the API enforces
+all of them again. **Opening hours are evaluated in the community's timezone**,
+not the server's.
+
+Capacity is a **headcount**, not a booking count: an amenity for 30 accepts any
+mix of parties up to 30 people in overlapping slots, and refuses the one that
+would go over. An amenity with no capacity set stays exclusive — one party at a
+time.
 
 ### Visitors and the gate
 
 - **Invite a visitor** for one of *their own* flats, with an expected arrival
-  time. This creates a gate entry and issues a **pass code**. Security sees it
-  immediately; either Security or an admin can approve or reject it.
+  time — which may not be in the past, checked in the community's timezone.
+  This creates a gate entry, issues a **pass code**, and the invitation is
+  **already approved**: the resident raising it IS the approval, so they are
+  never prompted to confirm their own guest. Security sees it immediately.
+- **A visit invited FOR them** — by an admin, say — arrives as an approval
+  request instead, and can be decided from the arrival popup or from the
+  Visitors list.
 - **Arrivals** — when a delivery or visitor reaches the gate, the resident gets
   a push/in-app/WhatsApp/email notification and can **approve or reject from
   their phone**. If no channel reaches them, the guard's screen says so and
   falls back to a phone call.
 - Cancelled and rejected visits stay in the list as history.
+
+Deliveries and visits are the same engine but never the same screen: the
+Security console lists them under separate tabs, and the resident's prompt is
+worded for the one that actually arrived.
 
 ### Money
 
@@ -219,6 +234,11 @@ Built for one hand, on site, on a mid-range Android.
 Photos are downscaled on the device before upload (a 9 MB camera frame becomes
 roughly 300 KB), uploaded to storage first and registered second, so a record
 never exists without the object behind it. Any photo can be removed and retaken.
+
+The **admin portal can add before/after photos too**, on both work orders and
+tickets, through the same signed-URL flow. It could not before, so an admin
+completing a job themselves met "an after photo is required" with no control on
+the screen that could produce one.
 
 ### Raising a work order
 
@@ -300,10 +320,15 @@ Ticket / PM / staff ─────────→ PENDING_APPROVAL ────
 ```
 
 **Approval is where the work becomes real**, so it is also where a vendor is
-found: auto-assignment fires on approval, not on recommendation, because
-assigning a vendor to spending nobody has agreed to is wrong. Rejection is a
-decision about the *spending*, never about the problem — the originating ticket
-resumes and staff carry on without the paid work.
+found: auto-assignment fires on approval, never on recommendation, because
+assigning a vendor to spending nobody has agreed to is wrong. A **manual** work
+order skips approval — it is already agreed — so it runs the same picker at
+creation. Either way the match comes from the linked **asset's category**, so a
+work order raised by hand should name its asset; without one there is nothing to
+match on and it waits for a human. Rejection is a decision about the *spending*,
+never about the problem — the originating ticket resumes and staff carry on
+without the paid work.
+
 
 ### Preventive maintenance and AMC
 
@@ -346,8 +371,7 @@ Stated plainly so nobody looks for it:
 
 - **No SR → work order button.** Work orders can be raised from tickets and
   from maintenance plans; there is no equivalent action on a service request.
-- **No head count on amenity bookings.** Capacity is concurrent bookings per
-  slot, not people per booking.
+
 - **Community banner images** are stored by key; there is no upload control on
   the settings screen yet.
 - **RLS is staged but inert.** Tenant isolation is enforced in the application

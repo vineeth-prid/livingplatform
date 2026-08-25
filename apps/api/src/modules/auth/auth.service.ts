@@ -223,19 +223,7 @@ export class AuthService {
    */
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string; channel: 'otp' | 'link' }> {
     const identifier = dto.identifier.trim();
-    const username = identifier.replace(/\D/g, '');
-    const looksLikeMobile = username.length >= 7 && !identifier.includes('@');
-
-    const user = await this.prisma.user.findFirst({
-      where: {
-        deletedAt: null,
-        OR: [
-          { email: identifier.toLowerCase() },
-          ...(username.length >= 7 ? [{ username }] : []),
-        ],
-      },
-      select: { id: true, email: true, username: true, firstName: true },
-    });
+    const user = await this.findByIdentifier(identifier);
 
     if (user) {
       if (user.username) {
@@ -254,8 +242,44 @@ export class AuthService {
         await this.mail.sendPasswordReset(user.email, token);
       }
     }
-    // Shape the hint off the *identifier*, not off the lookup result.
-    return { message: GENERIC_MESSAGE, channel: looksLikeMobile ? 'otp' : 'link' };
+
+    /*
+      `channel` has to describe what was actually SENT, not what the identifier
+      looked like.
+
+      Shaping it off the identifier meant a staff member who typed their EMAIL
+      was told "a link is on its way" while the engine — seeing an account with
+      a mobile number — sent a one-time code instead. The code arrived, the app
+      showed the link screen, and there was nowhere to enter it. Anyone
+      provisioned with a phone-number login (all staff, vendors and residents)
+      hit this the moment they recovered by email.
+
+      Falling back to the identifier's shape when no account matches keeps the
+      endpoint from confirming whether one exists.
+    */
+    const looksLikeMobile =
+      identifier.replace(/\D/g, '').length >= 7 && !identifier.includes('@');
+    const channel = user ? (user.username ? 'otp' : 'link') : looksLikeMobile ? 'otp' : 'link';
+    return { message: GENERIC_MESSAGE, channel };
+  }
+
+  /**
+   * Resolve an account from what a person typed to sign in: an email address or
+   * the digits-only mobile username. One lookup, shared by the reset flows, so
+   * they can never disagree about which account a reset is for.
+   */
+  private findByIdentifier(identifier: string) {
+    const username = identifier.replace(/\D/g, '');
+    return this.prisma.user.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [
+          { email: identifier.toLowerCase() },
+          ...(username.length >= 7 ? [{ username }] : []),
+        ],
+      },
+      select: { id: true, email: true, username: true, firstName: true },
+    });
   }
 
   /** Complete a reset from an emailed link token. */
@@ -267,14 +291,10 @@ export class AuthService {
     return this.applyNewPassword(userId, dto.password);
   }
 
-  /** Complete a reset from a mobile OTP. */
+  /** Complete a reset from the OTP, found by the same identifier that asked for it. */
   async resetPasswordWithOtp(dto: ResetPasswordWithOtpDto): Promise<{ message: string }> {
-    const username = dto.mobile.replace(/\D/g, '');
-    const user = await this.prisma.user.findFirst({
-      where: { username, deletedAt: null },
-      select: { id: true },
-    });
-    // Same generic failure whether the number is unknown or the code is wrong.
+    const user = await this.findByIdentifier(dto.identifier.trim());
+    // Same generic failure whether the account is unknown or the code is wrong.
     if (!user) throw new BadRequestException('That code is invalid or has expired');
     const userId = await this.otp.verify(user.id, dto.code);
     return this.applyNewPassword(userId, dto.password);

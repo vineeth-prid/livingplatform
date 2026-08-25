@@ -83,10 +83,20 @@ function BookSheet({ amenity, residentId, open, onOpenChange }: { amenity: Ameni
   const [date, setDate] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  // Party size. Capacity on an amenity has always been a headcount, so a
+  // booking has to carry one — without it the engine could only count parties.
+  const [headCount, setHeadCount] = useState('1');
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     if (!date || !start || !end) { toast.error('Choose a date and time'); return; }
+
+    const people = Number(headCount);
+    if (!Number.isInteger(people) || people < 1) { toast.error('Enter how many people are coming'); return; }
+    if (amenity.capacity && people > amenity.capacity) {
+      toast.error(`${amenity.name} holds ${amenity.capacity} people`);
+      return;
+    }
 
     // Check the rules the resident can already see, before the round-trip. The
     // API enforces all of these too — this only saves them a failed submit.
@@ -109,7 +119,7 @@ function BookSheet({ amenity, residentId, open, onOpenChange }: { amenity: Ameni
     setBusy(true);
     try {
       await create.mutateAsync({
-        communityId, amenityId: amenity.id, residentId,
+        communityId, amenityId: amenity.id, residentId, headCount: people,
         startTime: new Date(`${date}T${start}`).toISOString(), endTime: new Date(`${date}T${end}`).toISOString(),
       });
       toast.success('Booked');
@@ -160,6 +170,16 @@ function BookSheet({ amenity, residentId, open, onOpenChange }: { amenity: Ameni
             <Input label="From" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
             <Input label="To" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
           </div>
+          <Input
+            label="How many people"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={amenity.capacity || undefined}
+            value={headCount}
+            onChange={(e) => setHeadCount(e.target.value)}
+            hint={amenity.capacity ? `Including you. Up to ${amenity.capacity} at a time.` : 'Including you.'}
+          />
           <Button size="lg" block loading={busy} onClick={submit} className="mt-2">Confirm booking</Button>
         </div>
       </SheetContent>

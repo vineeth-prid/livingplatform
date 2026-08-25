@@ -25,6 +25,15 @@ export class CreateWorkOrderDto {
   @ApiPropertyOptional({ description: 'Unit (optional — omit for common-area work)' })
   @IsOptional() @IsString() unitId?: string;
 
+  /**
+   * The asset this work is against. Optional, but it is the ONLY signal a work
+   * order carries about which trade it needs, so naming it is what lets the
+   * order find a vendor by itself — an asset maintenance work order raised by
+   * hand had no way to say "this is a lift job" and sat unassigned.
+   */
+  @ApiPropertyOptional({ description: 'Asset the work is against (drives vendor auto-assignment)' })
+  @IsOptional() @IsString() assetId?: string;
+
   @ApiPropertyOptional({ enum: TicketPriority, default: TicketPriority.MEDIUM })
   @IsOptional() @IsEnum(TicketPriority) priority?: TicketPriority;
 
@@ -56,6 +65,11 @@ export class UpdateWorkOrderDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(3) @MaxLength(200) title?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(4000) description?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() unitId?: string;
+
+  /** Linking the asset later is how an existing order gains a trade to match on. */
+  @ApiPropertyOptional({ description: 'Asset the work is against' })
+  @IsOptional() @IsString() assetId?: string;
+
   @ApiPropertyOptional({ enum: TicketPriority }) @IsOptional() @IsEnum(TicketPriority) priority?: TicketPriority;
 
   @ApiPropertyOptional({ example: 2.5 })

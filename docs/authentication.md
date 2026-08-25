@@ -50,28 +50,37 @@ portal's `ChangePasswordGate` blocks the app until
 
 ## 4. Password recovery
 
-Two paths, chosen by what the user typed:
+Two paths, chosen by **what the account is**, not by what the user typed:
 
 ```
 POST /auth/forgot-password  { identifier }   → { message, channel: 'otp' | 'link' }
 ```
 
-| Identifier | Path |
+| Account | Path |
 | --- | --- |
-| A mobile-number account | **OTP** delivered over WhatsApp (and email if the account has a real one) |
-| An email-only account | Reset **link** by email |
+| Has a mobile-number login (all staff, vendors and residents) | **OTP** over WhatsApp (and email if the account has a real one) |
+| Email only | Reset **link** by email |
+
+`identifier` may be either an email or a mobile number in both cases — an
+account with a phone-number login gets a code even when it was looked up by
+email. The dialog is one shared component (`@living/ui`), so the portal, the
+resident app and the workforce app all offer the same recovery.
 
 Then one of:
 
 ```
-POST /auth/reset-password       { token, password }         # link path
-POST /auth/reset-password-otp   { mobile, code, password }  # OTP path
+POST /auth/reset-password       { token, password }              # link path
+POST /auth/reset-password-otp   { identifier, code, password }   # OTP path
 ```
+
+`identifier` on the OTP path is whatever was passed to `forgot-password`.
 
 ### Why this is safe
 
-- The response is identical whether or not the account exists; the `channel`
-  hint is shaped from the *identifier*, not from the lookup result.
+- The response is identical whether or not the account exists. `channel`
+  describes what was actually sent when the account is found, and falls back to
+  the identifier's shape when it is not — so it never becomes an existence
+  oracle, and it never sends the user to a screen that cannot finish the job.
 - The OTP is argon2-hashed into the existing `VerificationToken` table
   (`PASSWORD_RESET` type — no new model) and expires in `AUTH_OTP_TTL`.
 - Only **one live code per user** — issuing a new one consumes the old.
@@ -140,6 +149,8 @@ number.
 | Mobile login | Sign in with the phone number + `AUTH_DEFAULT_PASSWORD` |
 | First-login change | Portal blocks on the change-password gate until set |
 | Reset by mobile | Login → *Forgot password?* → enter mobile → OTP arrives on WhatsApp → set new password |
-| Reset by email | Same dialog with an email → link arrives |
+| Reset by email, mobile account | Same dialog with the email → the OTP screen opens (not the link screen) and the code redeems |
+| Reset by email, email-only account | Same dialog → link arrives |
+| Workforce recovery | Staff/vendor app login → *Forgot your password?* → same flow |
 | Admin reset | Resident detail → key icon → temporary password shown, user signed out everywhere |
 | History | Try to reuse a recent password → rejected with the depth in the message |

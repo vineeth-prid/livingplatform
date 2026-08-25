@@ -3,6 +3,7 @@ import { BillingCycle } from '@prisma/client';
 import {
   amountFor,
   chargeInForce,
+  daysInPeriod,
   daysOverdue,
   dueDateFor,
   invoiceNumber,
@@ -17,30 +18,65 @@ const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d))
 describe('periodFor', () => {
   it('aligns a monthly period to the calendar month', () => {
     const p = periodFor(BillingCycle.MONTHLY, utc(2026, 8, 17));
-    expect(p.start.toISOString()).toBe('2026-08-01T00:00:00.000Z');
-    expect(p.end.toISOString()).toBe('2026-08-31T23:59:59.999Z');
+    expect(p.start.toISOString()).toBe('2026-08-01T12:00:00.000Z');
+    expect(p.end.toISOString()).toBe('2026-08-31T12:00:00.000Z');
   });
 
   it('aligns a quarterly period to the calendar quarter', () => {
     const p = periodFor(BillingCycle.QUARTERLY, utc(2026, 8, 17));
-    expect(p.start.toISOString()).toBe('2026-07-01T00:00:00.000Z');
-    expect(p.end.toISOString()).toBe('2026-09-30T23:59:59.999Z');
+    expect(p.start.toISOString()).toBe('2026-07-01T12:00:00.000Z');
+    expect(p.end.toISOString()).toBe('2026-09-30T12:00:00.000Z');
   });
 
   it('aligns a yearly period to the calendar year', () => {
     const p = periodFor(BillingCycle.YEARLY, utc(2026, 8, 17));
-    expect(p.start.toISOString()).toBe('2026-01-01T00:00:00.000Z');
-    expect(p.end.toISOString()).toBe('2026-12-31T23:59:59.999Z');
+    expect(p.start.toISOString()).toBe('2026-01-01T12:00:00.000Z');
+    expect(p.end.toISOString()).toBe('2026-12-31T12:00:00.000Z');
   });
 
   it('handles February in a leap year', () => {
     const p = periodFor(BillingCycle.MONTHLY, utc(2028, 2, 3));
-    expect(p.end.toISOString()).toBe('2028-02-29T23:59:59.999Z');
+    expect(p.end.toISOString()).toBe('2028-02-29T12:00:00.000Z');
   });
 
   it('rolls a December monthly period into the next January', () => {
     const p = nextPeriod(BillingCycle.MONTHLY, periodFor(BillingCycle.MONTHLY, utc(2026, 12, 5)));
-    expect(p.start.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+    expect(p.start.toISOString()).toBe('2027-01-01T12:00:00.000Z');
+  });
+});
+
+/**
+ * A period and a due date are CALENDAR markers, and they are rendered with the
+ * reader's timezone. Stamped at midnight or at 23:59:59.999 UTC they landed on
+ * the neighbouring day for anyone not on UTC: an Indian admin saw an August
+ * invoice as "1 Aug – 1 Sep" and a bill due the 10th as due the 11th, which is
+ * the wrong maintenance day count that was reported.
+ *
+ * India (+05:30) and Hawaii (-10:00) bracket the range a community can be in.
+ */
+describe('calendar markers survive the reader’s timezone', () => {
+  const dayIn = (tz: string, d: Date) =>
+    d.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+
+  const august = periodFor(BillingCycle.MONTHLY, utc(2026, 8, 17));
+  const due = dueDateFor(august, 10);
+
+  it('reads as 1–31 August in India', () => {
+    expect(dayIn('Asia/Kolkata', august.start)).toBe('2026-08-01');
+    expect(dayIn('Asia/Kolkata', august.end)).toBe('2026-08-31');
+    expect(dayIn('Asia/Kolkata', due)).toBe('2026-08-10');
+  });
+
+  it('reads as 1–31 August in Hawaii too', () => {
+    expect(dayIn('Pacific/Honolulu', august.start)).toBe('2026-08-01');
+    expect(dayIn('Pacific/Honolulu', august.end)).toBe('2026-08-31');
+    expect(dayIn('Pacific/Honolulu', due)).toBe('2026-08-10');
+  });
+
+  it('spans the 31 days of August, not 32', () => {
+    expect(daysInPeriod(august)).toBe(31);
+    expect(daysInPeriod(periodFor(BillingCycle.MONTHLY, utc(2028, 2, 3)))).toBe(29);
+    expect(daysInPeriod(periodFor(BillingCycle.QUARTERLY, utc(2026, 8, 17)))).toBe(92);
   });
 });
 
@@ -65,12 +101,12 @@ describe('amountFor', () => {
 describe('dueDateFor', () => {
   it('uses the requested day of the first month of the period', () => {
     const due = dueDateFor(periodFor(BillingCycle.MONTHLY, utc(2026, 8, 1)), 10);
-    expect(due.toISOString()).toBe('2026-08-10T23:59:59.999Z');
+    expect(due.toISOString()).toBe('2026-08-10T12:00:00.000Z');
   });
 
   it('clamps a day the month does not have', () => {
     const due = dueDateFor(periodFor(BillingCycle.MONTHLY, utc(2026, 2, 1)), 31);
-    expect(due.toISOString()).toBe('2026-02-28T23:59:59.999Z');
+    expect(due.toISOString()).toBe('2026-02-28T12:00:00.000Z');
   });
 });
 
@@ -156,10 +192,10 @@ describe('round2', () => {
 /**
  * Days overdue, counted the way a person counts on a calendar.
  *
- * `dueDateFor` stamps the due date at 23:59:59.999 so the whole due day is on
- * time. Subtracting raw instants then measured from the END of that day, so a
- * bill one day late reported 0 and only reached "1 day" after nearly two. Every
- * invoice under-reported by a day, and the same arithmetic gates late fees.
+ * Both sides are normalised to midnight, so the whole due day is on time and
+ * the day after is exactly one day late — independent of the time of day the
+ * due date is stamped at. Subtracting raw instants made the answer depend on
+ * that stamp, and every invoice under-reported by a day.
  */
 describe('daysOverdue — calendar days, not elapsed time', () => {
   const due = dueDateFor({ start: new Date(Date.UTC(2026, 7, 1)), end: new Date(Date.UTC(2026, 7, 31)) }, 10);

@@ -320,11 +320,12 @@ export class InvoiceService {
     const unpaid = views
       .filter((v) => v.balance > 0 && v.status !== InvoiceStatus.CANCELLED)
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-    const now = Date.now();
     return {
       outstanding: round2(unpaid.reduce((sum, v) => sum + v.balance, 0)),
       currentDue: unpaid[0] ?? null,
-      nextDue: unpaid.find((v) => v.dueDate.getTime() > now) ?? null,
+      // Not yet late — counted in calendar days, so a bill due TODAY is still
+      // "next due" rather than flipping the moment its stamped instant passes.
+      nextDue: unpaid.find((v) => v.daysOverdue === 0) ?? null,
       overdueCount: unpaid.filter((v) => v.daysOverdue > 0).length,
       recent: views.slice(0, 12),
     };
@@ -450,12 +451,18 @@ export class InvoiceService {
    */
   async refreshOverdue(communityId: string): Promise<{ updated: number; lateFeesAdded: number }> {
     const asOf = new Date();
+    // Midnight UTC today: a bill is late once its due DAY has passed, never
+    // part-way through it. Comparing against the current instant made lateness
+    // depend on the time of day the due date happened to be stamped at.
+    const startOfToday = new Date(
+      Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()),
+    );
     const rows = await this.prisma.maintenanceInvoice.findMany({
       where: {
         communityId,
         deletedAt: null,
         status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE] },
-        dueDate: { lt: asOf },
+        dueDate: { lt: startOfToday },
       },
       include: { charge: true },
     });
@@ -741,7 +748,9 @@ function statusFor(
   const total = Number(invoice.totalAmount);
   if (paidAmount >= total) return InvoiceStatus.PAID;
   if (paidAmount > 0) return InvoiceStatus.PARTIALLY_PAID;
-  return invoice.dueDate.getTime() < Date.now() ? InvoiceStatus.OVERDUE : InvoiceStatus.ISSUED;
+  // Calendar days, like everything else that decides "late" — the whole due day
+  // counts as on time regardless of what time of day the marker is stamped at.
+  return daysOverdue(invoice.dueDate, new Date()) > 0 ? InvoiceStatus.OVERDUE : InvoiceStatus.ISSUED;
 }
 
 function monthKey(d: Date): string {

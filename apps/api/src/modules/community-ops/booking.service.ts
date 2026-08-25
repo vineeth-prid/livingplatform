@@ -61,8 +61,19 @@ export class BookingService {
     );
     assertWithinMaxDuration(dto.startTime, dto.endTime, amenity.maxBookingMinutes);
 
-    // Capacity: how many active bookings already overlap this slot?
-    const overlapping = await this.prisma.amenityBooking.count({
+    /*
+      Capacity is a HEADCOUNT, not a booking count.
+
+      This counted overlapping bookings, so a clubhouse configured for 50 people
+      accepted 50 separate parties — and a resident had no way to say how many
+      were coming in the first place. Summing the headcounts is the rule the
+      number on the amenity actually describes.
+
+      An amenity with no capacity set is treated as exclusive (one party at a
+      time), which is how it behaved before.
+    */
+    const headCount = dto.headCount ?? 1;
+    const overlapping = await this.prisma.amenityBooking.aggregate({
       where: {
         amenityId: dto.amenityId,
         deletedAt: null,
@@ -70,8 +81,21 @@ export class BookingService {
         startTime: { lt: dto.endTime },
         endTime: { gt: dto.startTime },
       },
+      _sum: { headCount: true },
+      _count: { _all: true },
     });
-    if (overlapping >= (amenity.capacity ?? 1)) {
+    const capacity = amenity.capacity ?? 0;
+    if (capacity > 0) {
+      if (headCount > capacity) {
+        throw new BadRequestException(`This amenity holds ${capacity} people`);
+      }
+      const taken = overlapping._sum.headCount ?? 0;
+      if (taken + headCount > capacity) {
+        throw new ConflictException(
+          `Only ${capacity - taken} of ${capacity} places are free in that slot`,
+        );
+      }
+    } else if (overlapping._count._all > 0) {
       throw new ConflictException('This slot is fully booked');
     }
 
@@ -84,6 +108,7 @@ export class BookingService {
         bookingDate: startOfDay(dto.startTime),
         startTime: dto.startTime,
         endTime: dto.endTime,
+        headCount,
         status: B.CONFIRMED,
         remarks: dto.remarks,
         createdById: actor.id,

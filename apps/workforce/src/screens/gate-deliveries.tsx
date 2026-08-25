@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, Check, PackageCheck, Plus, Radio, Send, Truck, X } from 'lucide-react';
+import {
+  Camera, Check, LogOut, PackageCheck, Plus, Radio, Send, Truck, UserRound, X,
+} from 'lucide-react';
 import { LivingApiError, type GateEntry, type RealtimeEvent } from '@living/living-sdk';
 import { useAuth, useRealtime } from '@living/hooks';
 import { cn, formatDateTime, timeAgo } from '@living/utils';
@@ -26,28 +28,57 @@ const COMMON_VENDORS = ['Swiggy', 'Zomato', 'Amazon', 'Flipkart', 'Blinkit', 'Ze
 const DELIVERY_TYPES = ['FOOD', 'COURIER', 'GROCERY', 'MEDICINE', 'OTHER'];
 
 /**
- * Gate → arrivals. The guard records an arrival, the resident is notified by
- * the Notification Engine, and their decision lands back on this screen over
- * the realtime stream — no refresh, no polling loop.
- *
- * Shows every entry type, not only deliveries: a visitor a resident invited in
- * advance is a VISITOR gate entry on the same list, which is what makes an
- * invitation visible here at all.
+ * Copy per entry type. A visit and a delivery are different jobs at the gate —
+ * one is handed over, the other walks in — and rendering both through delivery
+ * wording is what put a resident's invitation on screen as a delivery with a
+ * "Handed over" button.
  */
-export function GateDeliveriesScreen() {
+const COPY = {
+  DELIVERY: {
+    createLabel: 'New delivery',
+    approvedTitle: 'Approved — hand over',
+    closeLabel: 'Handed over',
+    emptyTitle: 'No deliveries at the gate today',
+    emptyHint: 'Record a delivery when it arrives.',
+    searchPlaceholder: 'Search name, vendor, flat…',
+  },
+  VISITOR: {
+    createLabel: 'Walk-in visitor',
+    approvedTitle: 'Cleared — let them in',
+    closeLabel: 'Visit finished',
+    emptyTitle: 'No visitors expected today',
+    emptyHint: 'Record a walk-in visitor, or wait for a resident’s invitation.',
+    searchPlaceholder: 'Search name, pass code, flat…',
+  },
+} as const;
+
+/**
+ * Gate → arrivals of ONE type. The guard records an arrival, the resident is
+ * notified by the Notification Engine, and their decision lands back on this
+ * screen over the realtime stream — no refresh, no polling loop.
+ *
+ * The type is a filter on the query, not just a label: the Visitors tab lists
+ * VISITOR entries — including invitations residents raised in advance, which is
+ * what makes an invitation visible at the gate at all — and the Deliveries tab
+ * lists deliveries. Nothing appears in both.
+ */
+export function GateArrivalsScreen({ entryType }: { entryType: 'DELIVERY' | 'VISITOR' }) {
   const { communityId } = useWorker();
   const { hasPermission } = useAuth();
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
+  const copy = COPY[entryType];
 
   const canCreate = hasPermission('gate:entry:create');
   const canView = hasPermission('gate:entry:view');
 
   const query = useQuery({
-    queryKey: ['gate-deliveries', communityId],
+    queryKey: ['gate-deliveries', communityId, entryType],
     queryFn: () =>
-      living.gate.list(communityId!, { limit: 100, todayOnly: true, sortBy: 'createdAt', sortDir: 'desc' }),
+      living.gate.list(communityId!, {
+        limit: 100, todayOnly: true, entryType, sortBy: 'createdAt', sortDir: 'desc',
+      }),
     enabled: !!communityId && canView,
     // A slow fallback only: the realtime stream is what keeps this current.
     refetchInterval: 60_000,
@@ -116,13 +147,13 @@ export function GateDeliveriesScreen() {
         <LiveDot status={status} />
         {canCreate && (
           <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> New delivery
+            <Plus className="h-4 w-4" /> {copy.createLabel}
           </Button>
         )}
       </div>
 
       <div className="px-4">
-        <SearchInput value={q} onValueChange={setQ} placeholder="Search name, vendor, flat…" />
+        <SearchInput value={q} onValueChange={setQ} placeholder={copy.searchPlaceholder} />
       </div>
 
       <div className="mt-4 flex flex-col gap-6 px-4">
@@ -132,24 +163,25 @@ export function GateDeliveriesScreen() {
           </div>
         ) : empty ? (
           <EmptyState
-            icon={Truck}
-            title="Nothing at the gate today"
-            description={canCreate ? 'Record a delivery or visitor when they arrive.' : undefined}
+            icon={entryType === 'VISITOR' ? UserRound : Truck}
+            title={copy.emptyTitle}
+            description={canCreate ? copy.emptyHint : undefined}
           />
         ) : (
           <>
             <Group title="Waiting on resident" entries={groups.waiting} />
-            <Group title="Approved — hand over" entries={groups.approved} />
+            <Group title={copy.approvedTitle} entries={groups.approved} />
             <Group title="Closed today" entries={groups.done} muted />
           </>
         )}
       </div>
 
       {communityId && canCreate && (
-        <NewDeliverySheet
+        <NewArrivalSheet
           open={creating}
           onOpenChange={setCreating}
           communityId={communityId}
+          entryType={entryType}
         />
       )}
     </div>
@@ -180,13 +212,13 @@ function Group({ title, entries, muted }: { title: string; entries: GateEntry[];
       action={<span className="rounded-full bg-sunken px-2 py-0.5 text-2xs text-muted">{entries.length}</span>}
     >
       <div className="flex flex-col gap-2">
-        {entries.map((e) => <DeliveryCard key={e.id} entry={e} muted={muted} />)}
+        {entries.map((e) => <ArrivalCard key={e.id} entry={e} muted={muted} />)}
       </div>
     </Section>
   );
 }
 
-function DeliveryCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
+function ArrivalCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
   const { hasPermission } = useAuth();
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ['gate-deliveries'] });
@@ -203,6 +235,7 @@ function DeliveryCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
   });
 
   const waiting = entry.status === 'CREATED' || entry.status === 'NOTIFIED';
+  const isVisitor = entry.entryType === 'VISITOR';
 
   return (
     <div className={cn('rounded-card bg-card p-4 shadow-sm', muted && 'opacity-70')}>
@@ -223,7 +256,7 @@ function DeliveryCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
       {/* A pre-announced visitor: the guard needs the pass to check against
           what the person at the gate says, and the expected time to know
           whether they are early. Deliveries have neither. */}
-      {entry.entryType === 'VISITOR' && (
+      {isVisitor && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-2xs">
           <span className="rounded-pill bg-brand/10 px-2 py-0.5 font-medium text-brand">Visitor</span>
           {entry.passCode && (
@@ -250,9 +283,14 @@ function DeliveryCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="font-mono text-2xs text-subtle">{entry.entryNumber}</span>
         <div className="flex gap-2">
+          {/* A visit is not "handed over" — the visitor comes and goes, and the
+              guard closes the entry when they leave. Same lifecycle step, and
+              labelling it as a parcel handover is what made an invitation look
+              like a delivery on this screen. */}
           {entry.status === 'APPROVED' && hasPermission('gate:entry:complete') && (
             <Button size="sm" loading={complete.isPending} onClick={() => complete.mutate()}>
-              <PackageCheck className="h-4 w-4" /> Handed over
+              {isVisitor ? <LogOut className="h-4 w-4" /> : <PackageCheck className="h-4 w-4" />}
+              {isVisitor ? 'Visit finished' : 'Handed over'}
             </Button>
           )}
           {waiting && hasPermission('gate:entry:update') && (
@@ -269,16 +307,23 @@ function DeliveryCard({ entry, muted }: { entry: GateEntry; muted?: boolean }) {
 /**
  * The entry form. Apartment search drives resident auto-fill, so the guard
  * never has to know who lives where — they type the flat number they were told.
+ *
+ * The vendor and delivery-type fields are delivery-only: a walk-in visitor has
+ * no brand and no "FOOD/COURIER" category, and offering them was part of why a
+ * visit recorded here came out looking like a delivery.
  */
-function NewDeliverySheet({
+function NewArrivalSheet({
   open,
   onOpenChange,
   communityId,
+  entryType,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   communityId: string;
+  entryType: 'DELIVERY' | 'VISITOR';
 }) {
+  const isVisitor = entryType === 'VISITOR';
   const qc = useQueryClient();
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -315,7 +360,9 @@ function NewDeliverySheet({
   const submit = useMutation({
     mutationFn: async () => {
       if (!unit) throw new Error('Choose the apartment');
-      if (!personName.trim()) throw new Error('Enter the delivery person’s name');
+      if (!personName.trim()) {
+        throw new Error(isVisitor ? 'Enter the visitor’s name' : 'Enter the delivery person’s name');
+      }
 
       let photoKey: string | undefined;
       if (photo) {
@@ -335,10 +382,9 @@ function NewDeliverySheet({
       }
 
       return living.gate.create(communityId, {
-        entryType: 'DELIVERY',
+        entryType,
         unitId: unit.id,
-        vendorName: vendorName.trim() || undefined,
-        deliveryType,
+        ...(isVisitor ? {} : { vendorName: vendorName.trim() || undefined, deliveryType }),
         personName: personName.trim(),
         mobileNumber: mobile.trim() || undefined,
         remarks: remarks.trim() || undefined,
@@ -363,7 +409,12 @@ function NewDeliverySheet({
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-      <SheetContent open={open} side="bottom" title="New delivery" className="max-h-[92dvh] overflow-y-auto">
+      <SheetContent
+        open={open}
+        side="bottom"
+        title={isVisitor ? 'Walk-in visitor' : 'New delivery'}
+        className="max-h-[92dvh] overflow-y-auto"
+      >
         <div className="flex flex-col gap-3">
           {/* Apartment first — everything else depends on it. */}
           {unit ? (
@@ -416,51 +467,55 @@ function NewDeliverySheet({
             </div>
           )}
 
-          <div>
-            <Input
-              label="Vendor"
-              value={vendorName}
-              onChange={(e) => setVendorName(e.target.value)}
-              placeholder="Swiggy"
-            />
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {COMMON_VENDORS.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setVendorName(v)}
-                  className={cn(
-                    'rounded-pill px-2.5 py-1 text-xs',
-                    vendorName === v ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted',
-                  )}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
+          {!isVisitor && (
+            <>
+              <div>
+                <Input
+                  label="Vendor"
+                  value={vendorName}
+                  onChange={(e) => setVendorName(e.target.value)}
+                  placeholder="Swiggy"
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {COMMON_VENDORS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setVendorName(v)}
+                      className={cn(
+                        'rounded-pill px-2.5 py-1 text-xs',
+                        vendorName === v ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted',
+                      )}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-strong">Type</span>
-            <div className="flex flex-wrap gap-1.5">
-              {DELIVERY_TYPES.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setDeliveryType(t)}
-                  className={cn(
-                    'rounded-pill px-3 py-1.5 text-sm',
-                    deliveryType === t ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted',
-                  )}
-                >
-                  {humanize(t)}
-                </button>
-              ))}
-            </div>
-          </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-strong">Type</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {DELIVERY_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setDeliveryType(t)}
+                      className={cn(
+                        'rounded-pill px-3 py-1.5 text-sm',
+                        deliveryType === t ? 'bg-brand text-brand-fg' : 'bg-sunken text-muted',
+                      )}
+                    >
+                      {humanize(t)}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            </>
+          )}
 
           <Input
-            label="Delivery person"
+            label={isVisitor ? 'Visitor name' : 'Delivery person'}
             value={personName}
             onChange={(e) => setPersonName(e.target.value)}
             placeholder="Ramesh"
@@ -500,7 +555,7 @@ function NewDeliverySheet({
             disabled={!unit || !personName.trim()}
             onClick={() => submit.mutate()}
           >
-            <Send className="h-4 w-4" /> Save &amp; notify resident
+            <Send className="h-4 w-4" /> Save &amp; ask the resident
           </Button>
         </div>
       </SheetContent>

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
-import { Button, Input, toast } from '@living/ui';
+import { Button, ForgotPasswordDialog, Input, toast } from '@living/ui';
 
 /**
  * Worker sign-in — plain, high-contrast, big touch targets.
@@ -20,6 +20,7 @@ export function LoginScreen() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
 
   if (status === 'authenticated') return <Navigate to="/" />;
 
@@ -55,11 +56,20 @@ export function LoginScreen() {
         <Input label="Password" type="password" autoComplete="current-password"
           placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Button type="submit" size="lg" block loading={busy} className="mt-2">Sign in</Button>
-        {/* No self-service recovery here yet — the resident app's OTP dialog is
-            bound to its own SDK client, so sharing it needs a lift into a
-            package rather than a copy. Admins reset workforce passwords today. */}
+        {/* Self-service recovery. The dialog now takes its client from the SDK
+            context rather than a module-level one, so the same implementation
+            serves all three apps — a worker no longer has to ring an admin to
+            get back in. */}
+        <button
+          type="button"
+          onClick={() => setForgot(true)}
+          className="text-center text-sm text-muted underline-offset-2 hover:underline"
+        >
+          Forgot your password?
+        </button>
         <p className="text-center text-xs text-subtle">Life Happens Here.</p>
       </form>
+      <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} />
     </div>
   );
 }

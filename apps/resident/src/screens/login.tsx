@@ -2,9 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
-import { Button, Input, toast } from '@living/ui';
+import { Button, ForgotPasswordDialog, Input, toast } from '@living/ui';
 
-import { ForgotPasswordDialog } from './forgot-password';
 
 /** Consumer sign-in — warm, minimal, big touch targets. Residents sign in with
  *  their mobile number; the field still accepts an email for staff/admins. */

@@ -15,6 +15,7 @@ const schema = z.object({
   title: z.string().min(3, 'At least 3 characters').max(200),
   description: z.string().min(1, 'Describe the work').max(4000),
   unitId: z.string().optional(),
+  assetId: z.string().optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   estimatedHours: z.string().optional(),
   estimatedLabourCost: z.string().optional(),
@@ -43,6 +44,14 @@ export function WorkOrderForm({
     queryFn: () => living.community.listUnits(communityId, { limit: 200, sortBy: 'unitNumber', sortDir: 'asc' }),
     enabled: open,
   });
+  // The asset is what tells the work order which trade it needs — naming one is
+  // what lets it go to the matching vendor by itself instead of waiting for a
+  // human to assign it.
+  const assets = useQuery({
+    queryKey: ['assets', communityId, 'wo-form'],
+    queryFn: () => living.assets.list({ communityId, limit: 300, sortBy: 'name', sortDir: 'asc' }),
+    enabled: open,
+  });
 
   const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -53,12 +62,13 @@ export function WorkOrderForm({
     if (!open) return;
     reset(editing
       ? { title: workOrder.title, description: workOrder.description, unitId: workOrder.unitId ?? '',
+          assetId: (workOrder as { assetId?: string | null }).assetId ?? '',
           priority: workOrder.priority,
           estimatedHours: workOrder.estimatedHours != null ? String(workOrder.estimatedHours) : '',
           estimatedLabourCost: workOrder.estimatedLabourCost ?? '',
           estimatedMaterialCost: workOrder.estimatedMaterialCost ?? '',
           requestApproval: false }
-      : { title: '', description: '', unitId: '', priority: 'MEDIUM', estimatedHours: '',
+      : { title: '', description: '', unitId: '', assetId: '', priority: 'MEDIUM', estimatedHours: '',
           estimatedLabourCost: '', estimatedMaterialCost: '', requestApproval: false });
   }, [open, editing, workOrder, reset]);
 
@@ -71,6 +81,7 @@ export function WorkOrderForm({
     const payload = {
       title: values.title, description: values.description, priority: values.priority,
       unitId: values.unitId || undefined,
+      assetId: values.assetId || undefined,
       estimatedHours: num(values.estimatedHours),
       estimatedLabourCost: num(values.estimatedLabourCost),
       estimatedMaterialCost: num(values.estimatedMaterialCost),
@@ -118,6 +129,15 @@ export function WorkOrderForm({
               options={(units.data?.items ?? []).map((u) => ({ value: u.id, label: u.unitNumber }))} />
             <OpsSelect label="Priority" {...register('priority')}
               options={[{ value: 'LOW', label: 'Low' }, { value: 'MEDIUM', label: 'Medium' }, { value: 'HIGH', label: 'High' }, { value: 'CRITICAL', label: 'Critical' }]} />
+          </div>
+          <div>
+            <OpsSelect label="Asset (optional)" {...register('assetId')}
+              placeholder={assets.isLoading ? 'Loading…' : 'Not against a specific asset'}
+              options={(assets.data?.items ?? []).map((a) => ({ value: a.id, label: `${a.assetCode} — ${a.name}` }))} />
+            <p className="mt-1.5 text-xs text-subtle">
+              Pick the asset and the work order goes straight to the least-loaded vendor who
+              services that category. Leave it blank and someone has to assign it by hand.
+            </p>
           </div>
           <Input label="Estimated hours" type="number" step="0.5" placeholder="2.5" {...register('estimatedHours')} />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

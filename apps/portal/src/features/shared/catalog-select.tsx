@@ -15,6 +15,21 @@ function useCatalog(kind: CatalogKind) {
   });
 }
 
+/**
+ * The same option list the forms use, shaped for a list filter.
+ *
+ * Staff roles and vendor categories are tenant catalogs — an admin can add
+ * "Lift Technician" from the form's Manage panel — but the Staff and Vendors
+ * filters were reading hardcoded copies of the seed defaults. So a role you had
+ * just created was selectable when adding someone and then missing from the
+ * filter that finds them, and any default you removed still showed up. One
+ * source, no drift.
+ */
+export function useCatalogOptions(kind: CatalogKind) {
+  const { data = [] } = useCatalog(kind);
+  return data.map((o) => ({ value: o.name, label: humanize(o.name) }));
+}
+
 /** Small popover to add/remove tenant options for a catalog kind. */
 function ManagePanel({ kind, onClose }: { kind: CatalogKind; onClose: () => void }) {
   const qc = useQueryClient();

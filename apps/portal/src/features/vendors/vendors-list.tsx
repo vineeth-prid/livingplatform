@@ -6,7 +6,8 @@ import type { Vendor } from '@living/types';
 
 import { living } from '../../lib/living';
 import { ListScaffold, StatusBadge, useListQuery, type ListColumn } from '../master-data';
-import { opt, PERSON_STATUS, VENDOR_CATEGORY } from '../master-data/options';
+import { opt, PERSON_STATUS } from '../master-data/options';
+import { useCatalogOptions } from '../shared/catalog-select';
 import { VendorForm } from './vendor-form';
 
 const catLabel = (c: string) => c.charAt(0) + c.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -33,6 +34,7 @@ const columns: ListColumn<Vendor>[] = [
 export function VendorsListPage() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const categoryOptions = useCatalogOptions('VENDOR_CATEGORY');
 
   const query = useListQuery<Vendor>({
     queryKey: qk.vendors('list'),
@@ -53,7 +55,7 @@ export function VendorsListPage() {
         onRowClick={(v) => navigate({ to: `/vendors/${v.id}` })}
         searchPlaceholder="Search name, company, phone…"
         filters={[
-          { key: 'category', placeholder: 'All categories', options: opt(VENDOR_CATEGORY) },
+          { key: 'category', placeholder: 'All categories', options: categoryOptions },
           { key: 'status', placeholder: 'All statuses', options: opt(PERSON_STATUS) },
         ]}
         createPermission="vendor:create"

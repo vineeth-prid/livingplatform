@@ -64,6 +64,8 @@ export function BookingsPage() {
     { key: 'resident', header: 'Resident', cell: (b) => <span className="text-sm text-body">{residentName(b)}</span> },
     { key: 'date', header: 'Date', sortKey: 'bookingDate', cell: (b) => <span className="text-sm text-body">{formatDate(b.bookingDate)}</span> },
     { key: 'slot', header: 'Slot', cell: (b) => <span className="text-sm text-muted">{time(b.startTime)}–{time(b.endTime)}</span> },
+    // Capacity planning needs the party size, not just the number of bookings.
+    { key: 'people', header: 'People', cell: (b) => <span className="text-sm text-body" data-numeric>{b.headCount ?? 1}</span> },
     { key: 'status', header: 'Status', cell: (b) => <BStatus status={b.status} /> },
     { key: 'actions', header: '', align: 'right', cell: (b) => canCancel && (b.status === 'PENDING' || b.status === 'CONFIRMED') ? <div onClick={(e) => e.stopPropagation()}><Button size="sm" variant="ghost" onClick={() => onCancel(b)}><X className="h-4 w-4" /> Cancel</Button></div> : null },
   ];

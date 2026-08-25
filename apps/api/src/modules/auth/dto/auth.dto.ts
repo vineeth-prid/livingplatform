@@ -89,13 +89,25 @@ export class ForgotPasswordDto {
   identifier!: string;
 }
 
-/** Complete a mobile reset: the number, the OTP, and the new password. */
+/**
+ * Complete an OTP reset: the identifier the code was requested with, the code,
+ * and the new password.
+ *
+ * `identifier`, not `mobile`: the code is issued to any account that HAS a
+ * mobile number, including one whose owner asked for it by EMAIL. Accepting
+ * only digits here is what stranded a staff member holding a valid OTP — the
+ * code arrived, and this endpoint could not find them by the address they had
+ * typed, so every attempt came back "invalid or expired".
+ */
 export class ResetPasswordWithOtpDto extends PasswordField {
-  @ApiProperty({ example: '9876543210' })
+  @ApiProperty({
+    example: '9876543210',
+    description: 'The same email or mobile number the code was requested with',
+  })
   @IsString()
-  @MinLength(7)
-  @MaxLength(20)
-  mobile!: string;
+  @MinLength(3)
+  @MaxLength(160)
+  identifier!: string;
 
   @ApiProperty({ example: '482913', description: 'The one-time code sent to the mobile' })
   @IsString()

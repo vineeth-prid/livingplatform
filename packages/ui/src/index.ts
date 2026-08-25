@@ -13,6 +13,7 @@ export { Spinner } from './components/spinner';
 export {
   Dialog, DialogTrigger, DialogClose, DialogContent, DialogFooter,
 } from './components/dialog';
+export { ForgotPasswordDialog } from './components/forgot-password-dialog';
 export { Sheet, SheetTrigger, SheetClose, SheetContent } from './components/sheet';
 export {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,

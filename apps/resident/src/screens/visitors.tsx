@@ -27,6 +27,8 @@ const TONE: Record<string, Tone> = {
 const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
 /** Still open, so still cancellable. */
 const OPEN = ['CREATED', 'NOTIFIED', 'APPROVED'];
+/** Waiting on this resident to say yes or no. */
+const AWAITING = ['CREATED', 'NOTIFIED'];
 
 export function VisitorsScreen() {
   const qc = useQueryClient();
@@ -53,6 +55,29 @@ export function VisitorsScreen() {
   const cancel = useMutation({
     mutationFn: (id: string) => living.gate.cancel(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['gate'] }),
+  });
+
+  /*
+    Deciding a visit from the list.
+
+    An invitation an ADMIN raises on a resident's behalf lands here waiting for
+    that resident's answer, and this screen offered only "Cancel" — so the one
+    person who could approve it had no way to, and the record sat Pending. The
+    arrival popup covers the case where the resident is in the app at the time;
+    this covers every other time, and is where they will look afterwards.
+
+    Visits the resident raised themselves arrive APPROVED, so they never show
+    these buttons.
+  */
+  const decide = useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
+      approve ? living.gate.approve(id) : living.gate.reject(id),
+    onSuccess: (_data, v) => {
+      void qc.invalidateQueries({ queryKey: ['gate'] });
+      toast.success(v.approve ? 'Approved — security will let them in' : 'Declined');
+    },
+    onError: (err) =>
+      toast.error(err instanceof LivingApiError ? err.message : 'Could not send your decision'),
   });
 
   const myUnits = units.data ?? [];
@@ -100,14 +125,30 @@ export function VisitorsScreen() {
                 </div>
                 <Badge tone={TONE[v.status] ?? 'neutral'} size="sm" dot>{humanize(v.status)}</Badge>
               </div>
-              <div className="mt-3 flex items-center justify-between">
+              <div className="mt-3 flex items-center justify-between gap-2">
                 {v.passCode ? (
                   <div className="rounded-md bg-sunken px-3 py-1 font-mono text-sm font-bold tracking-widest text-brand">{v.passCode}</div>
                 ) : <span />}
-                {OPEN.includes(v.status) && (
+                {AWAITING.includes(v.status) ? (
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" loading={decide.isPending}
+                      onClick={() => decide.mutate({ id: v.id, approve: true })}>
+                      Approve
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={decide.isPending}
+                      onClick={() => decide.mutate({ id: v.id, approve: false })}>
+                      Decline
+                    </Button>
+                  </div>
+                ) : OPEN.includes(v.status) ? (
                   <button onClick={() => void onCancel(v)} className="text-xs text-danger-fg">Cancel</button>
-                )}
+                ) : null}
               </div>
+              {AWAITING.includes(v.status) && (
+                <p className="mt-2 text-xs text-subtle">
+                  Invited on your behalf — approve it to let them through the gate.
+                </p>
+              )}
               {v.decisionNote && <p className="mt-2 text-xs text-subtle">{v.decisionNote}</p>}
             </div>
           ))

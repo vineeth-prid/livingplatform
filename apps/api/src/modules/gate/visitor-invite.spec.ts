@@ -68,6 +68,10 @@ describe('resident visitor invite', () => {
         expectedArrival: dto.expectedArrival,
       }),
       actor,
+      // Pre-approved. Without this the invitation is written CREATED like any
+      // other arrival, the engine asks the resident to approve it, and the
+      // popup opens in the very session that just submitted the form.
+      { preApproved: true },
     );
   });
 

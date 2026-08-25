@@ -90,11 +90,21 @@ export function useMyBookings() {
   });
 }
 
+/**
+ * The resident's visitors — VISITOR gate entries.
+ *
+ * This read the retired `visitors` table, which nothing writes to any more, so
+ * "My requests" showed an empty visitor list no matter how many passes the
+ * resident had raised. Same records the Visitors screen and the gate desk use.
+ */
 export function useMyVisitors() {
   const { communityId } = useResidentCommunity();
   return useQuery({
-    queryKey: ['visitors', communityId],
-    queryFn: () => living.visitors.list({ communityId: communityId!, limit: 50, sortBy: 'expectedArrival', sortDir: 'desc' }),
+    queryKey: ['gate', 'mine', 'visitors', communityId],
+    queryFn: () => living.gate.mine({
+      communityId: communityId!, entryType: 'VISITOR',
+      limit: 50, sortBy: 'createdAt', sortDir: 'desc',
+    }),
     enabled: !!communityId,
   });
 }
@@ -108,14 +118,6 @@ export function useBookableAmenities() {
   });
 }
 
-export function useVisitorMutations() {
-  const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['visitors'] });
-  return {
-    create: useMutation({ mutationFn: (input: Record<string, unknown>) => living.visitors.create(input), onSuccess: invalidate }),
-    cancel: useMutation({ mutationFn: (id: string) => living.visitors.cancel(id), onSuccess: invalidate }),
-  };
-}
 
 export function useBookingMutations() {
   const qc = useQueryClient();

@@ -2110,6 +2110,10 @@ model AmenityBooking {
   bookingDate DateTime
   startTime   DateTime
   endTime     DateTime
+  /// How many people are coming, the resident included. Checked against the
+  /// amenity's capacity, which counts PEOPLE — a hall for 50 was previously
+  /// treated as 50 simultaneous bookings.
+  headCount   Int           @default(1)
   status      BookingStatus @default(PENDING)
   remarks     String?
 

@@ -57,7 +57,29 @@ export class WorkOrderService {
    * system failure, burst pipe, …). Gated to managers via WORKORDER_CREATE.
    */
   async create(communityId: string, dto: CreateWorkOrderDto, actor: AuthenticatedUser) {
-    return this.persistNew(communityId, dto, actor, { recommended: false });
+    const workOrder = await this.persistNew(communityId, dto, actor, { recommended: false });
+    /*
+      Find it an owner now.
+
+      Auto-assignment hung off `approve()` alone, which a manual work order
+      never passes through — it skips approval and starts at DRAFT. So the one
+      kind of order a human raises against an asset was the one kind that never
+      reached the matching vendor, and every asset maintenance job entered by
+      hand waited for someone to assign it. A manual order IS agreed work, so
+      the same rule applies: least-loaded vendor covering this community and
+      this asset's category.
+    */
+    const assigned = await this.tryAutoAssign(
+      {
+        id: workOrder.id,
+        communityId: workOrder.communityId,
+        assetId: workOrder.assetId,
+        assignedStaffId: workOrder.assignedStaffId,
+        assignedVendorId: workOrder.assignedVendorId,
+      },
+      actor,
+    );
+    return assigned ? this.present(assigned) : workOrder;
   }
 
   /**
@@ -85,12 +107,14 @@ export class WorkOrderService {
   ) {
     await this.access.assert(communityId);
     if (dto.unitId) await this.assertUnitInCommunity(dto.unitId, communityId);
+    if (dto.assetId) await this.assertAssetInCommunity(dto.assetId, communityId);
 
     const workOrder = await this.prisma.$transaction(async (tx) => {
       const created = await tx.workOrder.create({
         data: {
           communityId,
           unitId: dto.unitId,
+          assetId: dto.assetId,
           title: dto.title,
           description: dto.description,
           priority: dto.priority ?? 'MEDIUM',
@@ -477,12 +501,14 @@ export class WorkOrderService {
       );
     }
     if (dto.unitId) await this.assertUnitInCommunity(dto.unitId, workOrder.communityId);
+    if (dto.assetId) await this.assertAssetInCommunity(dto.assetId, workOrder.communityId);
     const updated = await this.prisma.workOrder.update({
       where: { id },
       data: {
         title: dto.title,
         description: dto.description,
         unitId: dto.unitId,
+        assetId: dto.assetId,
         priority: dto.priority,
         estimatedHours: dto.estimatedHours,
         ...this.costFields(dto),
@@ -725,6 +751,14 @@ export class WorkOrderService {
       select: { id: true },
     });
     if (!unit) throw new BadRequestException('Unit does not belong to this community');
+  }
+
+  private async assertAssetInCommunity(assetId: string, communityId: string) {
+    const asset = await this.prisma.asset.findFirst({
+      where: { id: assetId, communityId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!asset) throw new BadRequestException('Asset does not belong to this community');
   }
 
   private async assertStaffInCommunity(staffId: string, communityId: string) {

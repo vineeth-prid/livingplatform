@@ -14,11 +14,6 @@ export const BLOCK_TYPE = [
   'TOWER', 'VILLA_CLUSTER', 'COMMERCIAL_BLOCK', 'PLOT', 'PODIUM', 'OTHER',
 ] as const;
 export const OWNERSHIP = ['OWNER_OCCUPIED', 'TENANTED', 'VACANT', 'UNKNOWN'] as const;
-export const VENDOR_CATEGORY = [
-  'ELECTRICAL', 'PLUMBING', 'CIVIL', 'HOUSEKEEPING', 'SECURITY', 'GARDENING',
-  'PEST_CONTROL', 'LIFT', 'DG', 'STP', 'HVAC', 'PAINTING', 'GENERAL',
-] as const;
-export const STAFF_ROLE = [
-  'FACILITY_MANAGER', 'SUPERVISOR', 'SECURITY', 'HOUSEKEEPING',
-  'ELECTRICIAN', 'PLUMBER', 'TECHNICIAN', 'ADMIN',
-] as const;
+// STAFF_ROLE and VENDOR_CATEGORY are NOT listed here. They are tenant catalogs
+// (see `useCatalogOptions`) — an admin adds and removes their own options, so a
+// copy of the seed defaults here could only ever be a second, wrong answer.

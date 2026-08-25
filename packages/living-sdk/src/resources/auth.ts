@@ -47,10 +47,18 @@ export class AuthResource {
     return this.http.request('POST', '/auth/reset-password', { body: { token, password }, skipAuth: true });
   }
 
-  /** Complete a mobile reset with the OTP that was sent to the number. */
-  resetPasswordWithOtp(mobile: string, code: string, password: string): Promise<{ message: string }> {
+  /**
+   * Complete a reset with the OTP. `identifier` is whatever was passed to
+   * `forgotPassword` — email or mobile — because an email account that has a
+   * mobile number on file is sent a code, not a link.
+   */
+  resetPasswordWithOtp(
+    identifier: string,
+    code: string,
+    password: string,
+  ): Promise<{ message: string }> {
     return this.http.request('POST', '/auth/reset-password-otp', {
-      body: { mobile, code, password },
+      body: { identifier, code, password },
       skipAuth: true,
     });
   }

@@ -128,3 +128,50 @@ describe('work order auto-assignment', () => {
     expect(autoAssign.pick).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A manual work order is agreed work, so it has to find an owner too.
+ *
+ * Auto-assignment hung off `approve()` alone, and a manual order never passes
+ * through approval — it skips straight to DRAFT. So the one kind an admin
+ * raises by hand against an asset was the one kind that never reached the
+ * matching vendor, which is exactly what was reported: an asset maintenance
+ * work order entered manually sat unassigned.
+ */
+describe('manual work orders reach the same picker', () => {
+  function buildCreate(picked: Picked) {
+    const svc = new WorkOrderService(
+      {} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
+      { pick: jest.fn(() => Promise.resolve(picked)) } as never,
+    );
+    const created = {
+      id: 'wo-1', communityId: 'c-1', assetId: 'a-1', number: 1,
+      assignedStaffId: null, assignedVendorId: null,
+    };
+    (svc as unknown as { persistNew: unknown }).persistNew = jest
+      .fn()
+      .mockResolvedValue({ ...created, workOrderNumber: 'WO-000001' });
+    const tryAutoAssign = jest.fn().mockResolvedValue(
+      picked ? { ...created, assignedVendorId: picked.vendorId } : null,
+    );
+    (svc as unknown as { tryAutoAssign: unknown }).tryAutoAssign = tryAutoAssign;
+    return { svc, tryAutoAssign };
+  }
+
+  it('runs auto-assignment on create, not only on approval', async () => {
+    const { svc, tryAutoAssign } = buildCreate(VENDOR);
+    const result = await svc.create('c-1', { title: 't', description: 'd' } as never, { id: 'u-1' } as never);
+    expect(tryAutoAssign).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wo-1', assetId: 'a-1' }),
+      expect.anything(),
+    );
+    expect(result).toMatchObject({ assignedVendorId: 'v-9' });
+  });
+
+  it('still returns the work order when no vendor matches', async () => {
+    const { svc } = buildCreate(null);
+    await expect(
+      svc.create('c-1', { title: 't', description: 'd' } as never, { id: 'u-1' } as never),
+    ).resolves.toMatchObject({ id: 'wo-1', assignedVendorId: null });
+  });
+});

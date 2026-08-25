@@ -7,13 +7,14 @@ import { formatDate } from '@living/utils';
 import { Button, toast, useConfirm } from '@living/ui';
 import type { Ticket, TicketStatus } from '@living/types';
 
+import { living } from '../../lib/living';
 import { useCommunity } from '../community/community-context';
 import {
   DetailHeader, DetailSection, DetailShell, Field, FieldGrid, PlaceholderSection,
 } from '../master-data';
 import { PriorityBadge, TicketStatusBadge } from './ticket-badges';
 import { TicketAssignment } from './ticket-assignment';
-import { TicketAttachments } from './ticket-attachments';
+import { AttachmentPanel } from '../shared/attachment-panel';
 import { TicketComments } from './ticket-comments';
 import { TicketForm } from './ticket-form';
 import { TicketStatusMenu } from './ticket-status-menu';
@@ -97,7 +98,16 @@ export function TicketDetailPage() {
               </DetailSection>
 
               <DetailSection title="Attachments">
-                <TicketAttachments ticketId={t.id} attachments={t.attachments ?? []} />
+                <AttachmentPanel
+                  queryKey={['ticket', t.id, 'attachments']}
+                  canAdd={hasPermission('ticket:comment')}
+                  evidenceHint="A before photo is required to start work and an after photo to resolve it."
+                  api={{
+                    list: () => living.ticket.listAttachments(t.id),
+                    uploadUrl: (input) => living.ticket.attachmentUploadUrl(t.id, input),
+                    add: (input) => living.ticket.addAttachment(t.id, input),
+                  }}
+                />
               </DetailSection>
             </div>
 

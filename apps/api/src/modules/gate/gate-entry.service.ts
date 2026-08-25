@@ -41,6 +41,20 @@ const SORTABLE = ['createdAt', 'status', 'personName', 'vendorName', 'decidedAt'
 /** Statuses that still need the resident to act. */
 const AWAITING: GateEntryStatus[] = [GateEntryStatus.CREATED, GateEntryStatus.NOTIFIED];
 
+/**
+ * The calendar day an instant falls on, in the community's own timezone.
+ *
+ * Comparing raw instants against the SERVER's midnight is wrong here for the
+ * same reason it was wrong for amenity opening hours (see booking.util.ts): a
+ * form sends a date-only value as local midnight, so an Indian resident booking
+ * "today" sends 18:30 UTC the previous day. On a UTC server that reads as
+ * yesterday and a same-day invitation would be refused. Comparing calendar days
+ * in the community's clock is the question actually being asked.
+ */
+function communityDay(instant: Date, timezone: string): string {
+  return instant.toLocaleDateString('en-CA', { timeZone: timezone }); // YYYY-MM-DD
+}
+
 const DETAIL_INCLUDE = {
   gate: { select: { id: true, name: true } },
   timeline: { orderBy: { createdAt: 'asc' } },
@@ -75,8 +89,35 @@ export class GateEntryService {
 
   // ── Creation ───────────────────────────────────────────────────────────────
 
-  async create(communityId: string, dto: CreateGateEntryDto, actor: AuthenticatedUser) {
+  /**
+   * @param opts.preApproved The entry needs no resident decision — it IS the
+   *   resident's decision. Used by `inviteVisitor`.
+   */
+  async create(
+    communityId: string,
+    dto: CreateGateEntryDto,
+    actor: AuthenticatedUser,
+    opts: { preApproved?: boolean } = {},
+  ) {
     const community = await this.access.assert(communityId);
+
+    /*
+      An arrival cannot be expected in the past.
+
+      Enforced HERE rather than on the DTOs because both entry points — the
+      resident's own invitation and an admin recording one on their behalf —
+      funnel through this method, and the `min` attribute the two forms carry is
+      advisory: a browser will happily submit a typed-in date below it, and the
+      API accepted it. A gate pass dated last Tuesday is either a typo or an
+      attempt to make an unannounced visit look pre-cleared, and neither should
+      reach the guard's screen.
+    */
+    if (dto.expectedArrival) {
+      const timezone = await this.communityTimezone(communityId);
+      if (communityDay(dto.expectedArrival, timezone) < communityDay(new Date(), timezone)) {
+        throw new BadRequestException('An expected arrival cannot be in the past');
+      }
+    }
 
     const unit = await this.prisma.unit.findFirst({
       where: { id: dto.unitId, communityId, deletedAt: null },
@@ -99,13 +140,15 @@ export class GateEntryService {
       if (!gate) throw new BadRequestException('Gate does not belong to this community');
     }
 
+    const preApproved = opts.preApproved === true;
     const entry = await this.prisma.gateEntry.create({
       data: {
         tenantId: community.tenantId,
         communityId,
         gateId: dto.gateId ?? (await this.defaultGateId(communityId)),
         entryType: dto.entryType ?? GateEntryType.DELIVERY,
-        status: GateEntryStatus.CREATED,
+        status: preApproved ? GateEntryStatus.APPROVED : GateEntryStatus.CREATED,
+        ...(preApproved ? { decidedAt: new Date(), decidedById: actor.id } : {}),
         entryNumber: await this.nextEntryNumber(communityId),
         unitId: unit.id,
         residentId,
@@ -125,7 +168,7 @@ export class GateEntryService {
 
     await this.addTimeline(entry.id, {
       action: GateEntryAction.CREATED,
-      status: GateEntryStatus.CREATED,
+      status: entry.status,
       actorId: actor.id,
       note: `${entry.personName}${entry.vendorName ? ` (${entry.vendorName})` : ''} at the gate for ${unit.unitNumber}`,
     });
@@ -136,11 +179,33 @@ export class GateEntryService {
       });
     }
 
-    // The Notification Engine takes it from here. Both the generic and the
-    // delivery-specific event are published so consumers can bind to either.
-    this.publish(DomainEventName.GateEntryCreated, entry, actor);
-    if (entry.entryType === GateEntryType.DELIVERY) {
-      this.publish(DomainEventName.DeliveryEntryCreated, entry, actor);
+    if (preApproved) {
+      /*
+        A resident's own invitation is already their approval, so it must NOT
+        raise the "someone is at your gate — approve or reject?" prompt. It did:
+        the invitation was written CREATED like any other arrival, the engine
+        notified the resident about it, and the popup opened in the very session
+        that had just filled in the form.
+
+        Publishing the APPROVED event instead keeps security and the portal in
+        step (both read the entry, and the desk gets its realtime nudge below)
+        while skipping the decision request entirely.
+      */
+      await this.addTimeline(entry.id, {
+        action: GateEntryAction.APPROVED,
+        status: GateEntryStatus.APPROVED,
+        actorId: actor.id,
+        actorName: actor.email,
+        note: 'Pre-approved by the resident who raised the invitation',
+      });
+      this.publish(DomainEventName.GateEntryApproved, entry, actor);
+    } else {
+      // The Notification Engine takes it from here. Both the generic and the
+      // delivery-specific event are published so consumers can bind to either.
+      this.publish(DomainEventName.GateEntryCreated, entry, actor);
+      if (entry.entryType === GateEntryType.DELIVERY) {
+        this.publish(DomainEventName.DeliveryEntryCreated, entry, actor);
+      }
     }
 
     // Mirror to the gate desk so a second guard's screen shows it at once.
@@ -455,9 +520,13 @@ export class GateEntryService {
    * they do not occupy: the unit has to be one of theirs or this throws.
    *
    * Everything after the check is the ordinary gate lifecycle, so the invitation
-   * reaches the security console and the admin portal the moment it exists, and
-   * either can approve or reject it. Before this, an invitation was written to a
-   * separate `visitors` table that the gate desk never read.
+   * reaches the security console and the admin portal the moment it exists.
+   * Before this, an invitation was written to a separate `visitors` table that
+   * the gate desk never read.
+   *
+   * It is created APPROVED. Asking the resident to approve a visitor they just
+   * invited is asking them to confirm their own decision — the popup fired in
+   * the same session that submitted the form.
    */
   async inviteVisitor(dto: InviteVisitorDto, actor: AuthenticatedUser) {
     const assignment = await this.prisma.residentUnit.findFirst({
@@ -489,6 +558,7 @@ export class GateEntryService {
         expectedArrival: dto.expectedArrival,
       },
       actor,
+      { preApproved: true },
     );
   }
 
@@ -751,6 +821,15 @@ export class GateEntryService {
       select: { residentId: true },
     });
     return assignment?.residentId ?? null;
+  }
+
+  /** The community's wall clock. Schema default is Asia/Kolkata. */
+  private async communityTimezone(communityId: string): Promise<string> {
+    const community = await this.prisma.community.findUnique({
+      where: { id: communityId },
+      select: { timezone: true },
+    });
+    return community?.timezone || 'Asia/Kolkata';
   }
 
   private async defaultGateId(communityId: string): Promise<string | null> {

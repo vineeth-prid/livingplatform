@@ -50,20 +50,8 @@ export function useWorkOrderMutations(id: string) {
       living.workOrder.addUpdate(id, input),
     onSuccess: invalidate,
   });
-  const addAttachment = useMutation({
-    mutationFn: async (file: File) => {
-      const signed = await living.workOrder.attachmentUploadUrl(id, {
-        fileName: file.name, contentType: file.type || 'application/octet-stream',
-      });
-      // Storage is a metadata-only stub this phase — register the record; byte
-      // PUT wires in when a real provider lands.
-      return living.workOrder.addAttachment(id, {
-        fileName: file.name, contentType: file.type || 'application/octet-stream',
-        size: file.size, storageKey: signed.key,
-      });
-    },
-    onSuccess: invalidate,
-  });
-
-  return { changeStatus, assign, verify, approve, reject, addUpdate, addAttachment };
+  // Attachments live in the shared AttachmentPanel — it owns the signed-URL
+  // flow, the byte PUT and the BEFORE/AFTER tag for work orders and tickets
+  // alike, so there is nothing left for this hook to duplicate.
+  return { changeStatus, assign, verify, approve, reject, addUpdate };
 }

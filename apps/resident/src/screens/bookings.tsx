@@ -50,7 +50,7 @@ export function BookingsScreen() {
           filtered.map((b) => (
             <div key={b.id} className="rounded-card bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0"><p className="truncate font-medium text-strong">{b.amenity?.name ?? 'Amenity'}</p><p className="text-xs text-muted">{formatDate(b.bookingDate)} · {time(b.startTime)}–{time(b.endTime)}</p></div>
+                <div className="min-w-0"><p className="truncate font-medium text-strong">{b.amenity?.name ?? 'Amenity'}</p><p className="text-xs text-muted">{formatDate(b.bookingDate)} · {time(b.startTime)}–{time(b.endTime)} · {b.headCount ?? 1} {(b.headCount ?? 1) === 1 ? 'person' : 'people'}</p></div>
                 <Badge tone={TONE[b.status] ?? 'neutral'} size="sm" dot>{humanize(b.status)}</Badge>
               </div>
               {tab === 'upcoming' && <button onClick={() => onCancel(b)} className="mt-2 text-xs text-danger-fg">Cancel booking</button>}

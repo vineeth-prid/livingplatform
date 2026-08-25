@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bike, Check, Package, PhoneCall, ShieldCheck, X } from 'lucide-react';
+import { Bike, Check, Package, PhoneCall, ShieldCheck, UserRound, X } from 'lucide-react';
 import { LivingApiError, type GateEntry, type RealtimeEvent } from '@living/living-sdk';
 import { useCommunityFeatures, useRealtime } from '@living/hooks';
 import { Badge, Button, Dialog, DialogContent, toast } from '@living/ui';
@@ -128,7 +128,56 @@ const TYPE_ICON: Record<string, typeof Package> = {
   MEDICINE: Package,
 };
 
-/** The Approve / Reject modal. Also used by the delivery detail screen. */
+/**
+ * How the prompt reads, per entry type.
+ *
+ * Every field here was hardcoded to the delivery wording, so a visitor arrived
+ * as "Delivery at Main Gate / Your delivery has arrived", headlined with a
+ * vendor brand they do not have — the visitor prompt and the delivery prompt
+ * were literally the same screen. What a resident is being asked differs too: a
+ * delivery is a parcel to accept, a visit is a person to let in.
+ */
+function copyFor(entry: GateEntry) {
+  if (entry.entryType === 'VISITOR') {
+    // A visit announced in advance is a pass to approve, not someone standing
+    // at the gate — telling a resident their visitor "has arrived" a week early
+    // is how an approval request reads as a mistake and gets dismissed.
+    const upcoming =
+      !!entry.expectedArrival && new Date(entry.expectedArrival).getTime() > Date.now() + 3_600_000;
+    return {
+      title: upcoming ? 'Visitor pass to approve' : `Visitor at ${entry.gate?.name ?? 'Main Gate'}`,
+      description: upcoming
+        ? 'Someone has been invited to your flat. Approve their gate pass.'
+        : 'Someone is at the gate to see you.',
+      headline: entry.personName,
+      subline: entry.mobileNumber,
+      approveLabel: upcoming ? 'Approve pass' : 'Let them in',
+      rejectLabel: upcoming ? 'Decline' : 'Turn away',
+      approved: upcoming ? 'Approved — the gate pass is active' : 'Approved — security will let them in',
+      rejected: upcoming ? 'Declined — no pass was issued' : 'Declined — security will turn them away',
+      callLabel: 'Call visitor',
+      deferLabel: upcoming
+        ? 'Decide later — it stays in your Visitors list'
+        : 'Decide later — security will hold them at the gate',
+      Icon: UserRound,
+    };
+  }
+  return {
+    title: `Delivery at ${entry.gate?.name ?? 'Main Gate'}`,
+    description: 'Your delivery has arrived at the gate.',
+    headline: entry.vendorName ?? 'Delivery',
+    subline: [entry.personName, entry.mobileNumber].filter(Boolean).join(' · ') || null,
+    approveLabel: 'Approve',
+    rejectLabel: 'Reject',
+    approved: 'Approved — security notified',
+    rejected: 'Rejected — security notified',
+    callLabel: 'Call delivery',
+    deferLabel: 'Decide later — security will hold it at the gate',
+    Icon: TYPE_ICON[entry.deliveryType ?? ''] ?? Package,
+  };
+}
+
+/** The Approve / Reject modal. Also used by the gate detail screen. */
 export function GateDecisionDialog({
   entry,
   onClose,
@@ -143,28 +192,30 @@ export function GateDecisionDialog({
   // reached on the community's published contact line.
   const securityNumber = community?.contactPhone ?? null;
 
+  const copy = entry ? copyFor(entry) : null;
+
   const decide = useMutation({
     mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
       approve ? living.gate.approve(id) : living.gate.reject(id),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({ queryKey: ['gate'] });
-      toast.success(variables.approve ? 'Approved — security notified' : 'Rejected — security notified');
+      toast.success(variables.approve ? copy!.approved : copy!.rejected);
       onClose();
     },
     onError: (err) => toast.error(err instanceof LivingApiError ? err.message : 'Could not send your decision'),
     onSettled: () => setBusy(null),
   });
 
-  if (!entry) return null;
-  const Icon = TYPE_ICON[entry.deliveryType ?? ''] ?? Package;
+  if (!entry || !copy) return null;
+  const { Icon } = copy;
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
         open
         showClose={false}
-        title={`Delivery at ${entry.gate?.name ?? 'Main Gate'}`}
-        description="Your delivery has arrived at the gate."
+        title={copy.title}
+        description={copy.description}
         className="max-w-md"
       >
         <div className="mb-5 flex items-start gap-3">
@@ -173,17 +224,25 @@ export function GateDecisionDialog({
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-display text-h4 leading-tight tracking-tight text-strong">
-              {entry.vendorName ?? 'Delivery'}
+              {copy.headline}
             </p>
-            <p className="mt-0.5 text-sm text-muted">
-              {entry.personName}
-              {entry.mobileNumber ? ` · ${entry.mobileNumber}` : ''}
-            </p>
+            {copy.subline && <p className="mt-0.5 text-sm text-muted">{copy.subline}</p>}
           </div>
           {entry.unit && (
             <Badge tone="neutral" size="sm">{entry.unit.unitNumber}</Badge>
           )}
         </div>
+
+        {/* The gate pass, which only a visit has — the guard will read it back,
+            so the resident needs to see the same code. */}
+        {entry.passCode && (
+          <div className="mb-4 flex items-center justify-between rounded-control bg-sunken px-3 py-2.5">
+            <span className="text-sm text-muted">Gate pass</span>
+            <span className="font-mono text-base font-bold tracking-widest text-brand">
+              {entry.passCode}
+            </span>
+          </div>
+        )}
 
         {entry.photoUrl && (
           <img
@@ -195,7 +254,10 @@ export function GateDecisionDialog({
 
         <dl className="mb-5 flex flex-col gap-1.5 text-sm">
           <Row label="Time" value={new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
-          {entry.remarks && <Row label="Note" value={entry.remarks} />}
+          {entry.expectedArrival && (
+            <Row label="Expected" value={new Date(entry.expectedArrival).toLocaleString()} />
+          )}
+          {entry.remarks && <Row label={entry.entryType === 'VISITOR' ? 'Purpose' : 'Note'} value={entry.remarks} />}
           <Row label="Reference" value={entry.entryNumber} mono />
         </dl>
 
@@ -207,7 +269,7 @@ export function GateDecisionDialog({
             disabled={decide.isPending}
             onClick={() => { setBusy('approve'); decide.mutate({ id: entry.id, approve: true }); }}
           >
-            <Check className="h-4 w-4" /> Approve
+            <Check className="h-4 w-4" /> {copy.approveLabel}
           </Button>
           <Button
             block
@@ -217,7 +279,7 @@ export function GateDecisionDialog({
             disabled={decide.isPending}
             onClick={() => { setBusy('reject'); decide.mutate({ id: entry.id, approve: false }); }}
           >
-            <X className="h-4 w-4" /> Reject
+            <X className="h-4 w-4" /> {copy.rejectLabel}
           </Button>
         </div>
 
@@ -242,7 +304,7 @@ export function GateDecisionDialog({
             {entry.mobileNumber && (
               <Button block variant="ghost" size="sm" asChild>
                 <a href={`tel:${entry.mobileNumber}`}>
-                  <PhoneCall className="h-4 w-4" /> Call delivery
+                  <PhoneCall className="h-4 w-4" /> {copy.callLabel}
                 </a>
               </Button>
             )}
@@ -254,7 +316,7 @@ export function GateDecisionDialog({
           onClick={onClose}
           className="mt-4 w-full text-center text-xs text-subtle underline-offset-2 hover:underline"
         >
-          Decide later — security will hold it at the gate
+          {copy.deferLabel}
         </button>
       </DialogContent>
     </Dialog>

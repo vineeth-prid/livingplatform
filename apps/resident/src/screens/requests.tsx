@@ -38,8 +38,10 @@ export function RequestsScreen() {
     const visitorItems: MyRequest[] = (visitors.data?.items ?? []).map((v) => ({
       kind: 'visitor' as const,
       id: v.id,
-      number: v.passCode,
-      title: v.visitorName,
+      // A walk-up visitor recorded at the gate carries no pass code; the entry
+      // number always identifies the record.
+      number: v.passCode ?? v.entryNumber,
+      title: v.personName,
       status: v.status,
       createdAt: v.createdAt,
       detailPath: '/visitors',

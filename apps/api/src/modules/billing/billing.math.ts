@@ -35,20 +35,42 @@ export function monthsIn(cycle: BillingCycle): number {
 }
 
 /**
+ * Midday UTC, not midnight and not 23:59:59.999.
+ *
+ * `periodEnd` and `dueDate` are CALENDAR MARKERS — "the 31st", "due on the
+ * 10th" — but they are stored as instants and rendered with the reader's
+ * timezone. Stamped at the last instant of the UTC day, every one of them
+ * crossed into the next calendar day for any timezone ahead of UTC: in IST a
+ * bill due the 10th displayed as due the 11th, and an August period displayed
+ * as "1 Aug – 1 Sep", which is where the wrong day counts came from. Midnight
+ * has the mirror problem behind UTC.
+ *
+ * Midday is the only stamp that lands on the intended day everywhere from
+ * UTC-11 to UTC+11, which covers every timezone a community can be in.
+ */
+const NOON = 12;
+
+/**
  * The period containing `anchor`, aligned to the calendar:
  *   MONTHLY   → the whole month
  *   QUARTERLY → Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec
  *   YEARLY    → Jan–Dec
- * `end` is the last instant of the last day, so `periodEnd` is inclusive.
+ * `end` is midday on the last day, so `periodEnd` is inclusive and reads as
+ * that day in any community's timezone.
  */
 export function periodFor(cycle: BillingCycle, anchor: Date): BillingPeriod {
   const year = anchor.getUTCFullYear();
   const month = anchor.getUTCMonth();
   const span = monthsIn(cycle);
   const startMonth = Math.floor(month / span) * span;
-  const start = new Date(Date.UTC(year, startMonth, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, startMonth + span, 0, 23, 59, 59, 999));
+  const start = new Date(Date.UTC(year, startMonth, 1, NOON, 0, 0, 0));
+  const end = new Date(Date.UTC(year, startMonth + span, 0, NOON, 0, 0, 0));
   return { start, end };
+}
+
+/** Whole calendar days in a period, inclusive of both ends. */
+export function daysInPeriod(period: BillingPeriod): number {
+  return Math.round((startOfDay(period.end) - startOfDay(period.start)) / 86_400_000) + 1;
 }
 
 /** The period immediately after `period` (used to bill the next cycle). */
@@ -84,7 +106,7 @@ export function dueDateFor(period: BillingPeriod, dueDay: number): Date {
   const month = period.start.getUTCMonth();
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const day = Math.min(Math.max(1, Math.trunc(dueDay)), lastDay);
-  return new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+  return new Date(Date.UTC(year, month, day, NOON, 0, 0, 0));
 }
 
 /**
@@ -114,14 +136,14 @@ function startOfDay(d: Date): number {
 /**
  * Days a bill is overdue as of `asOf` (0 when not yet due).
  *
- * Counted in CALENDAR days, not elapsed milliseconds. `dueDateFor` stamps the
- * due date at 23:59:59.999 so the whole due day counts as on time — subtracting
- * raw instants then measured from the END of that day, so a bill a day late
- * reported 0 and only reached "1 day" after nearly two. Every bill in the system
- * under-reported by a day, and the same arithmetic decides late fees.
+ * Counted in CALENDAR days, not elapsed milliseconds: the whole due day counts
+ * as on time, and the day after it is "1 day late" — the answer a person gives
+ * by counting on a calendar. Subtracting raw instants measured from whatever
+ * time of day the due date happened to be stamped at, which under-reported
+ * every bill by a day and fed the same arithmetic into late fees.
  *
- * Normalising both sides to midnight makes the answer the one a person would
- * give by counting on a calendar: due the 10th, on the 11th it is 1 day late.
+ * Normalising both sides to midnight is also what makes the midday stamp above
+ * safe: the time of day on a due date is not information, so it is discarded.
  */
 export function daysOverdue(dueDate: Date, asOf: Date): number {
   const diff = startOfDay(asOf) - startOfDay(dueDate);

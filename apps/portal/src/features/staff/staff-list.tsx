@@ -7,7 +7,8 @@ import type { Staff } from '@living/types';
 import { useCommunity } from '../community/community-context';
 import { living } from '../../lib/living';
 import { ListScaffold, StatusBadge, useListQuery, type ListColumn } from '../master-data';
-import { opt, PERSON_STATUS, STAFF_ROLE } from '../master-data/options';
+import { opt, PERSON_STATUS } from '../master-data/options';
+import { useCatalogOptions } from '../shared/catalog-select';
 import { StaffForm } from './staff-form';
 
 const roleLabel = (r: string) => r.charAt(0) + r.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -35,6 +36,7 @@ export function StaffListPage() {
   const { communityId } = useCommunity();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const roleOptions = useCatalogOptions('STAFF_ROLE');
 
   const query = useListQuery<Staff>({
     queryKey: qk.staff(communityId ?? '', 'list'),
@@ -56,7 +58,7 @@ export function StaffListPage() {
         onRowClick={(s) => navigate({ to: `/staff/${s.id}` })}
         searchPlaceholder="Search name, employee ID, phone…"
         filters={[
-          { key: 'role', placeholder: 'All roles', options: opt(STAFF_ROLE) },
+          { key: 'role', placeholder: 'All roles', options: roleOptions },
           { key: 'status', placeholder: 'All statuses', options: opt(PERSON_STATUS) },
         ]}
         createPermission="staff:create"

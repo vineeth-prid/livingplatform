@@ -335,6 +335,8 @@ export interface Visitor extends AuditFields {
 export interface AmenityBooking extends AuditFields {
   id: ID; tenantId: ID; communityId: ID; amenityId: ID; residentId: ID;
   bookingDate: ISODate; startTime: ISODate; endTime: ISODate;
+  /** People attending, the resident included. Checked against amenity capacity. */
+  headCount: number;
   status: BookingStatus; remarks?: string | null;
   amenity?: Pick<Amenity, 'id' | 'name' | 'location'>;
   resident?: Pick<Resident, 'id' | 'firstName' | 'lastName'>;

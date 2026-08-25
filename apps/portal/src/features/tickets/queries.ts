@@ -70,29 +70,6 @@ export function useTicketMutations(id: string) {
   return { changeStatus, assign, update, addComment, remove };
 }
 
-/** Register an attachment: get a signed key from StorageService, then record
- *  metadata. Byte upload wires in when a real storage provider replaces the stub. */
-export function useAddAttachment(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (file: File) => {
-      const signed = await living.ticket.attachmentUploadUrl(id, {
-        fileName: file.name,
-        contentType: file.type || 'application/octet-stream',
-      });
-      // ponytail: storage is a metadata-only stub this phase — skip the PUT of
-      // bytes; register the attachment record so it appears. Add the PUT when a
-      // real provider lands (uploadUrl becomes a real target).
-      return living.ticket.addAttachment(id, {
-        fileName: file.name,
-        contentType: file.type || 'application/octet-stream',
-        size: file.size,
-        storageKey: signed.key,
-      });
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ticketKey(id) }),
-  });
-}
 
 /** Staff (community) + vendors (tenant) for the assignment picker. */
 export function useAssignees(communityId: string | null) {
