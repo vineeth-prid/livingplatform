@@ -35,7 +35,7 @@ export function ProfileScreen() {
   const { session, logout } = useAuth();
   const { community, communityId } = useResidentCommunity();
   const features = useCommunityFeatures(communityId);
-  const { resident, units, family, isLoading: residentLoading } = useMyResident();
+  const { resident, units, family, ownsAUnit, isLoading: residentLoading } = useMyResident();
   const { mode, setMode } = useTheme();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -112,7 +112,8 @@ export function ProfileScreen() {
           {features.servicePackages && (
             <ProfileLink to="/packages" icon={Package} label="My packages" />
           )}
-          {features.maintenanceBilling && (
+          {/* Owner-only: the association bills the unit's owner, not its tenant. */}
+          {features.maintenanceBilling && ownsAUnit && (
             <ProfileLink to="/maintenance" icon={Wallet} label="Maintenance & payments" />
           )}
           {!features.servicePackages && !features.maintenanceBilling && (

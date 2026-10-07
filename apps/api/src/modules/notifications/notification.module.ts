@@ -3,6 +3,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { AppConfig } from '../../config/configuration';
+import { OwnershipModule } from '../ownership/ownership.module';
 import { NOTIFICATION_DLQ, NOTIFICATION_QUEUE } from './notification.constants';
 import { NotificationController } from './admin/notification.controller';
 import { EmailChannel } from './channels/email/email.channel';
@@ -61,6 +62,9 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
       useFactory: (config: ConfigService<AppConfig, true>) => ({ connection: bullConnection(config) }),
     }),
     BullModule.registerQueue({ name: NOTIFICATION_QUEUE }, { name: NOTIFICATION_DLQ }),
+    // Maintenance reminders are addressed to whoever OWES the money, which is a
+    // question about unit ownership rather than about who lives there.
+    OwnershipModule,
   ],
   controllers: [
     NotificationController,

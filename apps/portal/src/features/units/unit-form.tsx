@@ -120,8 +120,12 @@ export function UnitForm({
     // mapped to the unit, not of the unit itself, and it is captured when a
     // resident is assigned. Two places to state the same fact meant they
     // disagreed. The owner's own details stay here.
-    { name: 'ownerName', label: 'Owner name', half: true },
-    { name: 'ownerPhone', label: 'Owner phone', type: 'tel', half: true },
+    //
+    // Required on create: the owner is recorded (with a login) together with
+    // the unit, because maintenance is billed only to owners. Later changes to
+    // ownership go through the Owners panel on the unit, not these fields.
+    { name: 'ownerName', label: 'Owner name', required: !editing, half: true },
+    { name: 'ownerPhone', label: 'Owner mobile', type: 'tel', required: !editing, half: true },
   ];
 
   return (

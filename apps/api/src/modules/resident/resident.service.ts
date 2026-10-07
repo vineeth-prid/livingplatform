@@ -13,6 +13,7 @@ import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { AccountProvisioningService, normalizePhone } from '../people/account-provisioning.service';
 import { UserLinkService } from '../people/user-link.service';
+import { OwnershipService } from '../ownership/ownership.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
@@ -46,6 +47,7 @@ export class ResidentService {
     private readonly userLink: UserLinkService,
     private readonly accounts: AccountProvisioningService,
     private readonly events: DomainEventsService,
+    private readonly ownership: OwnershipService,
   ) {}
 
   async create(communityId: string, dto: CreateResidentDto, actor: AuthenticatedUser) {
@@ -221,9 +223,50 @@ export class ResidentService {
         })
       : [];
 
+    /*
+      The units this person is financially responsible for — a different
+      question from where they live, and the one that decides whether they are
+      shown maintenance at all.
+
+      Resolved through OwnershipService, the SAME call billing and the
+      Notification Engine make, so the app can never offer a Maintenance screen
+      the API would then empty (or hide one it would have filled). That includes
+      the legacy fallback for communities which have not recorded ownership yet.
+    */
+    const visibleUnitIds = await this.ownership.financiallyVisibleUnitIds(user);
+    const ownedUnits = visibleUnitIds.length
+      ? await this.prisma.unit.findMany({
+          where: { id: { in: visibleUnitIds } },
+          select: {
+            id: true,
+            communityId: true,
+            unitNumber: true,
+            block: { select: { name: true } },
+            ownerships: {
+              where: { deletedAt: null, status: 'ACTIVE', residentId: { in: residents.map((r) => r.id) } },
+              select: { isPrimary: true },
+              take: 1,
+            },
+          },
+        })
+      : [];
+
     return {
       residents: residents.map((r) => this.present(r)),
       family: family.map((r) => this.present(r)),
+      /*
+        Additive — existing callers ignore it. `ownerships` being empty on a row
+        means this person reaches the unit's money through the legacy occupancy
+        fallback rather than a recorded ownership, which the admin resolves via
+        the ownership-gaps report.
+      */
+      ownedUnits: ownedUnits.map((u) => ({
+        unitId: u.id,
+        communityId: u.communityId,
+        unitNumber: u.unitNumber,
+        blockName: u.block?.name ?? null,
+        isPrimaryOwner: u.ownerships[0]?.isPrimary ?? false,
+      })),
     };
   }
 
@@ -377,6 +420,35 @@ export class ResidentService {
       create: { residentId, createdById: actor.id, ...data },
       update: data,
     });
+
+    /*
+      "Occupied by: Owner" also records OWNERSHIP.
+
+      The two are separate relations now — maintenance follows ownership, not
+      occupancy — but an admin marking someone the owner on this form plainly
+      means both. Without this, every owner-occupier created after the migration
+      would live in the flat while nobody was recorded as owning it, and the
+      admin would have to say the same thing twice.
+
+      Only ever ADDS. Changing someone's occupancy role away from OWNER does not
+      revoke ownership: selling a flat is a transfer, not a form edit, and it
+      goes through the ownership actions on the unit.
+    */
+    if (role === 'OWNER') {
+      await this.prisma.unitOwnership.upsert({
+        where: { unitId_residentId: { unitId: dto.unitId, residentId } },
+        create: {
+          communityId: resident.communityId,
+          unitId: dto.unitId,
+          residentId,
+          isPrimary: true,
+          startDate: dto.moveInDate ?? new Date(),
+          createdById: actor.id,
+          updatedById: actor.id,
+        },
+        update: { status: 'ACTIVE', endDate: null, deletedAt: null, updatedById: actor.id },
+      });
+    }
     this.events.publish({
       name: DomainEventName.ResidentAssignedToUnit,
       ...this.events.from(actor, resident.communityId),
@@ -420,6 +492,19 @@ export class ResidentService {
     exceptResidentId?: string,
   ): Promise<void> {
     const normalized = normalizePhone(mobile);
+    const clash = await this.findByMobile(communityId, mobile, exceptResidentId);
+    if (!clash) return;
+
+    const name = `${clash.firstName} ${clash.lastName}`.trim();
+    throw new BadRequestException(
+      `${normalized} is already registered to ${name} in this community. ` +
+        'Use a different number, or add this person to that household as a family member.',
+    );
+  }
+
+  /** The community's resident with this mobile, compared on the normalised number. */
+  async findByMobile(communityId: string, mobile: string, exceptResidentId?: string) {
+    const normalized = normalizePhone(mobile);
     const residents = await this.prisma.resident.findMany({
       where: {
         communityId,
@@ -428,14 +513,7 @@ export class ResidentService {
       },
       select: { id: true, firstName: true, lastName: true, mobile: true },
     });
-    const clash = residents.find((r) => normalizePhone(r.mobile) === normalized);
-    if (!clash) return;
-
-    const name = `${clash.firstName} ${clash.lastName}`.trim();
-    throw new BadRequestException(
-      `${normalized} is already registered to ${name} in this community. ` +
-        'Use a different number, or add this person to that household as a family member.',
-    );
+    return residents.find((r) => normalizePhone(r.mobile) === normalized) ?? null;
   }
 
   /**
@@ -480,9 +558,13 @@ export class ResidentService {
     if (!occupant) return;
 
     const name = `${occupant.resident.firstName} ${occupant.resident.lastName}`.trim();
+    // Naming the ownership route matters here: the commonest reason to hit this
+    // is an admin trying to add the OWNER of a tenanted flat, and an owner does
+    // not need an occupancy record at all.
     throw new BadRequestException(
-      `This unit is already occupied by ${name}. Move them out first, or add this person ` +
-        'as a family member of that household.',
+      `This unit is already occupied by ${name}. Move them out first, add this person as a ` +
+        'family member of that household, or — if they are the owner rather than an occupant — ' +
+        'record them under Ownership on the unit instead.',
     );
   }
 

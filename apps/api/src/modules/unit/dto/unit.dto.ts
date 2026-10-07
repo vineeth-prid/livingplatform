@@ -62,11 +62,12 @@ export class CreateUnitDto {
   @IsOptional() @IsEnum(OwnershipType)
   ownership?: OwnershipType;
 
-  @ApiPropertyOptional({ description: 'Owner name (auto-populates owner residents)' })
-  @IsOptional() @IsString() @MaxLength(120) ownerName?: string;
+  /** Every unit has an owner: they are recorded (with a login) when the unit is created. */
+  @ApiProperty({ description: 'Owner name — required; the owner is billed for maintenance' })
+  @IsString() @MinLength(1) @MaxLength(120) ownerName!: string;
 
-  @ApiPropertyOptional({ description: 'Owner phone' })
-  @IsOptional() @IsString() @MaxLength(40) ownerPhone?: string;
+  @ApiProperty({ description: 'Owner mobile — required; becomes their login username' })
+  @IsString() @MinLength(6) @MaxLength(40) ownerPhone!: string;
 
   @ApiPropertyOptional()
   @IsOptional()

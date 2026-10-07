@@ -44,6 +44,7 @@ import { ProfileModule } from './modules/profile/profile.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { OwnershipModule } from './modules/ownership/ownership.module';
 import { ResidentModule } from './modules/resident/resident.module';
 import { SearchModule } from './modules/search/search.module';
 import { ServiceRequestModule } from './modules/service-request/service-request.module';
@@ -125,6 +126,7 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
 
     // People Foundation (Sprint 3)
     ResidentModule,
+    OwnershipModule,
     VendorModule,
     StaffModule,
 

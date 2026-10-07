@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { BillingModule } from '../billing/billing.module';
+import { OwnershipModule } from '../ownership/ownership.module';
 import { PaymentConfigService } from './payment-config.service';
 import { PaymentService } from './payment.service';
 import {
@@ -20,7 +21,7 @@ import {
  * consumes (never the other way round).
  */
 @Module({
-  imports: [BillingModule],
+  imports: [BillingModule, OwnershipModule],
   controllers: [
     PaymentConfigController,
     PlatformPaymentConfigController,

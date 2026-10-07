@@ -6,6 +6,7 @@ import { useCommunityFeatures } from '@living/hooks';
 import { Badge, Button, Card, Skeleton, toast } from '@living/ui';
 
 import { useResidentCommunity } from '../community';
+import { useMyResident } from '../community-ops';
 import { Section, SoftPlaceholder } from '../components';
 import { living } from '../lib/living';
 import { openCheckout } from '../payments/razorpay';
@@ -38,15 +39,24 @@ export function MaintenanceScreen() {
   // API deliberately 404s.
   const billingOn = features.maintenanceBilling;
 
+  /*
+    Maintenance is a debt between the OWNER and the association; a tenant pays
+    their landlord, not the community. The API returns nothing to a tenant
+    regardless — this is what lets the screen SAY so instead of showing an empty
+    dues page that reads as a bug.
+  */
+  const { ownsAUnit, isLoading: ownershipLoading } = useMyResident();
+  const canSeeDues = billingOn && ownsAUnit;
+
   const dues = useQuery({
     queryKey: ['maintenance', 'my-dues', communityId],
     queryFn: () => living.billing.myDues(communityId!),
-    enabled: !!communityId && billingOn,
+    enabled: !!communityId && canSeeDues,
   });
   const payments = useQuery({
     queryKey: ['maintenance', 'payments', communityId],
     queryFn: () => living.payments.list(communityId!, { limit: 25, sortBy: 'createdAt', sortDir: 'desc' }),
-    enabled: !!communityId && billingOn,
+    enabled: !!communityId && canSeeDues,
   });
 
   const pay = useMutation({
@@ -90,6 +100,23 @@ export function MaintenanceScreen() {
             icon={Wallet}
             title="Not collected here"
             note="Your community collects maintenance charges outside Living."
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // A tenant reaching this route directly — from an old link or a bookmark.
+  // Explain it rather than showing them a blank ledger.
+  if (!ownershipLoading && !ownsAUnit) {
+    return (
+      <div>
+        <ScreenHeader title="Maintenance" subtitle="Your dues" />
+        <div className="px-4">
+          <SoftPlaceholder
+            icon={Wallet}
+            title="Billed to the home owner"
+            note="Maintenance charges are raised against the owner of this home. If you rent it, your landlord settles them with the association."
           />
         </div>
       </div>

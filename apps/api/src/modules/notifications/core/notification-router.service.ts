@@ -13,6 +13,7 @@ import { formatWorkOrderNumber } from '../../work-order/work-order.service';
 import { NotificationPreferenceService } from '../preferences/notification-preference.service';
 import { NOTIFICATION_TEMPLATES } from '../notification.constants';
 import type { NotificationChannelName } from './notification-channel.interface';
+import { OwnershipService } from '../../ownership/ownership.service';
 import { NotificationDispatcher } from './notification.dispatcher';
 import { RecipientResolver, type RecipientRef } from './recipient-resolver';
 import { EmailTemplateEngine } from './templates/template.engine';
@@ -130,6 +131,7 @@ export class NotificationRouterService {
     private readonly preferences: NotificationPreferenceService,
     private readonly recipients: RecipientResolver,
     private readonly templates: EmailTemplateEngine,
+    private readonly ownership: OwnershipService,
     config: ConfigService<AppConfig, true>,
   ) {
     this.webAppUrl = config.get('webAppUrl', { infer: true });
@@ -582,6 +584,7 @@ export class NotificationRouterService {
     invoices: Array<{
       id: string;
       communityId: string;
+      unitId: string;
       residentId: string | null;
       invoiceNumber: string;
       totalAmount: unknown;
@@ -591,7 +594,17 @@ export class NotificationRouterService {
   ): Promise<number> {
     let sent = 0;
     for (const invoice of invoices) {
-      if (!invoice.residentId) continue;
+      /*
+        Addressed to the people who OWE the money, resolved from the unit.
+
+        This sent to `invoice.residentId`, which was whichever occupancy row
+        sorted first — so a tenant was chased for their landlord's bill by
+        WhatsApp, email and push. Ownership answers it properly, returns every
+        co-owner of a jointly-held flat, and returns nobody rather than a
+        tenant when the owner is not yet on record.
+      */
+      const residentIds = await this.ownership.notifiableResidentsFor(invoice.unitId);
+      if (residentIds.length === 0) continue;
       const routing = await this.preferences.resolve(
         invoice.communityId,
         NotificationEvent.MAINTENANCE_DUE,
@@ -610,22 +623,24 @@ export class NotificationRouterService {
         actionUrl: `${this.webAppUrl}/invoices/${invoice.id}`,
       };
 
-      for (const channel of routing.channels) {
-        const address = await this.recipients.resolve(channel, {
-          residentId: invoice.residentId,
-          communityId: invoice.communityId,
-        });
-        if (!address) continue;
-        await this.dispatcher
-          .dispatchTemplate(channel, NOTIFICATION_TEMPLATES.MAINTENANCE_DUE, address, variables, {
-            ctx: { communityId: invoice.communityId, metadata: { invoiceId: invoice.id } },
-          })
-          .then(() => {
-            sent += 1;
-          })
-          .catch((err: Error) => {
-            this.logger.warn(`Maintenance reminder failed for ${invoice.id}: ${err.message}`);
+      for (const residentId of residentIds) {
+        for (const channel of routing.channels) {
+          const address = await this.recipients.resolve(channel, {
+            residentId,
+            communityId: invoice.communityId,
           });
+          if (!address) continue;
+          await this.dispatcher
+            .dispatchTemplate(channel, NOTIFICATION_TEMPLATES.MAINTENANCE_DUE, address, variables, {
+              ctx: { communityId: invoice.communityId, metadata: { invoiceId: invoice.id } },
+            })
+            .then(() => {
+              sent += 1;
+            })
+            .catch((err: Error) => {
+              this.logger.warn(`Maintenance reminder failed for ${invoice.id}: ${err.message}`);
+            });
+        }
       }
     }
     return sent;

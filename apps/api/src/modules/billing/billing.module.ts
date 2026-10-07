@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { OwnershipModule } from '../ownership/ownership.module';
 import { BillingSchedulerService } from './billing-scheduler.service';
 import {
   MaintenanceChargeController,
@@ -20,6 +21,10 @@ import { MaintenanceChargeService } from './maintenance-charge.service';
  * which depends on this module's `InvoiceService.applyPayment` to credit a bill.
  */
 @Module({
+  // Ownership decides who a bill belongs to and who may read it. Imported
+  // rather than reimplemented, so billing, payments and notifications cannot
+  // drift apart on the one question that matters.
+  imports: [OwnershipModule],
   controllers: [MaintenanceChargeController, MaintenanceInvoiceController],
   providers: [MaintenanceChargeService, InvoiceService, BillingSchedulerService],
   exports: [MaintenanceChargeService, InvoiceService, BillingSchedulerService],

@@ -10,6 +10,7 @@ import { CommunityModulesService } from '../settings/community-modules.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
 import { BillingSchedulerService } from './billing-scheduler.service';
+import { OwnershipService } from '../ownership/ownership.service';
 import { InvoiceService } from './invoice.service';
 
 /**
@@ -55,6 +56,8 @@ describe('BillingSchedulerService wiring', () => {
         InvoiceService,
         CommunityAccessService,
         TenantContextService,
+        // Who a bill belongs to. Prisma-only, so the real one is fine here.
+        OwnershipService,
         { provide: 'REQUEST', useValue: {} },
         { provide: PrismaService, useValue: prisma },
         {

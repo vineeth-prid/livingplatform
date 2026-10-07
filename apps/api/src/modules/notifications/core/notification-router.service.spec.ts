@@ -52,12 +52,19 @@ function makeRouter(approvers: { id: string; email: string; firstName: string }[
   const templates = {} as EmailTemplateEngine;
   const config = { get: () => 'https://app.living.test' } as never;
 
+  // Ownership answers "who owes for this unit?". Stubbed to the invoice's own
+  // resident so the routing tests keep testing routing.
+  const ownership = {
+    notifiableResidentsFor: jest.fn(() => Promise.resolve(['res-1'])),
+  } as never;
+
   const router = new NotificationRouterService(
     prisma,
     dispatcher,
     preferences,
     recipients,
     templates,
+    ownership,
     config,
   );
   return { router, dispatcher, prisma };

@@ -122,11 +122,15 @@ export class BillingSchedulerService {
         deletedAt: null,
         status: { in: [InvoiceStatus.ISSUED, InvoiceStatus.PARTIALLY_PAID] },
         dueDate: { gte: now, lte: until },
-        residentId: { not: null },
+        // `residentId` is no longer required to be set. A tenant-occupied unit
+        // with no owner on record bills nobody personally, and the reminder
+        // router resolves the owner from the UNIT — so filtering the row out
+        // here would silently skip every flat whose owner is added later.
       },
       select: {
         id: true,
         communityId: true,
+        unitId: true,
         residentId: true,
         invoiceNumber: true,
         totalAmount: true,

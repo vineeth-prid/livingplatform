@@ -209,7 +209,28 @@ Deliveries and visits are the same engine but never the same screen: the
 Security console lists them under separate tabs, and the resident's prompt is
 worded for the one that actually arrived.
 
-### Money
+### Money — owners only
+
+**Maintenance is billed to the OWNER of a home, not to whoever lives in it.**
+A tenant pays rent to their landlord; the association's charge is a debt between
+the owner and the community. The platform keeps the two relationships apart:
+
+| Relationship | Table | Answers |
+| --- | --- | --- |
+| Occupancy | `resident_units` | Who lives here? Drives gate approvals, visitors, the household. |
+| Ownership | `unit_ownerships` | Who is billed? Drives maintenance, its reminders and its receipts. |
+
+An owner may hold several flats, a flat may be jointly owned, and an owner
+needs no occupancy record at all — they can have a Resident App login while a
+tenant lives in the home. Enforced at the API (`OwnershipService`), so a tenant
+calling the billing endpoints directly is refused, not merely hidden from.
+
+Every unit is created with an owner (name + mobile are required, in the form
+and in the CSV import); the owner gets a login, or is linked if that mobile is
+already a resident. Only active owners are billed, notified and allowed to pay —
+co-owners included. Occupancy never stands in for a missing owner: a legacy unit
+with no owner is billed to nobody until the admin records one (Community Admin →
+**Units** flags the gaps).
 
 **Maintenance** shows dues and pays them through Razorpay. **My packages**
 shows purchased service packages and the balance remaining, which is derived
@@ -371,6 +392,11 @@ Stated plainly so nobody looks for it:
 
 - **No SR → work order button.** Work orders can be raised from tickets and
   from maintenance plans; there is no equivalent action on a service request.
+- **No AMC → work order generator.** `AMC` is a valid work-order origin and the
+  portal filters on it, but nothing writes one yet.
+- **Cross-community ownership.** One login backs one resident profile per
+  tenant, so an owner with flats in two communities holds a profile in each.
+  Ownership within a community is unlimited.
 
 - **Community banner images** are stored by key; there is no upload control on
   the settings screen yet.

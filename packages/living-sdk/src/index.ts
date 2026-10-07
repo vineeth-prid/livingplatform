@@ -10,7 +10,12 @@ export {
 } from './token-store';
 export { AuthResource } from './resources/auth';
 export { CommunityResource, type CommunityFeatures } from './resources/community';
-export { PeopleResource } from './resources/people';
+export {
+  PeopleResource,
+  type OwnedUnit,
+  type UnitOwner,
+  type OwnershipGapReport,
+} from './resources/people';
 export { TicketResource } from './resources/tickets';
 export { ServiceRequestResource } from './resources/service-requests';
 export { WorkOrderResource } from './resources/work-orders';

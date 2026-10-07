@@ -21,6 +21,7 @@ import type { AppConfig } from '../../config/configuration';
 import { receiptNumber, round2 } from '../billing/billing.math';
 import { InvoiceService } from '../billing/invoice.service';
 import { myResidentIds } from '../community-ops/resident-access';
+import { OwnershipService } from '../ownership/ownership.service';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -85,6 +86,7 @@ export class PaymentService {
     private readonly events: DomainEventsService,
     private readonly modules: CommunityModulesService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly ownership: OwnershipService,
   ) {}
 
   // ── Checkout ───────────────────────────────────────────────────────────────
@@ -524,8 +526,17 @@ export class PaymentService {
       if (invoice.status === InvoiceStatus.CANCELLED) {
         throw new BadRequestException('This invoice is cancelled');
       }
-      if (!isManager && (!invoice.residentId || !mine.includes(invoice.residentId))) {
-        throw new ForbiddenException('You can only pay your own invoices');
+      /*
+        Paying is an OWNER's right, checked against the unit rather than against
+        the name stored on the invoice. A tenant could not read this invoice
+        either (see InvoiceService.assertVisible), but the pay route is its own
+        entry point and has to say no on its own — an authorization rule that
+        holds in one endpoint and not its neighbour is not a rule.
+      */
+      if (!isManager && !(await this.ownership.canAccessUnitFinancials(actor, invoice.unitId, communityId))) {
+        throw new ForbiddenException(
+          'Maintenance is billed to the unit owner. If you rent this home, your landlord pays it.',
+        );
       }
       const balance = round2(Number(invoice.totalAmount) - Number(invoice.paidAmount));
       if (balance <= 0) throw new BadRequestException('This invoice is already settled');
@@ -536,7 +547,9 @@ export class PaymentService {
         invoiceId: invoice.id,
         serviceRequestId: null,
         unitId: invoice.unitId,
-        residentId: invoice.residentId,
+        // The payer of record stays whoever the bill is filed under; a co-owner
+        // settling it does not rewrite who the association billed.
+        residentId: invoice.residentId ?? mine[0] ?? null,
         description: `Maintenance ${invoice.invoiceNumber} · Unit ${invoice.unit.unitNumber}`,
         prefill,
       };

@@ -46,7 +46,8 @@ const RULES: Record<Kind, string[]> = {
     // Omitting this used to fall through to the schema's VACANT default, which
     // then read as an empty flat when maintenance charges were generated.
     `“status” must be one of ${UNIT_STATUS.join(', ')}. Leave it empty only for a genuinely vacant unit — a row with owner details should say OCCUPIED.`,
-    '“ownerPhone” is the 10-digit mobile. A country code is fine and is removed automatically.',
+    '“ownerName” and “ownerPhone” are required — the owner is recorded with a login and is the only one billed for maintenance. A row without them is rejected.',
+    '“ownerPhone” is the 10-digit mobile. A country code is fine and is removed automatically. An owner of several flats is matched by this number, not duplicated.',
     'Leave a cell empty rather than writing “NA” or “-”; empty means “not set”, text means a value.',
   ],
   residents: [

@@ -12,6 +12,7 @@ import {
   DetailHeader, DetailSection, DetailShell, Field, FieldGrid, StatusBadge,
 } from '../master-data';
 import { UnitForm } from './unit-form';
+import { UnitOwners } from './unit-owners';
 
 const ownershipLabel = (o: string) => o.charAt(0) + o.slice(1).toLowerCase().replace(/_/g, ' ');
 
@@ -68,7 +69,16 @@ export function UnitDetailPage() {
                 </FieldGrid>
               </DetailSection>
 
-              <DetailSection title={`Residents${residents.data ? ` (${residents.data.meta.total})` : ''}`}>
+              {/* Ownership before occupancy: it is the relationship that decides
+                  who the association bills, and the one an admin is most often
+                  here to fix. */}
+              {communityId && (
+                <DetailSection title="Ownership">
+                  <UnitOwners communityId={communityId} unitId={u.id} />
+                </DetailSection>
+              )}
+
+              <DetailSection title={`Occupants${residents.data ? ` (${residents.data.meta.total})` : ''}`}>
                 {residents.data && residents.data.items.length > 0 ? (
                   <ul className="flex flex-col gap-1">
                     {residents.data.items.map((r) => (
@@ -85,7 +95,7 @@ export function UnitDetailPage() {
                     ))}
                   </ul>
                 ) : (
-                  <EmptyState title="No residents" description="No one is assigned to this unit yet." />
+                  <EmptyState title="No occupants" description="Nobody is living in this unit yet." />
                 )}
               </DetailSection>
             </div>

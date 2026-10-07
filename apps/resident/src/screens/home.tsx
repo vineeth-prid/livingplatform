@@ -7,7 +7,7 @@ import { formatDate } from '@living/utils';
 import { EmptyState, Skeleton } from '@living/ui';
 
 import { useResidentCommunity } from '../community';
-import { useMyBookings } from '../community-ops';
+import { useMyBookings, useMyResident } from '../community-ops';
 import { HeroBanner } from '../hero-banner';
 import { CreateRequestSheet } from '../create-request-sheet';
 import { living } from '../lib/living';
@@ -34,6 +34,7 @@ export function HomeScreen() {
   const features = useCommunityFeatures(communityId);
   const { open, isLoading } = useMyRequests();
   const bookings = useMyBookings();
+  const { ownsAUnit } = useMyResident();
   const [complaint, setComplaint] = useState(false);
 
   // Only genuinely upcoming bookings — a past booking is not "upcoming".
@@ -62,7 +63,10 @@ export function HomeScreen() {
 
       <HeroBanner />
 
-      {features.maintenanceBilling && <MaintenanceDueCard />}
+      {/* Maintenance is billed to the OWNER. A tenant is not shown their
+          landlord's dues — the API returns nothing for them either way, so this
+          only avoids an empty card that reads like something is broken. */}
+      {features.maintenanceBilling && ownsAUnit && <MaintenanceDueCard />}
 
       {/* Quick actions lead — this is what people open the app to do. */}
       <Section title="Quick actions">

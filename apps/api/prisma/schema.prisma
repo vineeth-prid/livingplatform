@@ -142,7 +142,13 @@ enum ResidentStatus {
   MOVED_OUT
 }
 
-/// A resident's role on their unit assignment.
+/// A resident's role on their unit assignment — that is, on their OCCUPANCY.
+///
+/// OWNER here means "the person living here owns it", which is a convenience
+/// for the common owner-occupier case; it is NOT the authority on financial
+/// responsibility. That is `UnitOwnership`, because an owner frequently does
+/// not live in the flat at all and so has no row in this table. Assigning
+/// someone OWNER also records ownership (see ResidentService.assignUnit).
 enum ResidentRole {
   PRIMARY
   SECONDARY
@@ -152,6 +158,15 @@ enum ResidentRole {
   /// child). Distinct from SECONDARY, which is an admin-created co-occupant:
   /// the residents register needs to show which is which.
   FAMILY_MEMBER
+}
+
+/// Lifecycle of a unit ownership record. Ownership ENDS, it is never deleted —
+/// an invoice raised while someone owned the flat must stay explainable.
+enum OwnershipStatus {
+  ACTIVE
+  /// Sold or handed on. Kept for history; carries no financial responsibility.
+  TRANSFERRED
+  INACTIVE
 }
 
 /// Shared active/inactive status for vendors and staff.
@@ -512,6 +527,7 @@ model Community {
   paymentConfigs          CommunityPaymentConfig[]
   maintenanceCharges      MaintenanceCharge[]
   maintenanceInvoices     MaintenanceInvoice[]
+  unitOwnerships          UnitOwnership[]
   payments                Payment[]
   notificationPreferences CommunityNotificationPreference[]
   notificationTemplates   CommunityNotificationTemplate[]
@@ -871,6 +887,7 @@ model Unit {
   metadata     Json?
 
   residentUnits       ResidentUnit[]
+  ownerships          UnitOwnership[]
   tickets             Ticket[]
   serviceRequests     ServiceRequest[]
   workOrders          WorkOrder[]
@@ -1096,7 +1113,15 @@ model Resident {
   metadata   Json?
 
   // 1:1 current unit assignment (no historical occupancy this sprint).
+  //
+  // OCCUPANCY — where this person LIVES. Deliberately still exclusive: a unit
+  // holds one household, which is what makes "whose flat is this?" answerable
+  // for gate approvals and notifications. Ownership is a separate relation
+  // below, because an owner may not live in the flat at all.
   unitAssignment  ResidentUnit?
+  /// OWNERSHIP — the units this person is financially responsible for. Many,
+  /// because an owner may hold several flats in the community.
+  ownedUnits      UnitOwnership[]
   tickets         Ticket[]
   serviceRequests ServiceRequest[]
   visitors        Visitor[]
@@ -1136,6 +1161,51 @@ model ResidentUnit {
 
   @@index([unitId])
   @@map("resident_units")
+}
+
+/// Who is financially responsible for a unit to the association.
+///
+/// Deliberately NOT a role on ResidentUnit. That table answers "who lives
+/// here", and the two are different questions with different answers: an owner
+/// may never set foot in the flat, a tenant lives there and is billed by their
+/// landlord rather than by the community, and a flat can be owned jointly by
+/// people who do not share a household. Maintenance follows THIS relation.
+///
+/// Many-to-many on purpose — several owners may hold one unit, and one owner
+/// may hold several units.
+model UnitOwnership {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  residentId  String
+  resident    Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+
+  /// The owner the association addresses first. Co-owners are recorded and can
+  /// see the unit's dues, but a bill names one person.
+  isPrimary    Boolean         @default(true)
+  /// Informational only for a jointly-held flat. A bill is never split by it —
+  /// the association raises one invoice per unit.
+  sharePercent Decimal?        @db.Decimal(5, 2)
+  startDate    DateTime?
+  endDate      DateTime?
+  status       OwnershipStatus @default(ACTIVE)
+  notes        String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  /// One record per person per unit; re-adding an owner updates theirs.
+  @@unique([unitId, residentId])
+  @@index([communityId])
+  @@index([unitId])
+  @@index([residentId])
+  @@index([status])
+  @@map("unit_ownerships")
 }
 
 model Vendor {
@@ -2388,7 +2458,11 @@ model MaintenanceInvoice {
   community   Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
   unitId      String
   unit        Unit               @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  /// Primary resident at generation time (for notifications and "my invoices").
+  /// The resident the association BILLS: the unit's primary owner at generation
+  /// time, falling back to the occupant only when no ownership is recorded and
+  /// that occupant is not a tenant. Drives notifications and "my invoices".
+  /// Null is legitimate — an unowned, tenant-occupied unit bills nobody
+  /// personally, and the charge stands against the unit for the admin to chase.
   residentId  String?
   chargeId    String?
   charge      MaintenanceCharge? @relation(fields: [chargeId], references: [id], onDelete: SetNull)

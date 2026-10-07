@@ -113,6 +113,7 @@ describe('Notification pipeline · end to end', () => {
       preferences,
       new RecipientResolver(prisma),
       new EmailTemplateEngine(),
+      { notifiableResidentsFor: () => Promise.resolve(['res-1']) } as never,
       { get: () => 'https://app.living.test' } as never,
     );
     return { service, sent, prisma };

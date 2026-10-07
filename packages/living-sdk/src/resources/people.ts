@@ -19,8 +19,46 @@ export class PeopleResource {
    * which is exactly why it exists — a resident must be able to find their own
    * residentId and unit to invite visitors, book amenities or raise a request.
    */
-  myResident(): Promise<{ residents: Resident[]; family: Resident[] }> {
+  myResident(): Promise<{
+    residents: Resident[];
+    family: Resident[];
+    /**
+     * Units this person is financially responsible for. Empty for a tenant,
+     * which is what tells the app not to offer Maintenance — the API refuses
+     * them either way, this only avoids a door onto an empty room.
+     */
+    ownedUnits: OwnedUnit[];
+  }> {
     return this.http.get('/residents/me');
+  }
+
+  // ── Unit ownership (admin) ──
+  /** Owners on record for a unit, with ownership and account status. */
+  listUnitOwners(communityId: string, unitId: string): Promise<UnitOwner[]> {
+    return this.http.get(`/communities/${communityId}/units/${unitId}/owners`);
+  }
+  /** Record an owner: link an existing resident, or create one with a login. */
+  addUnitOwner(communityId: string, unitId: string, input: Body): Promise<unknown> {
+    return this.http.post(`/communities/${communityId}/units/${unitId}/owners`, input);
+  }
+  updateUnitOwner(
+    communityId: string,
+    unitId: string,
+    residentId: string,
+    input: Body,
+  ): Promise<unknown> {
+    return this.http.patch(
+      `/communities/${communityId}/units/${unitId}/owners/${residentId}`,
+      input,
+    );
+  }
+  /** End an ownership — kept as history, never deleted. */
+  endUnitOwner(communityId: string, unitId: string, residentId: string): Promise<unknown> {
+    return this.http.delete(`/communities/${communityId}/units/${unitId}/owners/${residentId}`);
+  }
+  /** Units with nobody recorded as owner — the migration's worklist. */
+  ownershipGaps(communityId: string, limit?: number): Promise<OwnershipGapReport> {
+    return this.http.get(`/communities/${communityId}/units/ownership-gaps`, { limit });
   }
   addFamilyMember(input: {
     firstName: string;
@@ -122,4 +160,50 @@ export class PeopleResource {
   deleteStaff(id: string): Promise<unknown> {
     return this.http.delete(`/staff/${id}`);
   }
+}
+
+/** A unit this person is financially responsible for. */
+export interface OwnedUnit {
+  unitId: string;
+  communityId: string;
+  unitNumber: string;
+  blockName: string | null;
+  isPrimaryOwner: boolean;
+}
+
+/**
+ * An owner on record for a unit.
+ *
+ * `accountStatus` is deliberately separate from ownership: someone can own a
+ * flat for years without ever opening the app, and NOT_REGISTERED says exactly
+ * that rather than implying something is wrong.
+ */
+export interface UnitOwner {
+  id: string;
+  residentId: string;
+  isPrimary: boolean;
+  sharePercent: number | null;
+  startDate: string | null;
+  firstName: string;
+  lastName: string;
+  mobile: string;
+  email: string | null;
+  residentStatus: string;
+  accountStatus: 'NOT_REGISTERED' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+}
+
+/** Units with no owner recorded — what the migration deliberately did not guess. */
+export interface OwnershipGapReport {
+  total: number;
+  limit: number;
+  units: {
+    unitId: string;
+    unitNumber: string;
+    declaredOwnership: string;
+    ownerNameOnUnit: string | null;
+    ownerPhoneOnUnit: string | null;
+    occupants: { residentId: string; name: string; mobile: string; role: string }[];
+    /** A hint for the admin to confirm. Never applied automatically. */
+    suggestion: string | null;
+  }[];
 }

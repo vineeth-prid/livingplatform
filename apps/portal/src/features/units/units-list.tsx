@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { qk, Can } from '@living/hooks';
 import { Button } from '@living/ui';
-import { Upload } from 'lucide-react';
+import { KeyRound, Upload } from 'lucide-react';
 import type { Unit } from '@living/types';
 
 import { useCommunity } from '../community/community-context';
@@ -51,8 +51,33 @@ export function UnitsListPage() {
     fetch: (params) => living.community.listUnits(communityId!, params),
   });
 
+  /*
+    Units nobody is recorded as owning.
+
+    The ownership migration deliberately refused to infer an owner from whoever
+    happened to live in a flat, so this is the admin's worklist. Shown as a
+    banner rather than a separate page: it is temporary work with a natural end,
+    and it disappears the moment the last unit is resolved.
+  */
+  const gaps = useQuery({
+    queryKey: ['units', communityId, 'ownership-gaps'],
+    queryFn: () => living.people.ownershipGaps(communityId!, 1),
+    enabled: !!communityId,
+    staleTime: 5 * 60_000,
+  });
+
   return (
     <>
+      {(gaps.data?.total ?? 0) > 0 && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-card bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-fg)]">
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>Some units have no owner recorded.</strong> Maintenance charges are billed to
+            the owner, so open a unit and add one under <strong>Ownership</strong>. Until then those
+            flats keep behaving as they do today — except that a tenant is never shown the bill.
+          </span>
+        </div>
+      )}
       <ListScaffold
         title="Units"
         description="Every home and space across the community."

@@ -10,6 +10,7 @@ import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
+import { UnitOwnershipService } from '../ownership/unit-ownership.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
@@ -27,6 +28,7 @@ export class UnitService {
     private readonly prisma: PrismaService,
     private readonly access: CommunityAccessService,
     private readonly events: DomainEventsService,
+    private readonly owners: UnitOwnershipService,
   ) {}
 
   async create(communityId: string, dto: CreateUnitDto, actor: AuthenticatedUser) {
@@ -56,6 +58,7 @@ export class UnitService {
         updatedById: actor.id,
       },
     });
+    await this.recordOwnerOrRollBack(communityId, unit.id, dto.ownerName, dto.ownerPhone, actor);
     this.events.publish({
       name: DomainEventName.UnitCreated,
       ...this.events.from(actor, communityId),
@@ -88,7 +91,10 @@ export class UnitService {
         if (blockId && row.floorLevel != null) {
           floorId = await this.resolveFloor(communityId, blockId, row.floorLevel, floorCache, actor);
         }
-        await this.prisma.unit.create({
+        if (!row.ownerName?.trim() || !row.ownerPhone?.trim()) {
+          throw new BadRequestException('Owner name and owner phone are required');
+        }
+        const unit = await this.prisma.unit.create({
           data: {
             communityId,
             blockId,
@@ -110,6 +116,7 @@ export class UnitService {
             updatedById: actor.id,
           },
         });
+        await this.recordOwnerOrRollBack(communityId, unit.id, row.ownerName, row.ownerPhone, actor);
         created++;
       } catch (err) {
         errors.push({
@@ -120,6 +127,33 @@ export class UnitService {
       }
     }
     return { created, failed: errors.length, errors };
+  }
+
+  /**
+   * Record the unit's owner — an existing resident with that mobile is linked,
+   * anyone else is created with a login. A unit must never exist without an
+   * owner (maintenance is billed only to owners), so if this fails the
+   * just-created unit is removed and the error surfaces to the admin.
+   */
+  private async recordOwnerOrRollBack(
+    communityId: string,
+    unitId: string,
+    ownerName: string | undefined,
+    ownerPhone: string | undefined,
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    const [firstName, ...rest] = (ownerName ?? '').trim().split(/\s+/);
+    try {
+      await this.owners.add(
+        communityId,
+        unitId,
+        { firstName, lastName: rest.join(' ') || undefined, mobile: ownerPhone?.trim(), isPrimary: true },
+        actor,
+      );
+    } catch (err) {
+      await this.prisma.unit.delete({ where: { id: unitId } });
+      throw err;
+    }
   }
 
   private async resolveBlock(

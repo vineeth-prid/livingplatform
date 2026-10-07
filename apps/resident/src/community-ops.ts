@@ -43,11 +43,30 @@ export function useMyResident() {
 
   const residentIds = new Set(residents.map((r) => r.id));
 
+  /*
+    Units this person is financially responsible for, in the community being
+    viewed. Ownership is not occupancy: an owner may own the flat a tenant
+    lives in, and only the owner is billed by the association.
+  */
+  const ownedUnits = (q.data?.ownedUnits ?? []).filter(
+    (u) => !communityId || u.communityId === communityId,
+  );
+
   return {
     resident: primary,
     residentId: primary?.id ?? null,
     residents,
     units,
+    ownedUnits,
+    /**
+     * Whether to offer maintenance at all.
+     *
+     * The API is the authority — a tenant calling the billing endpoints gets a
+     * 403 and empty dues whatever the app does. This flag exists so the app
+     * does not show a resident a Maintenance screen that can only ever be
+     * empty, and so a tenant is not left wondering why their bills are missing.
+     */
+    ownsAUnit: ownedUnits.length > 0,
     // The household of the flats being viewed, not every flat they own.
     family: (q.data?.family ?? []).filter(
       (f) => !communityId || residentIds.size === 0 || f.communityId === communityId,

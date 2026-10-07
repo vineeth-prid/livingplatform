@@ -19,7 +19,7 @@ import { resolveSort } from '../../common/dto/list-query.dto';
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type { AppConfig } from '../../config/configuration';
-import { myResidentIds } from '../community-ops/resident-access';
+import { OwnershipService } from '../ownership/ownership.service';
 import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -104,6 +104,7 @@ export class InvoiceService {
     private readonly access: CommunityAccessService,
     private readonly events: DomainEventsService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly ownership: OwnershipService,
   ) {}
 
   // ── Generation ─────────────────────────────────────────────────────────────
@@ -144,6 +145,21 @@ export class InvoiceService {
       }),
     ]);
 
+    /*
+      Resolve who each unit is billed TO before the loop.
+
+      One question per unit, asked of the one service that knows the answer,
+      rather than reading whichever occupancy row happened to sort first — which
+      is how a tenant ended up named on their landlord's invoice.
+    */
+    const billTo = new Map<string, string | null>(
+      await Promise.all(
+        units.map(
+          async (u) => [u.id, await this.ownership.billableResidentFor(u.id)] as const,
+        ),
+      ),
+    );
+
     const alreadyBilled = new Set(existing.map((e) => e.unitId));
     const missingRates = new Set<string>();
     const rows: Prisma.MaintenanceInvoiceCreateManyInput[] = [];
@@ -182,7 +198,11 @@ export class InvoiceService {
       rows.push({
         communityId,
         unitId: unit.id,
-        residentId: unit.residentUnits[0]?.residentId ?? null,
+        // WHO IS BILLED: the unit's primary owner. Falls back to a non-tenant
+        // occupant only while no ownership is on record, and to null when the
+        // only occupant is a tenant — the charge still stands against the unit
+        // for the admin to collect, it is simply not filed under the renter.
+        residentId: billTo.get(unit.id) ?? null,
         chargeId: charge.id,
         invoiceNumber: invoiceNumber(billing.invoicePrefix, period, sequence++),
         cycle: dto.cycle,
@@ -286,7 +306,7 @@ export class InvoiceService {
       include: { unit: { select: { unitNumber: true, type: true } } },
     });
     if (!row) throw new NotFoundException('Invoice not found');
-    await this.assertVisible(communityId, row.residentId, actor);
+    await this.assertVisible(communityId, row.unitId, actor);
     const names = await this.residentNames([row.residentId]);
     return toView(row, row.unit, names.get(row.residentId ?? '') ?? null);
   }
@@ -306,12 +326,19 @@ export class InvoiceService {
     recent: InvoiceView[];
   }> {
     await this.access.assert(communityId);
-    const residentIds = await myResidentIds(this.prisma, actor, communityId);
-    if (residentIds.length === 0) {
+    /*
+      Dues follow OWNERSHIP, not occupancy.
+
+      A tenant asking for their dues gets an empty answer here — not an error,
+      because nothing is wrong: the community does not bill them. The owner of
+      the same flat gets the identical numbers the admin sees.
+    */
+    const unitIds = await this.ownership.financiallyVisibleUnitIds(actor, communityId);
+    if (unitIds.length === 0) {
       return { outstanding: 0, currentDue: null, nextDue: null, overdueCount: 0, recent: [] };
     }
     const rows = await this.prisma.maintenanceInvoice.findMany({
-      where: { communityId, residentId: { in: residentIds }, deletedAt: null },
+      where: { communityId, unitId: { in: unitIds }, deletedAt: null },
       orderBy: { dueDate: 'desc' },
       take: 24,
       include: { unit: { select: { unitNumber: true, type: true } } },
@@ -657,7 +684,17 @@ export class InvoiceService {
     return row;
   }
 
-  /** Residents see only their own invoices; managers see everything. */
+  /**
+   * Residents see only the invoices for units they are FINANCIALLY responsible
+   * for; managers see everything.
+   *
+   * Scoped by unit, not by `invoice.residentId`. That field was filled with
+   * whichever occupancy row sorted first, so a tenant recorded as their flat's
+   * primary resident was reading their landlord's bills — and would have kept
+   * reading them however the UI was arranged, because the filter itself was
+   * wrong. `financiallyVisibleUnitIds` never returns a unit the caller merely
+   * lives in once somebody is on record as owning it.
+   */
   private async residentScope(
     communityId: string,
     requestedResidentId: string | undefined,
@@ -666,19 +703,21 @@ export class InvoiceService {
     if (actor.permissions.includes(PERMISSIONS.BILLING_DASHBOARD_READ)) {
       return requestedResidentId ? { residentId: requestedResidentId } : {};
     }
-    const mine = await myResidentIds(this.prisma, actor, communityId);
-    return { residentId: { in: mine.length ? mine : ['__none__'] } };
+    const units = await this.ownership.financiallyVisibleUnitIds(actor, communityId);
+    return { unitId: { in: units.length ? units : ['__none__'] } };
   }
 
   private async assertVisible(
     communityId: string,
-    residentId: string | null,
+    unitId: string,
     actor: AuthenticatedUser,
   ): Promise<void> {
     if (actor.permissions.includes(PERMISSIONS.BILLING_DASHBOARD_READ)) return;
-    const mine = await myResidentIds(this.prisma, actor, communityId);
-    if (!residentId || !mine.includes(residentId)) {
-      throw new ForbiddenException('You can only view your own invoices');
+    if (!(await this.ownership.canAccessUnitFinancials(actor, unitId, communityId))) {
+      throw new ForbiddenException(
+        'Maintenance charges are visible to the unit owner. If you rent this home, ' +
+          'your landlord is billed for them.',
+      );
     }
   }
 
