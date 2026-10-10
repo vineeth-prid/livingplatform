@@ -16,7 +16,7 @@ import {
 import { resolveSort } from '../../common/dto/list-query.dto';
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
-import { myResidentIds } from '../community-ops/resident-access';
+import { myOccupancies, myResidentIds } from '../community-ops/resident-access';
 import { DomainEventName, type PaymentEvent } from '../events/domain-events';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
@@ -405,24 +405,22 @@ export class PackagePurchaseService {
     requestedUnitId: string | undefined,
     actor: AuthenticatedUser,
   ): Promise<{ residentId: string | null; unitId: string | null }> {
-    const mine = await myResidentIds(this.prisma, actor, communityId);
-    const residentId = mine[0] ?? null;
-    if (!residentId) return { residentId: null, unitId: null };
-
-    const assignment = await this.prisma.residentUnit.findUnique({
-      where: { residentId },
-      select: { unitId: true },
-    });
-    const unitId = requestedUnitId ?? assignment?.unitId ?? null;
-
-    if (requestedUnitId) {
-      const owned = await this.prisma.unit.findFirst({
-        where: { id: requestedUnitId, communityId, deletedAt: null },
-        select: { id: true },
-      });
-      if (!owned) throw new BadRequestException('That unit is not in this community');
+    /*
+      A package is for the home the buyer LIVES in — tenant or owner-occupier.
+      Its visits are redeemed as service requests against that unit, so a buyer
+      with no home here (e.g. an owner whose flat is let) was able to pay for a
+      package that could never be used. And any unit id in the body was
+      accepted, letting a resident buy against someone else's flat.
+    */
+    const homes = await myOccupancies(this.prisma, actor, communityId);
+    if (homes.length === 0) {
+      const mine = await myResidentIds(this.prisma, actor, communityId);
+      if (mine.length === 0) return { residentId: null, unitId: null };
+      throw new BadRequestException('Packages are available for the home you live in');
     }
-    return { residentId, unitId };
+    const home = requestedUnitId ? homes.find((h) => h.unitId === requestedUnitId) : homes[0];
+    if (!home) throw new ForbiddenException('You can only buy a package for the home you live in');
+    return { residentId: home.residentId, unitId: home.unitId };
   }
 
   /** A package restricted to property types is only sold to matching units. */

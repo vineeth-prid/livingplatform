@@ -39,3 +39,22 @@ export async function myResidentIds(
   });
   return residents.map((r) => r.id);
 }
+
+/**
+ * The caller's occupancies in a community — the homes they LIVE in, with the
+ * resident record behind each. Services and packages follow occupancy (tenant
+ * or owner-occupier alike); maintenance follows ownership (OwnershipService).
+ */
+export async function myOccupancies(
+  prisma: PrismaService,
+  user: AuthenticatedUser,
+  communityId: string,
+): Promise<{ unitId: string; residentId: string }[]> {
+  return prisma.residentUnit.findMany({
+    where: {
+      status: 'ACTIVE',
+      resident: { communityId, userId: user.id, deletedAt: null },
+    },
+    select: { unitId: true, residentId: true },
+  });
+}

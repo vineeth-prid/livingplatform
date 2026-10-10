@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,6 +10,7 @@ import { Prisma, ServiceRequestStatus } from '@prisma/client';
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
 import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import { myOccupancies } from '../community-ops/resident-access';
 import { DomainEventName } from '../events/domain-events';
 import type { ServiceRequestEvent } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
@@ -73,10 +75,23 @@ export class ServiceRequestService {
     // Same gap as tickets: the resident app posts service/unit/title only, so a
     // resident's own request was stored with residentId NULL — unattributed,
     // and unreachable by any notification addressed to the person who made it.
-    const residentId =
-      dto.residentId
-      ?? (await this.callerResidentId(communityId, actor))
-      ?? (await this.primaryResidentOfUnit(dto.unitId));
+    let residentId: string | undefined;
+    if (internal || actor.permissions.includes(PERMISSIONS.SERVICE_UPDATE)) {
+      residentId =
+        dto.residentId
+        ?? (await this.callerResidentId(communityId, actor))
+        ?? (await this.primaryResidentOfUnit(dto.unitId));
+    } else {
+      // A resident books for the home they LIVE in (tenant or owner-occupier),
+      // and the request — and what it costs — is always filed under themselves.
+      // Without this, any unit id or residentId in the body was accepted.
+      const home = (await myOccupancies(this.prisma, actor, communityId))
+        .find((o) => o.unitId === dto.unitId);
+      if (!home) {
+        throw new ForbiddenException('You can only request services for the home you live in');
+      }
+      residentId = home.residentId;
+    }
 
     // Price the request ONCE, here, and freeze the result onto the row. A later
     // catalogue edit must never rewrite what the resident was quoted.
