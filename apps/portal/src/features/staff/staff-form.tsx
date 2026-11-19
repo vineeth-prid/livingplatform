@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { Staff } from '@living/types';
 
 import { living } from '../../lib/living';
+import { announceTemporaryPassword } from '../shared/reset-password-button';
 import { FormDrawer, type FieldDef } from '../master-data';
 import { opt, PERSON_STATUS } from '../master-data/options';
 import { CatalogSelect } from '../shared/catalog-select';
@@ -62,7 +63,7 @@ export function StaffForm({
       open={open}
       onOpenChange={onOpenChange}
       title={editing ? 'Edit staff' : 'Add staff'}
-      description={editing ? undefined : 'A login is created — username is the phone number, password Living@123 (changed on first sign-in).'}
+      description={editing ? undefined : 'A login is created — username is the phone number, with a one-time password shown to you after saving (changed on first sign-in).'}
       fields={fields}
       submitLabel={editing ? 'Save changes' : 'Add staff'}
       initial={
@@ -91,6 +92,7 @@ export function StaffForm({
         const result = editing
           ? await living.people.updateStaff(staff.id, payload)
           : await living.people.createStaff(communityId, payload);
+        if (!editing) announceTemporaryPassword(`${values.firstName ?? ''} ${values.lastName ?? ''}`.trim(), result);
         await qc.invalidateQueries({ queryKey: ['staff'] });
         if (editing) await qc.invalidateQueries({ queryKey: ['staff-member', staff.id] });
         onSaved?.();

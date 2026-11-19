@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationEvent } from '@prisma/client';
 
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunityAccessService } from '../../tenancy/community-access.service';
 import type { NotificationChannelName } from '../core/notification-channel.interface';
+import { assertSafeTemplate, UnsafeTemplateError } from '../core/templates/template.engine';
 import type {
   UpdateNotificationPreferenceDto,
   UpsertNotificationTemplateDto,
@@ -188,6 +189,15 @@ export class NotificationPreferenceService {
     actor: AuthenticatedUser,
   ) {
     await this.access.assert(communityId);
+    // Refuse anything beyond variables / {{t}} / simple blocks at save time, so
+    // the admin sees why instead of the message silently falling back later.
+    try {
+      assertSafeTemplate(dto.body);
+      if (dto.subject) assertSafeTemplate(dto.subject);
+    } catch (err) {
+      if (err instanceof UnsafeTemplateError) throw new BadRequestException(err.message);
+      throw err;
+    }
     const key = {
       communityId,
       event: dto.event,

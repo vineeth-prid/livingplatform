@@ -1,4 +1,4 @@
-import { DOCUMENTED_DEFAULT_PASSWORD, EnvironmentVariables } from './env.validation';
+import { EnvironmentVariables } from './env.validation';
 
 /**
  * Structured, typed configuration derived from validated env vars.
@@ -30,9 +30,6 @@ export function configuration() {
       accessTtl: env.JWT_ACCESS_TTL ?? '15m',
       refreshTtl: env.JWT_REFRESH_TTL ?? '7d',
       refreshTtlRemember: env.JWT_REFRESH_TTL_REMEMBER ?? '30d',
-      // One-time password handed to provisioned people accounts. Configurable —
-      // never hardcoded in the provisioning service.
-      defaultPassword: env.AUTH_DEFAULT_PASSWORD ?? DOCUMENTED_DEFAULT_PASSWORD,
       /** How many previous passwords a user may not reuse (0 disables). */
       passwordHistorySize: Number(env.AUTH_PASSWORD_HISTORY_SIZE ?? 5),
       /** Minimum password length enforced on change/reset. */
@@ -40,10 +37,25 @@ export function configuration() {
       /** OTP lifetime for mobile-number password reset. */
       otpTtl: env.AUTH_OTP_TTL ?? '10m',
       otpLength: Number(env.AUTH_OTP_LENGTH ?? 6),
+      /** Failed sign-ins (per typed identifier) before the account is locked out. 0 disables. */
+      loginMaxFailures: Number(env.AUTH_LOGIN_MAX_FAILURES ?? 10),
+      /** How long the lockout (and the failure window) lasts. */
+      loginLockout: env.AUTH_LOGIN_LOCKOUT ?? '15m',
+      /** Public POST /auth/register. Off in production unless explicitly enabled. */
+      selfRegistration: env.AUTH_SELF_REGISTRATION
+        ? env.AUTH_SELF_REGISTRATION === 'true'
+        : env.NODE_ENV !== 'production',
+      /** Role keys that MUST enrol in two-factor sign-in (e.g. PLATFORM_ADMIN). Empty = optional for all. */
+      mfaRequiredRoles: (env.AUTH_MFA_REQUIRED_ROLES ?? '')
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean),
     },
     security: {
       /** Passphrase for AES-256-GCM secret columns (SecretCipher). */
       encryptionKey: env.APP_ENCRYPTION_KEY ?? '',
+      /** Previous key, decrypt-only, during a key rotation. */
+      previousEncryptionKey: env.APP_ENCRYPTION_KEY_PREVIOUS ?? '',
     },
     payments: {
       /** Active payment gateway. Community accounts are configured per-community. */
@@ -168,6 +180,8 @@ export function configuration() {
       publicUrl: env.STORAGE_PUBLIC_URL ?? 'http://localhost:4000/storage',
       // SIGNED_URL_EXPIRY is canonical; STORAGE_SIGNED_URL_TTL kept for back-compat.
       signedUrlTtl: Number(env.SIGNED_URL_EXPIRY || env.STORAGE_SIGNED_URL_TTL || 900),
+      /** Largest object accepted when a client attaches an uploaded file. */
+      maxUploadBytes: Number(env.STORAGE_MAX_UPLOAD_MB ?? 25) * 1024 * 1024,
       s3: {
         endpoint: env.MINIO_ENDPOINT ?? '',
         port: Number(env.MINIO_PORT ?? 9000),
@@ -177,6 +191,12 @@ export function configuration() {
         bucket: env.MINIO_BUCKET || env.STORAGE_BUCKET || 'living',
         region: env.MINIO_REGION ?? 'us-east-1',
         forcePathStyle: String(env.S3_FORCE_PATH_STYLE ?? 'true') !== 'false',
+        /**
+         * Browser-reachable endpoint used ONLY to sign upload/download URLs
+         * (e.g. https://files.living.example, proxied to MinIO by the edge).
+         * Unset → URLs are signed against the internal endpoint.
+         */
+        publicEndpoint: env.MINIO_PUBLIC_ENDPOINT ?? '',
       },
     },
   };

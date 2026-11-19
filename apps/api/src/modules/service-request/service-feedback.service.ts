@@ -3,14 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ServiceRequestStatus } from '@prisma/client';
+import { Prisma, ServiceRequestStatus } from '@prisma/client';
 
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
 import type { ServiceRequestEvent } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { participantWhere } from '../tenancy/participant-scope';
 import { SubmitFeedbackDto } from './dto/feedback.dto';
 import { formatServiceRequestNumber } from './service-request.service';
 
@@ -27,7 +29,7 @@ export class ServiceFeedbackService {
   ) {}
 
   async submit(serviceRequestId: string, dto: SubmitFeedbackDto, actor: AuthenticatedUser) {
-    const request = await this.loadRequest(serviceRequestId);
+    const request = await this.loadRequest(serviceRequestId, actor);
     if (request.status !== ServiceRequestStatus.COMPLETED) {
       throw new BadRequestException('Feedback can only be submitted after completion');
     }
@@ -57,14 +59,18 @@ export class ServiceFeedbackService {
     return feedback;
   }
 
-  async get(serviceRequestId: string) {
-    await this.loadRequest(serviceRequestId);
+  async get(serviceRequestId: string, actor: AuthenticatedUser) {
+    await this.loadRequest(serviceRequestId, actor);
     return this.prisma.serviceFeedback.findUnique({ where: { serviceRequestId } });
   }
 
-  private async loadRequest(id: string) {
+  private async loadRequest(id: string, actor: AuthenticatedUser) {
+    // Only a party to the request may read or rate it (see participant-scope).
+    const visible = await participantWhere<Prisma.ServiceRequestWhereInput>(
+      this.prisma, actor, PERMISSIONS.SERVICE_ASSIGN, 'requestedById',
+    );
     const request = await this.prisma.serviceRequest.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, ...visible },
       select: { id: true, communityId: true, number: true, status: true },
     });
     if (!request) throw new NotFoundException('Service request not found');

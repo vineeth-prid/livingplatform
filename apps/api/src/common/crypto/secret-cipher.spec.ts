@@ -98,3 +98,22 @@ describe('maskSecret', () => {
     expect(maskSecret(null)).toBeNull();
   });
 });
+
+describe('SecretCipher key rotation', () => {
+  const OLD = 'old-encryption-key-at-least-32-characters';
+  const NEW = 'new-encryption-key-at-least-32-characters';
+  const withKeys = (encryptionKey: string, previousEncryptionKey = '') =>
+    new SecretCipher(({ get: () => ({ encryptionKey, previousEncryptionKey }) }) as unknown as ConfigService<never, true>);
+
+  it('decrypts secrets written under the previous key, and encrypts under the new one', () => {
+    const legacy = withKeys(OLD).encrypt('rzp_secret');
+    const rotated = withKeys(NEW, OLD);
+    expect(rotated.decrypt(legacy)).toBe('rzp_secret');
+    expect(withKeys(NEW).decrypt(rotated.encrypt('x'))).toBe('x');
+  });
+
+  it('still refuses ciphertext from an unknown key', () => {
+    const foreign = withKeys('some-other-key-entirely-32-characters!!').encrypt('x');
+    expect(() => withKeys(NEW, OLD).decrypt(foreign)).toThrow(InternalServerErrorException);
+  });
+});

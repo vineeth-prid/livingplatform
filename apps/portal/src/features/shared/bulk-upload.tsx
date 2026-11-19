@@ -89,7 +89,13 @@ export function BulkUploadDrawer({
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [fileName, setFileName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ created: number; failed: number; errors: { row: number; error: string }[] } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    failed: number;
+    errors: { row: number; error: string }[];
+    /** One-time passwords for the logins this upload created (residents only). */
+    credentials?: { row: number; name: string; mobile: string; temporaryPassword: string }[];
+  } | null>(null);
 
   const reset = () => { setRows([]); setFileName(''); setResult(null); };
 
@@ -108,6 +114,17 @@ export function BulkUploadDrawer({
     URL.revokeObjectURL(url);
   };
 
+  /** The credentials only ever exist in this browser tab — saved locally, never re-sent. */
+  const downloadCredentials = (creds: NonNullable<NonNullable<typeof result>['credentials']>) => {
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const csv = ['row,name,mobile,one_time_password', ...creds.map((c) =>
+      [String(c.row), esc(c.name), esc(c.mobile), esc(c.temporaryPassword)].join(','))].join('\n');
+    const url = URL.createObjectURL(new Blob([csv + '\n'], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `${kind}-logins.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const upload = async () => {
     if (rows.length === 0) return;
     setBusy(true);
@@ -115,7 +132,7 @@ export function BulkUploadDrawer({
       const res = kind === 'units'
         ? await living.community.bulkCreateUnits(communityId, rows)
         : await living.people.bulkCreateResidents(communityId, rows);
-      setResult(res);
+      setResult(res as NonNullable<typeof result>);
       if (res.created > 0) { toast.success(`${res.created} ${kind} created`); onDone(); }
       if (res.failed > 0) toast.error(`${res.failed} row(s) failed`);
     } catch (err) {
@@ -169,6 +186,21 @@ export function BulkUploadDrawer({
                 <ul className="mt-2 max-h-48 overflow-y-auto text-xs text-danger-fg">
                   {result.errors.map((e) => <li key={e.row}>Row {e.row}: {e.error}</li>)}
                 </ul>
+              )}
+              {!!result.credentials?.length && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <p className="text-xs text-muted">
+                    Each new login has its own one-time password. This is the only time they are shown —
+                    download the list and hand each person theirs. They must change it at first sign-in.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    className="mt-2"
+                    onClick={() => downloadCredentials(result.credentials!)}
+                  >
+                    Download {result.credentials.length} login(s) (CSV)
+                  </Button>
+                </div>
               )}
             </div>
           )}

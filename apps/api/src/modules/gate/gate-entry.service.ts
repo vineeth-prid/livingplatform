@@ -141,6 +141,7 @@ export class GateEntryService {
     }
 
     const preApproved = opts.preApproved === true;
+    await this.storage.assertOwnedKey(dto.photoKey, `communities/${communityId}/gate`);
     const entry = await this.prisma.gateEntry.create({
       data: {
         tenantId: community.tenantId,
@@ -454,6 +455,7 @@ export class GateEntryService {
     if (entry.status === GateEntryStatus.COMPLETED || entry.status === GateEntryStatus.CANCELLED) {
       throw new BadRequestException('A closed entry can no longer be edited');
     }
+    await this.storage.assertOwnedKey(dto.photoKey, `communities/${entry.communityId}/gate`, entry.photoKey);
     await this.prisma.gateEntry.update({
       where: { id },
       data: {

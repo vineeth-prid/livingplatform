@@ -34,6 +34,9 @@ COPY --from=build /repo/apps/api/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /repo/apps/api/dist ./dist
 COPY --from=build /repo/apps/api/prisma ./prisma
 COPY --from=build /repo/apps/api/package.json ./package.json
+# Never run as root: a compromise of the API process must not own the container.
+USER node
 EXPOSE 4000
-# Apply migrations then start. (Use a dedicated migration job in real prod.)
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node dist/main.js"]
+# Migrations run as a separate one-shot service (`migrate` in
+# docker-compose.production.yml) before the API starts, not on every API boot.
+CMD ["node", "dist/main.js"]

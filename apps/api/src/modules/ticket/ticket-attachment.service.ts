@@ -1,11 +1,12 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { TicketEventType } from '@prisma/client';
+import { Prisma, TicketEventType } from '@prisma/client';
 
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { participantWhere } from '../tenancy/participant-scope';
 import {
   CreateAttachmentDto,
   RequestAttachmentUploadUrlDto,
@@ -25,8 +26,8 @@ export class TicketAttachmentService {
     private readonly timeline: TicketTimelineService,
   ) {}
 
-  async requestUploadUrl(ticketId: string, dto: RequestAttachmentUploadUrlDto) {
-    await this.assertTicketAccess(ticketId);
+  async requestUploadUrl(ticketId: string, dto: RequestAttachmentUploadUrlDto, actor: AuthenticatedUser) {
+    await this.assertTicketAccess(ticketId, actor);
     const key = this.storage.buildKey(
       `tickets/${ticketId}/attachments`,
       dto.fileName,
@@ -38,7 +39,9 @@ export class TicketAttachmentService {
   }
 
   async add(ticketId: string, dto: CreateAttachmentDto, actor: AuthenticatedUser) {
-    await this.assertTicketAccess(ticketId);
+    await this.assertTicketAccess(ticketId, actor);
+    await this.storage.assertOwnedKey(dto.storageKey, `tickets/${ticketId}/attachments`);
+    await this.storage.assertOwnedKey(dto.storageKey, `tickets/${ticketId}/attachments`);
     const attachment = await this.prisma.ticketAttachment.create({
       data: {
         ticketId,
@@ -72,7 +75,7 @@ export class TicketAttachmentService {
    * a picture of nothing useful.
    */
   async remove(ticketId: string, attachmentId: string, actor: AuthenticatedUser) {
-    await this.assertTicketAccess(ticketId);
+    await this.assertTicketAccess(ticketId, actor);
     const attachment = await this.prisma.ticketAttachment.findFirst({
       where: { id: attachmentId, ticketId, deletedAt: null },
     });
@@ -90,8 +93,8 @@ export class TicketAttachmentService {
     return { id: attachmentId, deleted: true };
   }
 
-  async list(ticketId: string) {
-    await this.assertTicketAccess(ticketId);
+  async list(ticketId: string, actor: AuthenticatedUser) {
+    await this.assertTicketAccess(ticketId, actor);
     const items = await this.prisma.ticketAttachment.findMany({
       where: { ticketId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
@@ -110,9 +113,14 @@ export class TicketAttachmentService {
     return { ...attachment, downloadUrl: signed.url };
   }
 
-  private async assertTicketAccess(ticketId: string) {
+  private async assertTicketAccess(ticketId: string, actor: AuthenticatedUser) {
+    // Party-to-the-ticket check (see participant-scope): a resident cannot read
+    // or post on a neighbour's ticket just because they share a community.
+    const visible = await participantWhere<Prisma.TicketWhereInput>(
+      this.prisma, actor, PERMISSIONS.TICKET_ASSIGN, 'reportedById',
+    );
     const ticket = await this.prisma.ticket.findFirst({
-      where: { id: ticketId, deletedAt: null },
+      where: { id: ticketId, deletedAt: null, ...visible },
       select: { id: true, communityId: true },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');

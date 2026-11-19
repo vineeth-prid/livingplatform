@@ -14,6 +14,7 @@ import type {
 import { expiryFrom } from '../../common/utils/duration';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacService } from '../rbac/rbac.service';
+import { SessionSecurityService } from './session-security.service';
 
 export interface TokenPair {
   accessToken: string;
@@ -46,6 +47,7 @@ export class TokensService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly rbac: RbacService,
+    private readonly sessions: SessionSecurityService,
     config: ConfigService<AppConfig, true>,
   ) {
     this.authCfg = config.get('auth', { infer: true });
@@ -78,7 +80,14 @@ export class TokensService {
 
     const row = await this.prisma.refreshToken.findUnique({
       where: { id },
-      include: { user: { select: { id: true, email: true, tenantId: true, status: true, deletedAt: true } } },
+      include: {
+        user: {
+          select: {
+            id: true, email: true, tenantId: true, status: true, deletedAt: true,
+            mustChangePassword: true, mfaEnabledAt: true,
+          },
+        },
+      },
     });
     // (impersonatorId/Email selected implicitly by findUnique — used below.)
 
@@ -105,11 +114,14 @@ export class TokensService {
       throw new UnauthorizedException('Account is not active');
     }
 
-    const principal = await this.rbac.buildPrincipal({
-      id: row.user.id,
-      email: row.user.email,
-      tenantId: row.user.tenantId,
-    });
+    const principal = this.withRestrictions(
+      await this.rbac.buildPrincipal({
+        id: row.user.id,
+        email: row.user.email,
+        tenantId: row.user.tenantId,
+      }),
+      row.user,
+    );
 
     // Preserve the impersonation marker across rotation so a refreshed session
     // never sheds its attribution to the real operator.
@@ -123,21 +135,46 @@ export class TokensService {
     return { pair, principal };
   }
 
-  /** Revoke a single refresh token (logout on this device). */
+  /**
+   * Revoke a single refresh token (logout on this device). The secret half is
+   * verified first: knowing a row id alone must not let anyone sign a user out.
+   */
   async revoke(presented: string): Promise<void> {
-    const { id } = this.split(presented);
+    const { id, secret } = this.split(presented);
+    const row = await this.prisma.refreshToken.findUnique({ where: { id }, select: { tokenHash: true } });
+    if (!row || !(await argon2.verify(row.tokenHash, secret).catch(() => false))) return;
     await this.prisma.refreshToken.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }
 
-  /** Revoke every active refresh token for a user (logout everywhere). */
+  /**
+   * Revoke every session for a user (logout everywhere): their refresh tokens,
+   * AND — via the Redis marker JwtStrategy checks — every live access token,
+   * so a suspension or password change bites immediately, not 15 minutes later.
+   */
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    await this.sessions.revokeSessions(userId);
+  }
+
+  /**
+   * Stamp the restricted-session flags onto a principal: a one-time password
+   * still in use, or two-factor enrolment required by AUTH_MFA_REQUIRED_ROLES
+   * but not done. RestrictedSessionGuard enforces both server-side.
+   */
+  withRestrictions(
+    principal: AuthenticatedUser,
+    user: { mustChangePassword: boolean; mfaEnabledAt: Date | null },
+  ): AuthenticatedUser {
+    const required = this.authCfg.mfaRequiredRoles;
+    const mfaSetupRequired =
+      !user.mfaEnabledAt && principal.roles.some((r) => required.includes(r.key));
+    return { ...principal, mustChangePassword: user.mustChangePassword, mfaSetupRequired };
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -159,6 +196,8 @@ export class TokensService {
       permissions: principal.permissions,
       type: 'access',
       ...(impersonatedBy ? { impersonatedBy } : {}),
+      ...(principal.mustChangePassword ? { mcp: true as const } : {}),
+      ...(principal.mfaSetupRequired ? { mfaSetup: true as const } : {}),
     };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.authCfg.accessSecret,

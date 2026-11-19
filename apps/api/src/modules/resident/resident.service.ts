@@ -67,18 +67,22 @@ export class ResidentService {
     }
     await this.assertMobileUnused(communityId, dto.mobile);
 
-    // Login account: username = mobile, common one-time password. Owners with
-    // multiple flats reuse their existing account (userId comes back null).
-    const userId = dto.userId ?? (await this.accounts.provisionLogin({
-      kind: 'resident',
-      tenantId: community.tenantId,
-      communityId,
-      phone: dto.mobile,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      email: dto.email,
-      actorId: actor.id,
-    }));
+    // Login account: username = mobile, its own one-time password (shown to the
+    // admin once). Owners with multiple flats reuse their existing account
+    // (userId comes back null, and there is no new password to show).
+    const login = dto.userId
+      ? { userId: dto.userId, temporaryPassword: null }
+      : await this.accounts.provisionLoginWithCredential({
+          kind: 'resident',
+          tenantId: community.tenantId,
+          communityId,
+          phone: dto.mobile,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          actorId: actor.id,
+        });
+    const userId = login.userId;
 
     const residentCode = dto.residentCode ?? (await this.nextResidentCode(communityId));
 
@@ -118,7 +122,7 @@ export class ResidentService {
       entityId: resident.id,
       data: { residentCode: resident.residentCode },
     });
-    return this.findOne(resident.id);
+    return { ...(await this.findOne(resident.id)), temporaryPassword: login.temporaryPassword };
   }
 
   /** Bulk upload residents; unit mapped by unit number. Row-isolated. */
@@ -126,6 +130,9 @@ export class ResidentService {
     await this.access.assert(communityId);
     let created = 0;
     const errors: { row: number; mobile: string; error: string }[] = [];
+    // One-time passwords for the accounts this upload minted — the admin's only
+    // chance to see them (they are stored hashed).
+    const credentials: { row: number; name: string; mobile: string; temporaryPassword: string }[] = [];
     for (let i = 0; i < dto.rows.length; i++) {
       const row = dto.rows[i]!;
       try {
@@ -138,16 +145,24 @@ export class ResidentService {
           if (!unit) throw new Error(`Unit "${row.unit}" not found`);
           unitId = unit.id;
         }
-        await this.create(communityId, {
+        const result = await this.create(communityId, {
           firstName: row.firstName, lastName: row.lastName, mobile: row.mobile,
           email: row.email, occupiedBy: row.occupiedBy, unitId,
         }, actor);
         created++;
+        if (result.temporaryPassword) {
+          credentials.push({
+            row: i + 1,
+            name: `${row.firstName} ${row.lastName ?? ''}`.trim(),
+            mobile: row.mobile,
+            temporaryPassword: result.temporaryPassword,
+          });
+        }
       } catch (err) {
         errors.push({ row: i + 1, mobile: row.mobile, error: err instanceof Error ? err.message : 'Failed' });
       }
     }
-    return { created, failed: errors.length, errors };
+    return { created, failed: errors.length, errors, credentials };
   }
 
   /** Sequential per-community code: R-000001, R-000002, … (gaps are fine). */
@@ -190,7 +205,7 @@ export class ResidentService {
       }),
       this.prisma.resident.count({ where }),
     ]);
-    return paginate(items.map((r) => this.present(r)), total, query);
+    return paginate(await Promise.all(items.map((r) => this.present(r))), total, query);
   }
 
   /**
@@ -252,8 +267,8 @@ export class ResidentService {
       : [];
 
     return {
-      residents: residents.map((r) => this.present(r)),
-      family: family.map((r) => this.present(r)),
+      residents: await Promise.all(residents.map((r) => this.present(r))),
+      family: await Promise.all(family.map((r) => this.present(r))),
       /*
         Additive — existing callers ignore it. `ownerships` being empty on a row
         means this person reaches the unit's money through the legacy occupancy
@@ -357,6 +372,7 @@ export class ResidentService {
         actorId: actor.id,
       });
     }
+    await this.storage.assertOwnedKey(dto.photoKey, `communities/${existing.communityId}`, existing.photoKey);
     const resident = await this.prisma.resident.update({
       where: { id },
       data: {
@@ -588,7 +604,7 @@ export class ResidentService {
     };
   }
 
-  private present<T extends { photoKey: string | null }>(resident: T) {
-    return { ...resident, photoUrl: this.storage.resolveUrl(resident.photoKey) };
+  private async present<T extends { photoKey: string | null }>(resident: T) {
+    return { ...resident, photoUrl: await this.storage.signedUrl(resident.photoKey) };
   }
 }

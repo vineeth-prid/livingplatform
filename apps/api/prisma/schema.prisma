@@ -560,9 +560,13 @@ model User {
   username           String?    @unique
   emailVerifiedAt    DateTime?
   passwordHash       String
-  /// Set on provisioned accounts (common one-time password) — the portal
-  /// forces a password change on first login.
+  /// Set on provisioned / admin-reset accounts (per-account one-time password)
+  /// — the API restricts the session until the password is changed.
   mustChangePassword Boolean    @default(false)
+  /// TOTP secret (AES-256-GCM via SecretCipher). Present but unconfirmed while
+  /// enrolment is in progress; two-factor is ON only once mfaEnabledAt is set.
+  mfaSecret          String?
+  mfaEnabledAt       DateTime?
   firstName          String
   lastName           String
   status             UserStatus @default(PENDING)

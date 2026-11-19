@@ -8,6 +8,7 @@ import {
 } from '@living/ui';
 
 import { living } from '../../lib/living';
+import { TwoFactorCard } from '../../pages/mfa-setup';
 import { FormGrid, FullWidth, SelectField, TextAreaField } from '../shared/form-kit';
 
 const THEMES = [
@@ -128,6 +129,7 @@ export function ProfilePage() {
         </Card>
 
         <ChangePasswordCard />
+        <TwoFactorCard />
       </PageContainer>
     </PageTransition>
   );

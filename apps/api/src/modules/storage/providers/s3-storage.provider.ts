@@ -34,6 +34,8 @@ export class S3StorageProvider implements StorageProvider {
   readonly driver = 's3';
   private readonly logger = new Logger(S3StorageProvider.name);
   private readonly client: S3Client;
+  /** Signs URLs for the BROWSER-facing endpoint; same client when none is set. */
+  private readonly signer: S3Client;
   private readonly bucket: string;
   private readonly publicUrl: string;
   private readonly ttl: number;
@@ -50,6 +52,17 @@ export class S3StorageProvider implements StorageProvider {
       credentials: { accessKeyId: s3.accessKey, secretAccessKey: s3.secretKey },
       forcePathStyle: s3.forcePathStyle,
     });
+    // Presigning is offline crypto, so a second client pointed at the public
+    // hostname costs nothing — and a link signed for "minio:9000" is useless
+    // to a browser.
+    this.signer = s3.publicEndpoint
+      ? new S3Client({
+          endpoint: s3.publicEndpoint.replace(/\/$/, ''),
+          region: s3.region,
+          credentials: { accessKeyId: s3.accessKey, secretAccessKey: s3.secretKey },
+          forcePathStyle: true,
+        })
+      : this.client;
   }
 
   /** Ensure the bucket exists (create if missing) and confirm write access. */
@@ -78,7 +91,7 @@ export class S3StorageProvider implements StorageProvider {
   async getSignedUploadUrl(key: string, options?: SignedUrlOptions): Promise<SignedUrl> {
     const expiresIn = options?.expiresInSeconds ?? this.ttl;
     const url = await getSignedUrl(
-      this.client,
+      this.signer,
       new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: options?.contentType }),
       { expiresIn },
     );
@@ -88,7 +101,7 @@ export class S3StorageProvider implements StorageProvider {
   async getSignedDownloadUrl(key: string, options?: SignedUrlOptions): Promise<SignedUrl> {
     const expiresIn = options?.expiresInSeconds ?? this.ttl;
     const url = await getSignedUrl(
-      this.client,
+      this.signer,
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       { expiresIn },
     );
@@ -114,6 +127,16 @@ export class S3StorageProvider implements StorageProvider {
       return true;
     } catch (err) {
       if (this.isNotFound(err)) return false;
+      throw err;
+    }
+  }
+
+  async stat(key: string): Promise<{ size: number; contentType?: string } | null> {
+    try {
+      const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return { size: head.ContentLength ?? 0, contentType: head.ContentType };
+    } catch (err) {
+      if (this.isNotFound(err)) return null;
       throw err;
     }
   }

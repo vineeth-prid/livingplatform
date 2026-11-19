@@ -57,15 +57,19 @@ export class ServiceRequestController {
   @Get('communities/:communityId/service-requests')
   @RequirePermissions(PERMISSIONS.SERVICE_VIEW)
   @ApiOperation({ summary: 'List service requests (filter/search/sort/paginate)' })
-  list(@Param('communityId') communityId: string, @Query() query: QueryServiceRequestDto) {
-    return this.requests.findMany(communityId, query);
+  list(
+    @Param('communityId') communityId: string,
+    @Query() query: QueryServiceRequestDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.requests.findMany(communityId, query, user);
   }
 
   @Get('service-requests/:id')
   @RequirePermissions(PERMISSIONS.SERVICE_VIEW)
   @ApiOperation({ summary: 'Service request details (service, unit, resident, feedback, assignee)' })
-  findOne(@Param('id') id: string) {
-    return this.requests.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.requests.findOne(id, user);
   }
 
   @Patch('service-requests/:id')
@@ -149,8 +153,8 @@ export class ServiceFeedbackController {
 
   @Get('service-requests/:id/feedback')
   @RequirePermissions(PERMISSIONS.SERVICE_VIEW)
-  get(@Param('id') id: string) {
-    return this.feedback.get(id);
+  get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.feedback.get(id, user);
   }
 
   @Post('service-requests/:id/feedback')

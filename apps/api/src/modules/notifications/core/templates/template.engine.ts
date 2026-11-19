@@ -10,6 +10,83 @@ export interface RenderedTemplate {
   text: string;
 }
 
+/**
+ * Thrown when a community-written template uses anything beyond plain variable
+ * substitution and the small helper/block allow-list below.
+ */
+export class UnsafeTemplateError extends Error {}
+
+/** Built-in block helpers a community template may use. */
+const SAFE_BLOCKS = new Set(['if', 'unless', 'each', 'with']);
+/** Our own helpers (see registerHelpers) — the only names callable with arguments. */
+const SAFE_HELPERS = new Set(['t', 'year', 'upper']);
+/** Path segments that reach the prototype chain rather than template data. */
+const FORBIDDEN_SEGMENT =
+  /^(constructor|prototype|__proto__|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__)$/;
+const LITERALS = new Set(['StringLiteral', 'NumberLiteral', 'BooleanLiteral']);
+
+/**
+ * Validate a COMMUNITY-AUTHORED template before it is ever compiled.
+ *
+ * Tenant admins write these bodies and the API compiles them server-side, so
+ * the template language is an attack surface (Handlebars has shipped
+ * compile-time code-injection bugs). Tenants need variables, {{t}} and simple
+ * conditionals/loops — nothing else — so the AST is walked and anything outside
+ * that (partials, decorators, sub-expressions, raw blocks, unknown helpers,
+ * prototype paths) is refused. Built-in templates on disk are trusted and skip this.
+ */
+export function assertSafeTemplate(source: string): void {
+  const fail = (why: string): never => {
+    throw new UnsafeTemplateError(why);
+  };
+  let ast: hbs.AST.Program;
+  try {
+    ast = Handlebars.parse(source);
+  } catch (e) {
+    return fail(`Template does not parse: ${(e as Error).message}`);
+  }
+  const checkPath = (p: hbs.AST.PathExpression) => {
+    if (p.parts.some((s) => FORBIDDEN_SEGMENT.test(s))) fail(`"${p.original}" is not allowed`);
+  };
+  const checkParam = (e: hbs.AST.Expression) => {
+    if (e.type === 'PathExpression') return checkPath(e as hbs.AST.PathExpression);
+    if (!LITERALS.has(e.type)) fail(`${e.type} is not allowed in a community template`);
+  };
+  const walk = (program: hbs.AST.Program | undefined): void => {
+    for (const node of program?.body ?? []) {
+      switch (node.type) {
+        case 'ContentStatement':
+        case 'CommentStatement':
+          break;
+        case 'MustacheStatement': {
+          const m = node as hbs.AST.MustacheStatement;
+          if (m.path.type !== 'PathExpression') fail('Only variables and {{t}} are allowed');
+          const path = m.path as hbs.AST.PathExpression;
+          checkPath(path);
+          if (m.params.length || m.hash?.pairs.length) {
+            if (!SAFE_HELPERS.has(path.original)) fail(`Helper "${path.original}" is not allowed`);
+            m.params.forEach(checkParam);
+            m.hash?.pairs.forEach((p) => checkParam(p.value));
+          }
+          break;
+        }
+        case 'BlockStatement': {
+          const b = node as hbs.AST.BlockStatement;
+          const name = (b.path as hbs.AST.PathExpression).original;
+          if (b.path.type !== 'PathExpression' || !SAFE_BLOCKS.has(name)) fail(`Block "${name}" is not allowed`);
+          b.params.forEach(checkParam);
+          walk(b.program);
+          walk(b.inverse);
+          break;
+        }
+        default:
+          fail(`${node.type} is not allowed in a community template`);
+      }
+    }
+  };
+  walk(ast);
+}
+
 interface Compiled {
   subject: Handlebars.TemplateDelegate;
   body: Handlebars.TemplateDelegate;
@@ -71,9 +148,14 @@ export class EmailTemplateEngine {
     variables: Record<string, unknown> = {},
     opts: { subject?: string; locale?: string; layout?: boolean } = {},
   ): RenderedTemplate {
+    // Community-authored: validate before compiling, and compile so that only
+    // our own helpers are callable (no helperMissing fallback).
+    assertSafeTemplate(body);
+    if (opts.subject) assertSafeTemplate(opts.subject);
+    const options = { knownHelpers: { t: true, year: true, upper: true }, knownHelpersOnly: true };
     const ctx = { ...variables, __locale: opts.locale ?? 'en' };
-    const inner = this.hbs.compile(body)(ctx);
-    const subject = opts.subject ? this.hbs.compile(opts.subject)(ctx).trim() : '';
+    const inner = this.hbs.compile(body, options)(ctx);
+    const subject = opts.subject ? this.hbs.compile(opts.subject, options)(ctx).trim() : '';
     const html = opts.layout === false
       ? inner
       : this.layout({ ...ctx, body: new Handlebars.SafeString(inner) });

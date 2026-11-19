@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { Vendor } from '@living/types';
 
 import { living } from '../../lib/living';
+import { announceTemporaryPassword } from '../shared/reset-password-button';
 import { useCommunity } from '../community/community-context';
 import { FormDrawer, type FieldDef } from '../master-data';
 import { opt, PERSON_STATUS } from '../master-data/options';
@@ -55,7 +56,7 @@ export function VendorForm({
       open={open}
       onOpenChange={onOpenChange}
       title={editing ? 'Edit vendor' : 'Add vendor'}
-      description={editing ? undefined : 'A login is created — username is the phone number, password Living@123 (changed on first sign-in).'}
+      description={editing ? undefined : 'A login is created — username is the phone number, with a one-time password shown to you after saving (changed on first sign-in).'}
       fields={fields}
       submitLabel={editing ? 'Save changes' : 'Add vendor'}
       initial={
@@ -87,6 +88,7 @@ export function VendorForm({
         const result = editing
           ? await living.people.updateVendor(vendor.id, body)
           : await living.people.createVendor(body);
+        if (!editing) announceTemporaryPassword(String(values.name ?? 'the vendor'), result);
         await qc.invalidateQueries({ queryKey: ['vendors'] });
         if (editing) await qc.invalidateQueries({ queryKey: ['vendor', vendor.id] });
         onSaved?.();

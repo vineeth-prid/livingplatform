@@ -115,7 +115,7 @@ export class CommunityService {
       this.prisma.community.count({ where }),
     ]);
 
-    return paginate(rows.map((c) => this.present(c)), total, query);
+    return paginate(await Promise.all(rows.map((c) => this.present(c))), total, query);
   }
 
   async findOne(id: string) {
@@ -137,7 +137,7 @@ export class CommunityService {
     });
     if (!community) throw new NotFoundException('Community not found');
     return {
-      ...this.present(community),
+      ...(await this.present(community)),
       settings: community.settings,
       statistics: {
         phases: community._count.phases,
@@ -151,6 +151,12 @@ export class CommunityService {
 
   async update(id: string, dto: UpdateCommunityDto, actor: AuthenticatedUser) {
     await this.access.assert(id);
+    const current = await this.prisma.community.findUnique({
+      where: { id },
+      select: { logoKey: true, coverImageKey: true },
+    });
+    await this.storage.assertOwnedKey(dto.logoKey, `communities/${id}`, current?.logoKey);
+    await this.storage.assertOwnedKey(dto.coverImageKey, `communities/${id}`, current?.coverImageKey);
     const updated = await this.prisma.community.update({
       where: { id },
       data: {
@@ -221,13 +227,13 @@ export class CommunityService {
   }
 
   /** Adds resolved asset URLs to a community row. */
-  private present<T extends { logoKey: string | null; coverImageKey: string | null }>(
+  private async present<T extends { logoKey: string | null; coverImageKey: string | null }>(
     community: T,
   ) {
     return {
       ...community,
-      logoUrl: this.storage.resolveUrl(community.logoKey),
-      coverImageUrl: this.storage.resolveUrl(community.coverImageKey),
+      logoUrl: await this.storage.signedUrl(community.logoKey),
+      coverImageUrl: await this.storage.signedUrl(community.coverImageKey),
     };
   }
 }

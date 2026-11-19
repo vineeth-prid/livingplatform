@@ -51,18 +51,44 @@ export class LoginDto {
   @ApiProperty({ example: 'Living!2024' })
   @IsString()
   @MinLength(1)
+  @MaxLength(128)
   password!: string;
 
   @ApiPropertyOptional({ default: false, description: 'Extend refresh lifetime' })
   @IsOptional()
   @IsBoolean()
   rememberMe?: boolean;
+
+  @ApiPropertyOptional({ description: 'Six-digit authenticator code, when two-factor sign-in is on' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  mfaCode?: string;
+}
+
+/** Confirms two-factor enrolment with the first code from the authenticator app. */
+export class MfaCodeDto {
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(8)
+  code!: string;
+}
+
+/** Turning two-factor OFF needs both the password and a current code. */
+export class DisableMfaDto extends MfaCodeDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  password!: string;
 }
 
 export class ChangePasswordDto extends PasswordField {
   @ApiProperty({ description: 'Current password' })
   @IsString()
   @MinLength(1)
+  @MaxLength(128)
   currentPassword!: string;
 }
 
@@ -116,10 +142,10 @@ export class ResetPasswordWithOtpDto extends PasswordField {
   code!: string;
 }
 
-/** Admin-initiated reset. Omit the password to fall back to the platform default. */
+/** Admin-initiated reset. Omit the password to get a freshly generated one-time password. */
 export class AdminResetPasswordDto {
   @ApiPropertyOptional({
-    description: 'Temporary password to set. Defaults to AUTH_DEFAULT_PASSWORD.',
+    description: 'Temporary password to set. Omitted → a random one-time password is generated.',
   })
   @IsOptional()
   @IsString()

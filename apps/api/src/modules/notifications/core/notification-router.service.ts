@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as Handlebars from 'handlebars';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationEvent } from '@prisma/client';
@@ -16,7 +17,14 @@ import type { NotificationChannelName } from './notification-channel.interface';
 import { OwnershipService } from '../../ownership/ownership.service';
 import { NotificationDispatcher } from './notification.dispatcher';
 import { RecipientResolver, type RecipientRef } from './recipient-resolver';
-import { EmailTemplateEngine } from './templates/template.engine';
+import { EmailTemplateEngine, UnsafeTemplateError, type RenderedTemplate } from './templates/template.engine';
+
+/**
+ * Escape user-typed text (titles come from residents and staff) before it is
+ * placed inside a raw-HTML email variable — otherwise a title could inject
+ * links or markup into mail sent to approvers.
+ */
+const esc = (v: unknown): string => Handlebars.escapeExpression(String(v ?? ''));
 
 /**
  * The seam that turns a DOMAIN event into NOTIFICATIONS.
@@ -196,11 +204,21 @@ export class NotificationRouterService {
     const override = template
       ? null
       : await this.preferences.templateFor(event.communityId, binding.event, channel);
+    // An override that fails the template safety check (one stored before the
+    // check existed) falls back to the default message rather than dropping it.
+    let rendered: RenderedTemplate | null = null;
     if (override) {
-      const rendered = this.templates.renderRaw(override.body, variables, {
-        subject: override.subject ?? undefined,
-        layout: channel === 'email',
-      });
+      try {
+        rendered = this.templates.renderRaw(override.body, variables, {
+          subject: override.subject ?? undefined,
+          layout: channel === 'email',
+        });
+      } catch (err) {
+        if (!(err instanceof UnsafeTemplateError)) throw err;
+        this.logger.warn(`Ignoring unsafe custom template for ${binding.event}/${channel}: ${err.message}`);
+      }
+    }
+    if (rendered) {
       await this.dispatcher.dispatch(
         {
           channel,
@@ -415,7 +433,7 @@ export class NotificationRouterService {
             ...base,
             recipientName: '',
             heading: 'Your request is complete',
-            bodyHtml: `<p>${base.title} (${base.requestNumber}) has been completed.</p>`,
+            bodyHtml: `<p>${esc(base.title)} (${esc(base.requestNumber)}) has been completed.</p>`,
           },
         }];
       }
@@ -445,10 +463,10 @@ export class NotificationRouterService {
               : 'Approved to continue without the extra work';
         const body =
           event.name === DomainEventName.WorkOrderRecommended
-            ? `<p>${workOrder.title} (${number}) needs approval before work can continue. We will update you as soon as it is decided.</p>`
+            ? `<p>${esc(workOrder.title)} (${number}) needs approval before work can continue. We will update you as soon as it is decided.</p>`
             : event.name === DomainEventName.WorkOrderApproved
-              ? `<p>${workOrder.title} (${number}) has been approved and work is resuming.</p>`
-              : `<p>The additional work for ${workOrder.title} (${number}) was not approved. Our team is continuing with the original request.</p>`;
+              ? `<p>${esc(workOrder.title)} (${number}) has been approved and work is resuming.</p>`
+              : `<p>The additional work for ${esc(workOrder.title)} (${number}) was not approved. Our team is continuing with the original request.</p>`;
 
         const variables = {
           subject: `${heading} — ${number}`,
@@ -485,7 +503,7 @@ export class NotificationRouterService {
                 ...variables,
                 recipientName: approver.firstName,
                 bodyHtml:
-                  `<p>${workOrder.title} (${number}) is waiting on your approval` +
+                  `<p>${esc(workOrder.title)} (${number}) is waiting on your approval` +
                   `${workOrder.estimatedTotalCost ? ` — estimated ${this.currency} ${Number(workOrder.estimatedTotalCost).toFixed(2)}` : ''}.</p>`,
               },
             });

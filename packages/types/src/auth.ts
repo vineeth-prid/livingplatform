@@ -31,6 +31,10 @@ export interface PublicUser {
   status: UserStatus;
   emailVerified: boolean;
   mustChangePassword?: boolean;
+  /** Two-factor sign-in (authenticator app) is on for this account. */
+  mfaEnabled?: boolean;
+  /** Two-factor is required for this account's role and not set up yet. */
+  mfaSetupRequired?: boolean;
   roles: string[];
 }
 
@@ -49,6 +53,16 @@ export interface LoginInput {
   email: string;
   password: string;
   rememberMe?: boolean;
+  /** Six-digit authenticator code — sent on the second step when two-factor is on. */
+  mfaCode?: string;
+}
+
+/** Returned when two-factor enrolment starts. */
+export interface MfaSetup {
+  /** Base32 key for manual entry in an authenticator app. */
+  secret: string;
+  /** otpauth:// URI (what a QR code would encode). */
+  otpauthUrl: string;
 }
 
 export interface RegisterInput {

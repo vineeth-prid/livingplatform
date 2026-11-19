@@ -10,7 +10,7 @@ import { living } from '../../lib/living';
  * Admin password reset for a person's login account.
  *
  * Deliberately shows the temporary password once, in a dialog, so the admin can
- * read it out — it is the platform's documented one-time password and the user
+ * read it out — a fresh random one-time password for this person, and the user
  * is forced to change it at next sign-in anyway. Every active session for that
  * user is revoked server-side the moment this runs.
  */
@@ -139,4 +139,24 @@ function CredentialDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Show a newly created login's one-time password — once, in a toast that stays
+ * until dismissed (the create sheet closes on save, which would take a dialog
+ * with it). Every account gets its own random password now; there is no shared
+ * default to fall back on, so this is the admin's only chance to see it.
+ */
+export function announceTemporaryPassword(personName: string, created: unknown): void {
+  const temporaryPassword = (created as { temporaryPassword?: string | null } | null)?.temporaryPassword;
+  if (!temporaryPassword) return;
+  toast.success(`Login created for ${personName}`, {
+    description: `Username: their mobile number · One-time password: ${temporaryPassword} (they must change it at first sign-in)`,
+    duration: Infinity,
+    closeButton: true,
+    action: {
+      label: 'Copy',
+      onClick: () => void navigator.clipboard?.writeText(temporaryPassword),
+    },
+  });
 }

@@ -6,6 +6,7 @@ import type { AppConfig } from '../../config/configuration';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { RbacService } from '../rbac/rbac.service';
+import type { SessionSecurityService } from './session-security.service';
 
 // Keep the crypto fast + deterministic; we assert on wiring, not hashing.
 jest.mock('argon2', () => ({
@@ -36,9 +37,13 @@ function setup() {
   } as unknown as JwtService;
   const rbac = { buildPrincipal: jest.fn().mockResolvedValue(principal) } as unknown as RbacService;
   const config = {
-    get: () => ({ accessSecret: 's', accessTtl: '15m', refreshTtl: '7d', refreshTtlRemember: '30d' }),
+    get: () => ({
+      accessSecret: 's', accessTtl: '15m', refreshTtl: '7d', refreshTtlRemember: '30d',
+      mfaRequiredRoles: ['PLATFORM_ADMIN'],
+    }),
   } as unknown as ConfigService<AppConfig, true>;
-  return { service: new TokensService(prisma, jwt, rbac, config), refreshToken, signed };
+  const sessions = { revokeSessions: jest.fn().mockResolvedValue(undefined) } as unknown as SessionSecurityService;
+  return { service: new TokensService(prisma, jwt, rbac, sessions, config), refreshToken, signed, sessions };
 }
 
 describe('TokensService impersonation attribution', () => {
@@ -83,5 +88,42 @@ describe('TokensService impersonation attribution', () => {
         data: expect.objectContaining({ impersonatorId: 'p1', impersonatorEmail: 'platform@op.test' }),
       }),
     );
+  });
+});
+
+describe('TokensService session security', () => {
+  it('stamps restricted-session claims into the access token', async () => {
+    const { service, signed } = setup();
+    const restricted = service.withRestrictions(
+      { ...principal, roles: [{ key: 'PLATFORM_ADMIN', scope: 'PLATFORM' as never, communityId: null }] },
+      { mustChangePassword: true, mfaEnabledAt: null },
+    );
+    expect(restricted.mustChangePassword).toBe(true);
+    expect(restricted.mfaSetupRequired).toBe(true);
+    await service.issuePair(restricted, false, {});
+    expect(signed.payload).toMatchObject({ mcp: true, mfaSetup: true });
+  });
+
+  it('does not require 2FA once enrolled, nor for roles outside the policy', () => {
+    const { service } = setup();
+    expect(service.withRestrictions(principal, { mustChangePassword: false, mfaEnabledAt: null }).mfaSetupRequired).toBe(false);
+    const admin = { ...principal, roles: [{ key: 'PLATFORM_ADMIN', scope: 'PLATFORM' as never, communityId: null }] };
+    expect(service.withRestrictions(admin, { mustChangePassword: false, mfaEnabledAt: new Date() }).mfaSetupRequired).toBe(false);
+  });
+
+  it('revokeAllForUser also revokes live access tokens', async () => {
+    const { service, sessions, refreshToken } = setup();
+    await service.revokeAllForUser('u1');
+    expect(refreshToken.updateMany).toHaveBeenCalled();
+    expect(sessions.revokeSessions).toHaveBeenCalledWith('u1');
+  });
+
+  it('logout ignores a token whose secret does not verify', async () => {
+    const argon2 = jest.requireMock('argon2') as { verify: jest.Mock };
+    argon2.verify.mockResolvedValueOnce(false);
+    const { service, refreshToken } = setup();
+    refreshToken.findUnique.mockResolvedValue({ tokenHash: 'h' });
+    await service.revoke('row-1.wrong-secret');
+    expect(refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -27,11 +27,6 @@ export class PasswordPolicyService {
     this.minLength = auth.passwordMinLength;
   }
 
-  /** The one-time password handed to newly provisioned accounts. */
-  static defaultPasswordFrom(config: ConfigService<AppConfig, true>): string {
-    return config.get('auth', { infer: true }).defaultPassword;
-  }
-
   hash(plain: string): Promise<string> {
     return argon2.hash(plain, { type: argon2.argon2id });
   }

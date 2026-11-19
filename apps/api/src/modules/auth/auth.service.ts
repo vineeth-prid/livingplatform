@@ -2,17 +2,17 @@ import { randomBytes } from 'node:crypto';
 
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { UserStatus, VerificationTokenType } from '@prisma/client';
 import * as argon2 from 'argon2';
 
-import type { AppConfig } from '../../config/configuration';
-
+import { SecretCipher } from '../../common/crypto/secret-cipher';
 import { expiryFrom } from '../../common/utils/duration';
+import { AuditService } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,7 +26,20 @@ import {
 } from './dto/auth.dto';
 import { OtpService } from './otp.service';
 import { PasswordPolicyService } from './password-policy.service';
+import { SessionSecurityService } from './session-security.service';
+import { generateTemporaryPassword } from './temporary-password';
 import { TokensService, type TokenPair } from './tokens.service';
+import { generateTotpSecret, otpauthUri, verifyTotp } from './totp';
+
+/**
+ * 401 the sign-in screens recognise (by `error`) to ask for the authenticator
+ * code. Only thrown AFTER the password checks out, so it reveals nothing.
+ */
+export class MfaRequiredException extends UnauthorizedException {
+  constructor() {
+    super('Enter the 6-digit code from your authenticator app');
+  }
+}
 
 const EMAIL_VERIFICATION_TTL = '24h';
 const PASSWORD_RESET_TTL = '1h';
@@ -50,6 +63,9 @@ export interface PublicUser {
   status: UserStatus;
   emailVerified: boolean;
   mustChangePassword: boolean;
+  mfaEnabled: boolean;
+  /** Two-factor enrolment is required for this account's role and not done yet. */
+  mfaSetupRequired: boolean;
   roles: string[];
 }
 
@@ -61,8 +77,6 @@ export interface PublicUser {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  /** Configurable one-time password for provisioned/reset accounts. */
-  private readonly defaultPassword: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -71,10 +85,10 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly passwords: PasswordPolicyService,
     private readonly otp: OtpService,
-    config: ConfigService<AppConfig, true>,
-  ) {
-    this.defaultPassword = config.get('auth', { infer: true }).defaultPassword;
-  }
+    private readonly sessions: SessionSecurityService,
+    private readonly cipher: SecretCipher,
+    private readonly audit: AuditService,
+  ) {}
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
     const existing = await this.prisma.user.findUnique({
@@ -142,6 +156,9 @@ export class AuthService {
     // Identifier is an email or a mobile number (people accounts log in with
     // their phone as username — digits only, matching normalizePhone at signup).
     const identifier = dto.email.trim();
+    // Per-account lockout (keyed on what was typed, so unknown and known
+    // accounts behave the same) — the IP throttle alone does not stop a botnet.
+    await this.sessions.assertNotLocked(identifier);
     const username = identifier.replace(/\D/g, '');
     const user = await this.prisma.user.findFirst({
       where: {
@@ -161,6 +178,7 @@ export class AuthService {
     const ok = await argon2.verify(hash, dto.password).catch(() => false);
 
     if (!user || !ok) {
+      await this.loginFailed(identifier, meta, user?.id ?? null, 'bad_password');
       throw new UnauthorizedException('Invalid email or password');
     }
     if (user.status === UserStatus.PENDING) {
@@ -170,16 +188,29 @@ export class AuthService {
       throw new UnauthorizedException('This account is not active');
     }
 
+    // Two-factor: only asked for once the password is right.
+    if (user.mfaEnabledAt && user.mfaSecret) {
+      if (!dto.mfaCode) throw new MfaRequiredException();
+      if (!(await this.checkTotp(user.id, user.mfaSecret, dto.mfaCode))) {
+        await this.loginFailed(identifier, meta, user.id, 'bad_mfa_code');
+        throw new UnauthorizedException('That two-factor code is not valid');
+      }
+    }
+    await this.sessions.clearFailures(identifier);
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    const principal = await this.rbac.buildPrincipal({
-      id: user.id,
-      email: user.email,
-      tenantId: user.tenantId,
-    });
+    const principal = this.tokens.withRestrictions(
+      await this.rbac.buildPrincipal({
+        id: user.id,
+        email: user.email,
+        tenantId: user.tenantId,
+      }),
+      user,
+    );
     const pair = await this.tokens.issuePair(
       principal,
       dto.rememberMe ?? false,
@@ -320,7 +351,8 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
 
-    const temporaryPassword = newPassword ?? this.defaultPassword;
+    // A fresh random value per reset — never a shared, published default.
+    const temporaryPassword = newPassword ?? generateTemporaryPassword();
     const passwordHash = await this.passwords.hashAndRecord(userId, temporaryPassword).catch(
       // A forced reset must succeed even when the temp password is in history.
       () => this.passwords.hash(temporaryPassword),
@@ -358,21 +390,133 @@ export class AuthService {
   }
 
   /** Signed-in password change — used by the forced first-login flow. */
+  /**
+   * Change the signed-in user's password. Every OTHER session is signed out
+   * (a thief holding an old refresh token loses it), and this device gets a
+   * fresh token pair — which is also what lifts a one-time-password session's
+   * restriction without a second sign-in.
+   */
   async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
-  ): Promise<{ message: string }> {
+    meta: RequestMeta = {},
+  ): Promise<{ message: string } & AuthResult> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const ok = await this.passwords.verify(user.passwordHash, currentPassword);
     if (!ok) throw new BadRequestException('Current password is incorrect');
     // Rejects reuse of a recent password and records the old hash in history.
     const passwordHash = await this.passwords.hashAndRecord(userId, newPassword);
-    await this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash, mustChangePassword: false },
     });
-    return { message: 'Your password has been changed.' };
+    await this.tokens.revokeAllForUser(userId);
+    const result = await this.reissue(updated, meta);
+    return { message: 'Your password has been changed.', ...result };
+  }
+
+  // ── two-factor sign-in (TOTP) ──────────────────────────────────────────────
+
+  /** Start enrolment: a new secret, stored encrypted, NOT active until confirmed. */
+  async startMfaSetup(userId: string): Promise<{ secret: string; otpauthUrl: string }> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.mfaEnabledAt) throw new BadRequestException('Two-factor sign-in is already on');
+    const secret = generateTotpSecret();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaSecret: this.cipher.encrypt(secret) },
+    });
+    return { secret, otpauthUrl: otpauthUri(secret, user.email) };
+  }
+
+  /** Confirm enrolment with the first code; returns a fresh, unrestricted session. */
+  async confirmMfaSetup(
+    userId: string,
+    code: string,
+    meta: RequestMeta = {},
+  ): Promise<{ message: string } & AuthResult> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.mfaEnabledAt) throw new BadRequestException('Two-factor sign-in is already on');
+    if (!user.mfaSecret) throw new BadRequestException('Start two-factor setup first');
+    if (!(await this.checkTotp(userId, user.mfaSecret, code))) {
+      throw new BadRequestException('That code is not valid — check the time on your phone and try again');
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabledAt: new Date() },
+    });
+    void this.audit.record({
+      action: 'auth.mfa_enabled', resource: 'auth', actorId: userId, actorEmail: user.email, tenantId: user.tenantId,
+    });
+    const result = await this.reissue(updated, meta);
+    return { message: 'Two-factor sign-in is on.', ...result };
+  }
+
+  async disableMfa(userId: string, password: string, code: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.mfaEnabledAt || !user.mfaSecret) throw new BadRequestException('Two-factor sign-in is not on');
+    const principal = this.tokens.withRestrictions(
+      await this.rbac.buildPrincipal({ id: user.id, email: user.email, tenantId: user.tenantId }),
+      { mustChangePassword: false, mfaEnabledAt: null },
+    );
+    if (principal.mfaSetupRequired) {
+      throw new ForbiddenException('Two-factor sign-in is required for your role and cannot be turned off');
+    }
+    const ok =
+      (await this.passwords.verify(user.passwordHash, password)) &&
+      (await this.checkTotp(userId, user.mfaSecret, code));
+    if (!ok) throw new BadRequestException('Password or code is incorrect');
+    await this.prisma.user.update({ where: { id: userId }, data: { mfaSecret: null, mfaEnabledAt: null } });
+    void this.audit.record({
+      action: 'auth.mfa_disabled', resource: 'auth', actorId: userId, actorEmail: user.email, tenantId: user.tenantId,
+    });
+    return { message: 'Two-factor sign-in is off.' };
+  }
+
+  /** Verify a TOTP code against the stored (encrypted) secret; each code works once. */
+  private async checkTotp(userId: string, encryptedSecret: string, code: string): Promise<boolean> {
+    const step = verifyTotp(this.cipher.decrypt(encryptedSecret), code);
+    return step !== null && (await this.sessions.claimTotpStep(userId, step));
+  }
+
+  /** Mint a new pair for a user whose security state just changed. */
+  private async reissue(
+    user: {
+      id: string; email: string; firstName: string; lastName: string; tenantId: string | null;
+      status: UserStatus; emailVerifiedAt: Date | null; mustChangePassword: boolean; mfaEnabledAt: Date | null;
+    },
+    meta: RequestMeta,
+  ): Promise<AuthResult> {
+    const principal = this.tokens.withRestrictions(
+      await this.rbac.buildPrincipal({ id: user.id, email: user.email, tenantId: user.tenantId }),
+      user,
+    );
+    const pair = await this.tokens.issuePair(principal, false, meta);
+    return { ...pair, user: this.toPublicUser(user, principal) };
+  }
+
+  /** Count a failed sign-in toward the lockout and leave a security trail. */
+  private async loginFailed(
+    identifier: string,
+    meta: RequestMeta,
+    userId: string | null,
+    reason: string,
+  ): Promise<void> {
+    const failures = await this.sessions.recordFailure(identifier);
+    this.logger.warn(`Failed sign-in (${reason}) user=${userId ?? 'unknown'} ip=${meta.ipAddress ?? '?'} count=${failures}`);
+    // Only known accounts go to the audit trail — logging every typed
+    // identifier would store passwords pasted into the username box.
+    if (userId) {
+      void this.audit.record({
+        action: 'auth.login_failed',
+        resource: 'auth',
+        resourceId: userId,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        metadata: { reason, failures },
+      });
+    }
   }
 
   // ── verification token helpers (selector.verifier, same as refresh) ─────────
@@ -437,6 +581,7 @@ export class AuthService {
       status: UserStatus;
       emailVerifiedAt: Date | null;
       mustChangePassword?: boolean;
+      mfaEnabledAt?: Date | null;
     },
     principal: AuthenticatedUser,
   ): PublicUser {
@@ -449,6 +594,8 @@ export class AuthService {
       status: user.status,
       emailVerified: user.emailVerifiedAt !== null,
       mustChangePassword: user.mustChangePassword ?? false,
+      mfaEnabled: !!user.mfaEnabledAt,
+      mfaSetupRequired: principal.mfaSetupRequired ?? false,
       roles: principal.roles.map((r) => r.key),
     };
   }

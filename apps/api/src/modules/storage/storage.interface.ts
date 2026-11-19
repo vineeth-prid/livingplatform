@@ -43,6 +43,9 @@ export interface StorageProvider {
 
   exists(key: string): Promise<boolean>;
 
+  /** Size + stored content type, or null when absent. Optional: stub drivers store no bytes. */
+  stat?(key: string): Promise<{ size: number; contentType?: string } | null>;
+
   /**
    * Optional health probe (reachable + credentials valid). Internal — used by
    * the readiness check only; the app-facing operations above are unchanged.

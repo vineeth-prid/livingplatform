@@ -31,6 +31,8 @@ export class WorkOrderAttachmentService {
 
   async add(workOrderId: string, dto: CreateWorkOrderAttachmentDto, actor: AuthenticatedUser) {
     await this.assertAccess(workOrderId);
+    await this.storage.assertOwnedKey(dto.storageKey, `work-orders/${workOrderId}/attachments`);
+    await this.storage.assertOwnedKey(dto.storageKey, `work-orders/${workOrderId}/attachments`);
     const attachment = await this.prisma.workOrderAttachment.create({
       data: {
         workOrderId,

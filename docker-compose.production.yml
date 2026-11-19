@@ -38,11 +38,19 @@ services:
     image: redis:7-alpine
     restart: *restart
     logging: *logging
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    # Password-protected: Redis holds the OTP attempt counters, login lockouts,
+    # session revocations and the realtime fan-out — none of which any other
+    # container on this network should be able to rewrite.
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass "$$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +61,9 @@ services:
 
   # S3-compatible object storage for real file uploads (StorageService s3 driver).
   minio:
-    image: minio/minio:latest
+    # Pin MINIO_IMAGE to the exact RELEASE tag (or @sha256 digest) you have
+    # tested; `latest` silently changes under you on the next pull.
+    image: ${MINIO_IMAGE:-minio/minio:latest}
     restart: *restart
     logging: *logging
     command: server /data --console-address ":9001"
@@ -75,6 +85,55 @@ services:
         limits: { cpus: "1.0", memory: 512m }
     networks: [living]
 
+  # One-shot: create the PRIVATE bucket and a least-privilege MinIO user for the
+  # API (read/write/delete objects in that one bucket — nothing else). The root
+  # credentials stay with the operator and never reach the API container.
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-minio/mc:latest}
+    restart: "no"
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_APP_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?MINIO_APP_ACCESS_KEY is required}
+      MINIO_APP_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?MINIO_APP_SECRET_KEY is required}
+      BUCKET: ${STORAGE_BUCKET:-living}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$BUCKET"
+        # Private: objects are only reachable through short-lived signed URLs.
+        mc anonymous set none "local/$$BUCKET"
+        cat > /tmp/living-app.json <<POLICY
+        {"Version":"2012-10-17","Statement":[
+          {"Effect":"Allow","Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::$$BUCKET"]},
+          {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::$$BUCKET/*"]}
+        ]}
+        POLICY
+        mc admin policy create local living-app /tmp/living-app.json 2>/dev/null || true
+        mc admin user add local "$$MINIO_APP_ACCESS_KEY" "$$MINIO_APP_SECRET_KEY"
+        mc admin policy attach local living-app --user "$$MINIO_APP_ACCESS_KEY" 2>/dev/null || true
+        echo "minio-init: bucket $$BUCKET private, app user scoped"
+    networks: [living]
+
+  # One-shot: apply database migrations BEFORE the API starts, instead of on
+  # every API boot (a crash-looping API would otherwise re-run them).
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: "no"
+    logging: *logging
+    command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [living]
+
   api:
     build:
       context: .
@@ -85,45 +144,79 @@ services:
       NODE_ENV: production
       PORT: "4000"
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CORS_ORIGINS: ${CORS_ORIGINS}
       WEB_APP_URL: ${WEB_APP_URL}
+      # One trusted hop: the edge recovers the real client IP from Cloudflare
+      # (cloudflare-realip.conf) and OVERWRITES X-Forwarded-For with it. Rate
+      # limits and login lockouts key on that IP; the old default of 0 collapsed
+      # EVERY user into one bucket (ten failed logins anywhere locked everyone out).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      # Both are enforced at boot under NODE_ENV=production (see env.validation.ts).
+      # Enforced at boot under NODE_ENV=production (see env.validation.ts).
       # --env-file only feeds ${...} interpolation here; a var absent from this
-      # list never reaches the container, so the API would refuse to start.
+      # list never reaches the container.
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
-      AUTH_DEFAULT_PASSWORD: ${AUTH_DEFAULT_PASSWORD}
+      APP_ENCRYPTION_KEY_PREVIOUS: ${APP_ENCRYPTION_KEY_PREVIOUS:-}
+      # Account protection.
+      AUTH_LOGIN_MAX_FAILURES: ${AUTH_LOGIN_MAX_FAILURES:-10}
+      AUTH_LOGIN_LOCKOUT: ${AUTH_LOGIN_LOCKOUT:-15m}
+      AUTH_MFA_REQUIRED_ROLES: ${AUTH_MFA_REQUIRED_ROLES:-}
+      AUTH_SELF_REGISTRATION: ${AUTH_SELF_REGISTRATION:-false}
+      # /metrics requires `Authorization: Bearer <token>` when set (and the edge
+      # does not route it publicly at all).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Web Push. Optional — the push channel reports unhealthy and stands down
       # when unset; every other notification channel is unaffected.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # WhatsApp. The webhook secrets fail CLOSED in production when unset, so
+      # they must be forwarded here for inbound status callbacks to work.
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-meta}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      OPENWA_BASE_URL: ${OPENWA_BASE_URL:-}
+      OPENWA_API_KEY: ${OPENWA_API_KEY:-}
+      OPENWA_SESSION: ${OPENWA_SESSION:-living}
+      OPENWA_WEBHOOK_SECRET: ${OPENWA_WEBHOOK_SECRET:-}
+      OPENWA_WEBHOOK_URL: ${OPENWA_WEBHOOK_URL:-}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
+      # 'true' = implicit TLS (port 465). On 587 nodemailer upgrades via STARTTLS.
+      SMTP_SECURE: ${SMTP_SECURE:-false}
       MAIL_FROM: ${MAIL_FROM}
       THROTTLE_TTL: ${THROTTLE_TTL:-60}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-120}
-      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-s3}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-living}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
-      # MinIO / S3 (used when STORAGE_DRIVER=s3). Endpoint is the internal service.
+      STORAGE_MAX_UPLOAD_MB: ${STORAGE_MAX_UPLOAD_MB:-25}
+      # MinIO / S3. Endpoint is the internal service; credentials are the
+      # least-privilege app user created by minio-init — NOT the root keys.
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
       MINIO_SSL: "false"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_APP_SECRET_KEY}
       MINIO_BUCKET: ${STORAGE_BUCKET:-living}
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
       S3_FORCE_PATH_STYLE: "true"
+      # Browser-facing host the signed links are minted for (edge routes it to MinIO).
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-}
       SIGNED_URL_EXPIRY: ${SIGNED_URL_EXPIRY:-900}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      migrate: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4000/api/v1/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 15s
@@ -162,8 +255,12 @@ services:
     logging: *logging
     volumes:
       - ./deploy/nginx/edge.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/nginx/cloudflare-realip.conf:/etc/nginx/conf.d/cloudflare-realip.conf:ro
     ports:
-      - "80:80"
+      # EDGE_BIND=127.0.0.1 when a Cloudflare Tunnel (cloudflared) fronts the
+      # origin — then nothing listens publicly at all. Otherwise firewall port 80
+      # to Cloudflare's IP ranges only (see docs/SECURITY.md).
+      - "${EDGE_BIND:-0.0.0.0}:80:80"
     depends_on: [api, portal, resident, workforce]
     deploy: { resources: { limits: { cpus: "0.5", memory: 128m } } }
     networks: [living]

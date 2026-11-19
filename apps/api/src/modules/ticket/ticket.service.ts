@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { participantWhere } from '../tenancy/participant-scope';
 import { StaffAutoAssignService } from '../staff/staff-auto-assign.service';
 import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
@@ -231,9 +232,9 @@ export class TicketService {
     return updated;
   }
 
-  async findMany(communityId: string, query: QueryTicketDto): Promise<Paginated<unknown>> {
+  async findMany(communityId: string, query: QueryTicketDto, actor: AuthenticatedUser): Promise<Paginated<unknown>> {
     await this.access.assert(communityId);
-    const where: Prisma.TicketWhereInput = {
+    const filters: Prisma.TicketWhereInput = {
       communityId,
       deletedAt: null,
       ...(query.status ? { status: query.status } : {}),
@@ -261,6 +262,8 @@ export class TicketService {
         : {}),
       ...(query.search ? this.searchWhere(query.search) : {}),
     };
+    const visible = await this.visibility(actor);
+    const where: Prisma.TicketWhereInput = visible ? { AND: [filters, visible] } : filters;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.ticket.findMany({
@@ -281,7 +284,7 @@ export class TicketService {
 
   async findOne(id: string, actor: AuthenticatedUser) {
     const ticket = await this.prisma.ticket.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, ...(await this.visibility(actor)) },
       include: {
         category: true,
         unit: { select: { id: true, unitNumber: true, blockId: true, floorId: true } },
@@ -302,15 +305,18 @@ export class TicketService {
       ...this.present(ticket),
       assignee: await this.resolveAssignee(ticket),
       comments: ticket.comments.filter((c) => canSeeInternal || !c.isInternal),
-      attachments: ticket.attachments.map((a) => ({
-        ...a,
-        downloadUrl: this.storage.resolveUrl(a.storageKey),
-      })),
+      // Signed, not public: the bucket is private, so a public URL only 403s.
+      attachments: await Promise.all(
+        ticket.attachments.map(async (a) => ({
+          ...a,
+          downloadUrl: (await this.storage.signDownload(a.storageKey)).url,
+        })),
+      ),
     };
   }
 
   async update(id: string, dto: UpdateTicketDto, actor: AuthenticatedUser) {
-    const ticket = await this.loadOrThrow(id);
+    const ticket = await this.loadOrThrow(id, actor);
     this.assertEditable(ticket, actor);
 
     if (dto.categoryId) {
@@ -344,7 +350,7 @@ export class TicketService {
   }
 
   async changeStatus(id: string, dto: ChangeTicketStatusDto, actor: AuthenticatedUser) {
-    const ticket = await this.loadOrThrow(id);
+    const ticket = await this.loadOrThrow(id, actor);
     const from = ticket.status;
     const to = dto.status;
     this.statusFlow.assertTransition(from, to);
@@ -460,20 +466,25 @@ export class TicketService {
     return { id, deleted: true };
   }
 
-  async getTimeline(id: string) {
-    await this.loadOrThrow(id);
+  async getTimeline(id: string, actor: AuthenticatedUser) {
+    await this.loadOrThrow(id, actor);
     return this.timeline.list(id);
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
 
-  private async loadOrThrow(id: string) {
+  private async loadOrThrow(id: string, actor?: AuthenticatedUser) {
     const ticket = await this.prisma.ticket.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, ...(actor ? await this.visibility(actor) : {}) },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
     await this.access.assert(ticket.communityId);
     return ticket;
+  }
+
+  /** Rows the caller is a party to; null = the whole community (managers). */
+  private visibility(actor: AuthenticatedUser): Promise<Prisma.TicketWhereInput | null> {
+    return participantWhere<Prisma.TicketWhereInput>(this.prisma, actor, PERMISSIONS.TICKET_ASSIGN, 'reportedById');
   }
 
   /** Closed tickets can only be edited by users holding ticket:close. */

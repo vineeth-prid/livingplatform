@@ -17,6 +17,7 @@ import { DomainEventsService } from '../events/domain-events.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { participantWhere } from '../tenancy/participant-scope';
 import { TicketService } from '../ticket/ticket.service';
 import { StaffAutoAssignService } from '../staff/staff-auto-assign.service';
 import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
@@ -208,9 +209,13 @@ export class ServiceRequestService {
     }
   }
 
-  async findMany(communityId: string, query: QueryServiceRequestDto): Promise<Paginated<unknown>> {
+  async findMany(
+    communityId: string,
+    query: QueryServiceRequestDto,
+    actor: AuthenticatedUser,
+  ): Promise<Paginated<unknown>> {
     await this.access.assert(communityId);
-    const where: Prisma.ServiceRequestWhereInput = {
+    const filters: Prisma.ServiceRequestWhereInput = {
       communityId,
       deletedAt: null,
       ...(query.status ? { status: query.status } : {}),
@@ -230,6 +235,8 @@ export class ServiceRequestService {
         : {}),
       ...(query.search ? this.searchWhere(query.search) : {}),
     };
+    const visible = await this.visibility(actor);
+    const where: Prisma.ServiceRequestWhereInput = visible ? { AND: [filters, visible] } : filters;
     const [items, total] = await this.prisma.$transaction([
       this.prisma.serviceRequest.findMany({
         where,
@@ -247,9 +254,9 @@ export class ServiceRequestService {
     return paginate(items.map((r) => this.present(r)), total, query);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actor: AuthenticatedUser) {
     const request = await this.prisma.serviceRequest.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, ...(await this.visibility(actor)) },
       include: {
         service: true,
         unit: { select: { id: true, unitNumber: true, blockId: true, floorId: true } },
@@ -263,7 +270,7 @@ export class ServiceRequestService {
   }
 
   async update(id: string, dto: UpdateServiceRequestDto, actor: AuthenticatedUser) {
-    const request = await this.loadOrThrow(id);
+    const request = await this.loadOrThrow(id, actor);
     if (this.statusFlow.isTerminal(request.status)) {
       throw new BadRequestException(
         `A ${request.status.toLowerCase()} request cannot be edited`,
@@ -293,7 +300,7 @@ export class ServiceRequestService {
   }
 
   async changeStatus(id: string, dto: ChangeServiceRequestStatusDto, actor: AuthenticatedUser) {
-    const request = await this.loadOrThrow(id);
+    const request = await this.loadOrThrow(id, actor);
     const from = request.status;
     const to = dto.status;
     this.statusFlow.assertTransition(from, to);
@@ -319,7 +326,7 @@ export class ServiceRequestService {
   }
 
   async assign(id: string, dto: AssignServiceRequestDto, actor: AuthenticatedUser) {
-    const request = await this.loadOrThrow(id);
+    const request = await this.loadOrThrow(id, actor);
     const community = await this.access.assert(request.communityId);
 
     const hasStaff = !!dto.staffId;
@@ -353,7 +360,7 @@ export class ServiceRequestService {
   }
 
   async schedule(id: string, dto: ScheduleServiceRequestDto, actor: AuthenticatedUser) {
-    await this.loadOrThrow(id);
+    await this.loadOrThrow(id, actor);
     const updated = await this.prisma.serviceRequest.update({
       where: { id },
       data: {
@@ -370,7 +377,7 @@ export class ServiceRequestService {
   // ── Ticket integration (loose coupling — Ticket Engine unchanged) ────────────
 
   async linkTicket(id: string, dto: LinkTicketDto, actor: AuthenticatedUser) {
-    const request = await this.loadOrThrow(id);
+    const request = await this.loadOrThrow(id, actor);
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: dto.ticketId, communityId: request.communityId, deletedAt: null },
       select: { id: true },
@@ -387,7 +394,7 @@ export class ServiceRequestService {
 
   /** Create a Ticket from this request (delegates to the Ticket Engine) and link it. */
   async createTicket(id: string, dto: CreateTicketFromRequestDto, actor: AuthenticatedUser) {
-    const request = await this.loadOrThrow(id);
+    const request = await this.loadOrThrow(id, actor);
     const ticket = await this.tickets.create(
       request.communityId,
       {
@@ -419,13 +426,20 @@ export class ServiceRequestService {
 
   // ── internals ──────────────────────────────────────────────────────────────
 
-  private async loadOrThrow(id: string) {
+  private async loadOrThrow(id: string, actor?: AuthenticatedUser) {
     const request = await this.prisma.serviceRequest.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, ...(actor ? await this.visibility(actor) : {}) },
     });
     if (!request) throw new NotFoundException('Service request not found');
     await this.access.assert(request.communityId);
     return request;
+  }
+
+  /** Rows the caller is a party to; null = the whole community (managers). */
+  private visibility(actor: AuthenticatedUser): Promise<Prisma.ServiceRequestWhereInput | null> {
+    return participantWhere<Prisma.ServiceRequestWhereInput>(
+      this.prisma, actor, PERMISSIONS.SERVICE_ASSIGN, 'requestedById',
+    );
   }
 
   private assertStatusPermission(to: ServiceRequestStatus, actor: AuthenticatedUser): void {

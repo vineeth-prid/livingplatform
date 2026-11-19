@@ -23,7 +23,6 @@ describe('password recovery', () => {
     const otp = { issue: jest.fn().mockResolvedValue(undefined), verify: jest.fn().mockResolvedValue('u-1') };
     const mail = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
     const prisma = { user: { findFirst: jest.fn().mockResolvedValue(user) } };
-    const config = { get: () => ({ defaultPassword: 'Living@123' }) };
     const svc = new AuthService(
       prisma as never, // prisma
       {} as never, // rbac
@@ -31,7 +30,9 @@ describe('password recovery', () => {
       mail as never, // mail
       {} as never, // passwords
       otp as never, // otp
-      config as never, // config
+      {} as never, // sessions
+      {} as never, // cipher
+      {} as never, // audit
     );
     // createVerificationToken hits tables this unit test does not stand up.
     (svc as unknown as { createVerificationToken: unknown }).createVerificationToken =

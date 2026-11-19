@@ -1,4 +1,4 @@
-import type { AuthResult, LoginInput, PublicUser, RegisterInput } from '@living/types';
+import type { AuthResult, LoginInput, MfaSetup, PublicUser, RegisterInput } from '@living/types';
 
 import type { HttpClient } from '../http';
 import type { TokenStore } from '../token-store';
@@ -75,8 +75,40 @@ export class AuthResource {
     return this.http.get('/auth/me');
   }
 
-  changePassword(currentPassword: string, password: string): Promise<{ message: string }> {
-    return this.http.post('/auth/change-password', { currentPassword, password });
+  /**
+   * Change password. The API signs out every other session and returns a fresh
+   * token pair for this device, which is stored here so the caller stays
+   * signed in (and a one-time-password session becomes a normal one).
+   */
+  async changePassword(currentPassword: string, password: string): Promise<{ message: string }> {
+    const result = await this.http.post<{ message: string } & Partial<AuthResult>>(
+      '/auth/change-password',
+      { currentPassword, password },
+    );
+    this.adoptTokens(result);
+    return { message: result.message };
+  }
+
+  /** Start two-factor enrolment: returns the key to add to an authenticator app. */
+  startMfaSetup(): Promise<MfaSetup> {
+    return this.http.post('/auth/mfa/setup', {});
+  }
+
+  /** Confirm enrolment with the first code. Stores the fresh token pair. */
+  async enableMfa(code: string): Promise<{ message: string }> {
+    const result = await this.http.post<{ message: string } & Partial<AuthResult>>('/auth/mfa/enable', { code });
+    this.adoptTokens(result);
+    return { message: result.message };
+  }
+
+  disableMfa(password: string, code: string): Promise<{ message: string }> {
+    return this.http.post('/auth/mfa/disable', { password, code });
+  }
+
+  private adoptTokens(result: Partial<AuthResult>): void {
+    if (result.accessToken && result.refreshToken) {
+      this.http.setTokens({ accessToken: result.accessToken, refreshToken: result.refreshToken });
+    }
   }
 
   async logout(): Promise<void> {

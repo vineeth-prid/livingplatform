@@ -36,7 +36,9 @@ openssl rand -base64 48   # → APP_ENCRYPTION_KEY   (REQUIRED in production)
 | Variable | Why |
 | --- | --- |
 | `APP_ENCRYPTION_KEY` | AES-256-GCM key for Razorpay key secrets, webhook secrets and WhatsApp API keys. **Boot fails in production without it.** Rotating it makes every stored secret undecryptable — they must be re-entered. Back it up with the same care as the DB password. |
-| `AUTH_DEFAULT_PASSWORD` | The one-time password handed to every provisioned resident/staff/vendor. **Change it from `Living@123`.** |
+| `REDIS_PASSWORD` | **Required.** Redis holds OTP counters, lockouts and session revocations. |
+| `MINIO_APP_ACCESS_KEY` / `MINIO_APP_SECRET_KEY` | **Required.** Least-privilege storage user for the API (created by `minio-init`). |
+| ~~`AUTH_DEFAULT_PASSWORD`~~ | Removed — every account gets its own one-time password. |
 | `WHATSAPP_PROVIDER` + `OPENWA_*` | Only if using the self-hosted gateway — see [`whatsapp.md`](whatsapp.md). |
 | `BILLING_SWEEP_ENABLED` | Leave `true` on exactly one API replica. |
 

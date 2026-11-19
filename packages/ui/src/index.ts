@@ -14,6 +14,7 @@ export {
   Dialog, DialogTrigger, DialogClose, DialogContent, DialogFooter,
 } from './components/dialog';
 export { ForgotPasswordDialog } from './components/forgot-password-dialog';
+export { PasswordChangeGate } from './components/password-change-gate';
 export { Sheet, SheetTrigger, SheetClose, SheetContent } from './components/sheet';
 export {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,

@@ -76,7 +76,14 @@ Frontend variables are **baked at build time** (Vite).
 
 | Variable | Req | Default | Notes |
 | --- | :-: | --- | --- |
-| `AUTH_DEFAULT_PASSWORD` | — | `Living@123` | One-time password for provisioned resident/staff/vendor accounts. **Change in production.** Forced change on first sign-in. |
+| `AUTH_LOGIN_MAX_FAILURES` | — | `10` | Failed sign-ins per account before a temporary lockout (0 disables). |
+| `AUTH_LOGIN_LOCKOUT` | — | `15m` | Lockout / failure-window length. |
+| `AUTH_MFA_REQUIRED_ROLES` | — | — | Comma-separated role keys that must enrol in two-factor sign-in (e.g. `PLATFORM_ADMIN`). |
+| `AUTH_SELF_REGISTRATION` | — | dev on / prod off | Opens `POST /auth/register`. |
+| `APP_ENCRYPTION_KEY_PREVIOUS` | — | — | Old encryption key, decrypt-only, during key rotation. |
+| `STORAGE_MAX_UPLOAD_MB` | — | `25` | Largest file accepted when an upload is attached. |
+| `MINIO_PUBLIC_ENDPOINT` | — | — | Browser-reachable host signed file links are minted for (e.g. `https://files.example`). |
+| ~~`AUTH_DEFAULT_PASSWORD`~~ | — | — | **Removed.** Every account now gets its own one-time password. A leftover value is ignored. |
 | `AUTH_PASSWORD_HISTORY_SIZE` | — | `5` | Previous passwords that may not be reused. `0` disables. |
 | `AUTH_PASSWORD_MIN_LENGTH` | — | `8` | Minimum length on change/reset. |
 | `AUTH_OTP_TTL` | — | `10m` | Mobile password-reset code lifetime. |

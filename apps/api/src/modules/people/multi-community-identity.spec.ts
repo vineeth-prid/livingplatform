@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 
 import type { PrismaService } from '../prisma/prisma.service';
 import { AccountProvisioningService } from './account-provisioning.service';
@@ -47,8 +46,7 @@ function makeService(existingUser: { id: string } | null, opts: { linked?: 'resi
     },
   } as unknown as PrismaService;
 
-  const config = { get: () => ({ defaultPassword: 'Living@123' }) } as unknown as ConfigService<never, true>;
-  return { service: new AccountProvisioningService(prisma, config as never), prisma, grants: created };
+  return { service: new AccountProvisioningService(prisma), prisma, grants: created };
 }
 
 const input = (kind: 'resident' | 'staff' | 'vendor', communityId: string | null) => ({

@@ -6,6 +6,7 @@ import {
   type Paginated,
   type PaginationQueryDto,
 } from '../../common/dto/pagination.dto';
+import { TokensService } from '../auth/tokens.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
 
@@ -31,6 +32,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
+    private readonly tokens: TokensService,
   ) {}
 
   /** Restricts a query to the caller's tenant unless they are platform-level. */
@@ -74,10 +76,13 @@ export class UsersService {
   async updateStatus(id: string, status: UserStatus) {
     // Ensure the target is visible within the caller's tenant first.
     await this.findOne(id);
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: { status },
       select: PUBLIC_SELECT,
     });
+    // Suspending must bite now: kill refresh tokens AND live access tokens.
+    if (status !== UserStatus.ACTIVE) await this.tokens.revokeAllForUser(id);
+    return updated;
   }
 }

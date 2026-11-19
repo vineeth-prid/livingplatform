@@ -47,6 +47,7 @@ export class DocumentService {
 
   async create(communityId: string, dto: CreateDocumentDto, actor: AuthenticatedUser) {
     await this.access.assert(communityId);
+    await this.storage.assertOwnedKey(dto.storageKey, `communities/${communityId}/documents`);
     const doc = await this.prisma.communityDocument.create({
       data: {
         communityId,
@@ -114,7 +115,12 @@ export class DocumentService {
   }
 
   async update(id: string, dto: UpdateDocumentDto, actor: AuthenticatedUser) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
+    await this.storage.assertOwnedKey(
+      dto.storageKey,
+      `communities/${current.communityId}/documents`,
+      current.storageKey,
+    );
     const doc = await this.prisma.communityDocument.update({
       where: { id },
       data: {

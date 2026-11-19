@@ -30,6 +30,8 @@ export class AssetDocumentService {
 
   async add(assetId: string, dto: CreateAssetDocumentDto, actor: AuthenticatedUser) {
     const asset = await this.assertAccess(assetId);
+    await this.storage.assertOwnedKey(dto.storageKey, `assets/${assetId}/documents`);
+    await this.storage.assertOwnedKey(dto.storageKey, `assets/${assetId}/documents`);
     const document = await this.prisma.assetDocument.create({
       data: {
         assetId,

@@ -7,6 +7,7 @@ import { useAuth } from '@living/hooks';
 import { Badge, type BadgeProps, Button, EmptyState, Input, Sheet, SheetContent, Skeleton, toast, useConfirm } from '@living/ui';
 
 import { living } from '../../lib/living';
+import { announceTemporaryPassword } from '../shared/reset-password-button';
 
 type Tone = NonNullable<BadgeProps['tone']>;
 
@@ -184,12 +185,9 @@ function AddOwnerSheet({
           ? { residentId }
           : { firstName: firstName.trim(), lastName: lastName.trim() || undefined, mobile: mobile.trim(), email: email.trim() || undefined },
       ),
-    onSuccess: () => {
-      toast.success(
-        mode === 'existing'
-          ? 'Owner recorded'
-          : 'Owner recorded — their login is the mobile number, password Living@123 (changed on first sign-in)',
-      );
+    onSuccess: (created) => {
+      toast.success('Owner recorded');
+      if (mode !== 'existing') announceTemporaryPassword(`${firstName} ${lastName}`.trim(), created);
       onSaved();
       onOpenChange(false);
     },

@@ -37,10 +37,12 @@ export class ProfileService {
     const profile =
       user.profile ??
       (await this.prisma.userProfile.create({ data: { userId } }));
-    return { ...user, profile: this.present(profile) };
+    return { ...user, profile: await this.present(profile) };
   }
 
   async update(userId: string, dto: UpdateProfileDto, actor: AuthenticatedUser) {
+    const current = await this.prisma.userProfile.findUnique({ where: { userId }, select: { avatarKey: true } });
+    await this.storage.assertOwnedKey(dto.avatarKey, `users/${userId}`, current?.avatarKey);
     const data = {
       displayName: dto.displayName,
       avatarKey: dto.avatarKey,
@@ -68,7 +70,7 @@ export class ProfileService {
     return this.present(profile);
   }
 
-  private present<T extends { avatarKey: string | null }>(profile: T) {
-    return { ...profile, avatarUrl: this.storage.resolveUrl(profile.avatarKey) };
+  private async present<T extends { avatarKey: string | null }>(profile: T) {
+    return { ...profile, avatarUrl: await this.storage.signedUrl(profile.avatarKey) };
   }
 }

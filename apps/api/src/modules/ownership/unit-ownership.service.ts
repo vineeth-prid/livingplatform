@@ -66,8 +66,10 @@ export class UnitOwnershipService {
   async add(communityId: string, unitId: string, dto: AddUnitOwnerDto, actor: AuthenticatedUser) {
     await this.assertUnit(communityId, unitId);
 
-    const residentId = dto.residentId
-      ? await this.assertResidentInCommunity(dto.residentId, communityId)
+    // A brand-new owner gets a login with its own one-time password, returned
+    // once so the admin can hand it over (null when an existing record is linked).
+    const { residentId, temporaryPassword } = dto.residentId
+      ? { residentId: await this.assertResidentInCommunity(dto.residentId, communityId), temporaryPassword: null }
       : await this.createOwnerResident(communityId, dto, actor);
 
     const existing = await this.prisma.unitOwnership.findUnique({
@@ -109,7 +111,7 @@ export class UnitOwnershipService {
     await this.record(actor, communityId, 'ownership.owner_added', row.id, {
       unitId, residentId, isPrimary,
     });
-    return row;
+    return { ...row, temporaryPassword };
   }
 
   async update(
@@ -268,7 +270,7 @@ export class UnitOwnershipService {
     communityId: string,
     dto: AddUnitOwnerDto,
     actor: AuthenticatedUser,
-  ): Promise<string> {
+  ): Promise<{ residentId: string; temporaryPassword: string | null }> {
     if (!dto.firstName || !dto.mobile) {
       throw new BadRequestException(
         'Give an existing residentId, or the owner’s first name and mobile number',
@@ -277,7 +279,7 @@ export class UnitOwnershipService {
     // Someone the community already knows (an owner of another flat, or the
     // occupier themselves) is linked, never given a second record and login.
     const known = await this.residents.findByMobile(communityId, dto.mobile);
-    if (known) return known.id;
+    if (known) return { residentId: known.id, temporaryPassword: null };
     /*
       Created WITHOUT a unit assignment on purpose.
 
@@ -296,7 +298,8 @@ export class UnitOwnershipService {
       } as never,
       actor,
     );
-    return (resident as { id: string }).id;
+    const created = resident as { id: string; temporaryPassword?: string | null };
+    return { residentId: created.id, temporaryPassword: created.temporaryPassword ?? null };
   }
 
   private async assertUnit(communityId: string, unitId: string) {

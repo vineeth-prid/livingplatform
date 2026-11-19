@@ -7,8 +7,9 @@ import { living } from '../lib/living';
 
 /**
  * Forced first-login password change. Shown (blocking the app) whenever the
- * signed-in user has `mustChangePassword` — accounts provisioned with the common
- * one-time password (Living@123). On success the session is refreshed.
+ * signed-in user has `mustChangePassword` — accounts provisioned or reset with a
+ * one-time password. The API enforces the same restriction (every other route
+ * answers 403 until this is done); on success it returns a fresh session.
  */
 export function ChangePasswordGate() {
   const { refreshSession, logout } = useAuth();

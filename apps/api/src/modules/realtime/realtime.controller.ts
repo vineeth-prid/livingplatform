@@ -65,7 +65,9 @@ export class RealtimeController {
 
     const events = this.realtime
       .streamFor(channels)
-      .pipe(map((event): SseMessage => ({ type: event.type, data: JSON.stringify(event) })));
+      // Strip CR/LF from the SSE event name: Nest 10 writes it into the stream
+      // unescaped (GHSA-36xv-jgw5-4q75), and events arrive via Redis fan-out.
+      .pipe(map((event): SseMessage => ({ type: String(event.type).replace(/[\r\n]/g, ''), data: JSON.stringify(event) })));
 
     const heartbeat = interval(HEARTBEAT_MS).pipe(
       map((): SseMessage => ({ type: 'ping', data: JSON.stringify({ at: new Date().toISOString() }) })),

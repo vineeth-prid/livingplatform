@@ -12,10 +12,10 @@ export interface AssignedRole {
  * Carries the flattened permission set so guards can authorize without a DB
  * round-trip on every request.
  *
- * ponytail: permissions are embedded from the access token (minted at
- * login/refresh). A permission change takes effect on the user's next token
- * refresh (≤ access TTL). Move to a Redis-backed live lookup if you need
- * instant revocation.
+ * Permissions are embedded from the access token (minted at login/refresh). A
+ * permission change takes effect on the user's next token refresh (≤ access
+ * TTL); suspension, password changes and sign-out-everywhere revoke live access
+ * tokens immediately via SessionSecurityService.
  */
 export interface AuthenticatedUser {
   id: string;
@@ -44,6 +44,14 @@ export interface AuthenticatedUser {
   /** Set when this is a Platform-Admin impersonation session; identifies the
    *  real operator so their actions stay attributable in the audit trail. */
   impersonatedBy?: Impersonator | null;
+  /**
+   * Restricted session: the account still holds a one-time password, or must
+   * enrol in two-factor sign-in. Only the routes that resolve that are allowed
+   * (RestrictedSessionGuard) — the app gate alone could be skipped by calling
+   * the API directly.
+   */
+  mustChangePassword?: boolean;
+  mfaSetupRequired?: boolean;
 }
 
 /** The real operator behind an impersonation ("log in as") session. */
@@ -65,6 +73,11 @@ export interface AccessTokenPayload {
   type: 'access';
   /** Present only on impersonation sessions (see AuthenticatedUser). */
   impersonatedBy?: Impersonator | null;
+  /** Restricted-session claims (see AuthenticatedUser). */
+  mcp?: true;
+  mfaSetup?: true;
+  /** Issued-at (seconds), set by jsonwebtoken — compared with session revocation. */
+  iat?: number;
 }
 
 /** JWT refresh-token payload shape (kept minimal — authority is the DB row). */

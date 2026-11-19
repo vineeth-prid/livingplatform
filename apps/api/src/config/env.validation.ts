@@ -16,14 +16,6 @@ export enum NodeEnv {
   Production = 'production',
 }
 
-/**
- * Documented one-time password for provisioned accounts, so a dev environment
- * works out of the box. Production must override it via AUTH_DEFAULT_PASSWORD —
- * enforced below, because a default published in this repo is claimable by
- * anyone who logs in before the real user does.
- */
-export const DOCUMENTED_DEFAULT_PASSWORD = 'Living@123';
-
 export enum EmailProvider {
   Ses = 'ses',
   Smtp = 'smtp',
@@ -111,16 +103,6 @@ export class EnvironmentVariables {
   @IsOptional()
   JWT_REFRESH_TTL_REMEMBER = '30d';
 
-  /**
-   * One-time password given to provisioned people accounts (residents, staff,
-   * vendors). Users are forced to change it on first login. Configurable so
-   * production never ships with the documented default.
-   */
-  @IsString()
-  @MinLength(8, { message: 'AUTH_DEFAULT_PASSWORD must be at least 8 characters' })
-  @IsOptional()
-  AUTH_DEFAULT_PASSWORD = DOCUMENTED_DEFAULT_PASSWORD;
-
   /** Number of previous passwords that may not be reused (0 disables). */
   @Type(() => Number)
   @IsInt()
@@ -142,6 +124,31 @@ export class EnvironmentVariables {
   @IsOptional()
   AUTH_OTP_LENGTH = 6;
 
+  /** Failed sign-ins per account before a temporary lockout (0 disables). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  AUTH_LOGIN_MAX_FAILURES = 10;
+
+  @IsString()
+  @IsOptional()
+  AUTH_LOGIN_LOCKOUT = '15m';
+
+  /** "true" opens POST /auth/register. Default: on in dev, off in production. */
+  @IsString()
+  @IsOptional()
+  AUTH_SELF_REGISTRATION?: string;
+
+  /**
+   * Comma-separated role keys that must use two-factor sign-in, e.g.
+   * "PLATFORM_ADMIN,ASSOCIATION_ADMIN". Those users are walked through
+   * enrolment at their next sign-in. Empty (default) = optional for everyone.
+   */
+  @IsString()
+  @IsOptional()
+  AUTH_MFA_REQUIRED_ROLES = '';
+
   // ── Secret encryption (payment keys, webhook secrets, WhatsApp API keys) ──
   /**
    * Passphrase for AES-256-GCM encryption of secret columns. REQUIRED in
@@ -153,6 +160,11 @@ export class EnvironmentVariables {
     message: 'APP_ENCRYPTION_KEY must be at least 32 characters in production',
   })
   APP_ENCRYPTION_KEY = '';
+
+  /** Old APP_ENCRYPTION_KEY, accepted for decryption only while rotating keys. */
+  @IsString()
+  @IsOptional()
+  APP_ENCRYPTION_KEY_PREVIOUS = '';
 
   // ── Email (verification / password reset) ──
   @IsString()
@@ -409,6 +421,13 @@ export class EnvironmentVariables {
   @IsOptional()
   STORAGE_SIGNED_URL_TTL = 900;
 
+  /** Largest upload (MB) accepted when a file is attached; larger objects are deleted. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  STORAGE_MAX_UPLOAD_MB = 25;
+
   // ── Web Push / VAPID (Gate Management, Sprint 13) ──
   // All optional. Leave unset and the push channel simply reports unhealthy and
   // sends nothing — in-app, WhatsApp and email are unaffected. Generate with:
@@ -471,6 +490,11 @@ export class EnvironmentVariables {
   @IsOptional()
   S3_FORCE_PATH_STYLE = 'true';
 
+  /** Public URL browsers use for signed links, e.g. https://files.living.example (optional). */
+  @IsString()
+  @IsOptional()
+  MINIO_PUBLIC_ENDPOINT = '';
+
   /** Signed-URL lifetime (seconds); falls back to STORAGE_SIGNED_URL_TTL. */
   @Type(() => Number)
   @IsInt()
@@ -488,16 +512,6 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
       .map((e) => Object.values(e.constraints ?? {}).join(', '))
       .join('\n  - ');
     throw new Error(`Invalid environment configuration:\n  - ${details}`);
-  }
-  if (
-    validated.NODE_ENV === NodeEnv.Production &&
-    validated.AUTH_DEFAULT_PASSWORD === DOCUMENTED_DEFAULT_PASSWORD
-  ) {
-    throw new Error(
-      'Invalid environment configuration:\n  - AUTH_DEFAULT_PASSWORD must be overridden in production; ' +
-        'the fallback is published in this repository, so every provisioned account would be claimable ' +
-        'by whoever logs in first.',
-    );
   }
   return validated;
 }

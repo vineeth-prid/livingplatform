@@ -3,7 +3,7 @@ import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Activity, CalendarCheck, CloudOff, ListChecks, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '@living/hooks';
-import { LoadingState } from '@living/ui';
+import { LoadingState, PasswordChangeGate } from '@living/ui';
 import { cn } from '@living/utils';
 
 import { CommunitySwitcher } from './community-switcher';
@@ -38,11 +38,16 @@ const TABS = [
 /** The mobile field shell: a scrollable page over a fixed bottom tab bar,
  *  centred and framed on tablet/desktop. */
 export function MobileShell() {
-  const { status } = useAuth();
+  const { status, session } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (status === 'loading') return <LoadingState className="h-dvh" label="Loading your work…" />;
   if (status === 'unauthenticated') return <Navigate to="/login" />;
+  // One-time password (or required 2FA) — the API serves nothing else until
+  // it is resolved, so show the screen that resolves it instead of the app.
+  if (session?.user?.mustChangePassword || session?.user?.mfaSetupRequired) {
+    return <PasswordChangeGate mfaSetupRequired={!session.user.mustChangePassword} />;
+  }
 
   return (
     <div className="mx-auto flex h-dvh max-w-md flex-col bg-page sm:my-4 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl sm:border sm:border-border-subtle sm:shadow-lg sm:overflow-hidden">

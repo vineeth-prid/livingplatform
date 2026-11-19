@@ -134,7 +134,7 @@ export class ProvisioningService {
     });
 
     return {
-      community: this.present(community),
+      community: await this.present(community),
       admin: { ...admin, temporaryPassword },
     };
   }
@@ -286,11 +286,11 @@ export class ProvisioningService {
     });
   }
 
-  private present<T extends { logoKey: string | null; coverImageKey: string | null }>(c: T) {
+  private async present<T extends { logoKey: string | null; coverImageKey: string | null }>(c: T) {
     return {
       ...c,
-      logoUrl: this.storage.resolveUrl(c.logoKey),
-      coverImageUrl: this.storage.resolveUrl(c.coverImageKey),
+      logoUrl: await this.storage.signedUrl(c.logoKey),
+      coverImageUrl: await this.storage.signedUrl(c.coverImageKey),
     };
   }
 }

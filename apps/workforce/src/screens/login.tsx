@@ -21,6 +21,9 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(false);
+  // Second step, only for accounts with two-factor sign-in on.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
 
   if (status === 'authenticated') return <Navigate to="/" />;
 
@@ -30,9 +33,14 @@ export function LoginScreen() {
     try {
       // The API's `email` field is really an identifier — it matches on email
       // OR on the digits-only username.
-      await login({ email: identifier.trim(), password, rememberMe: true });
+      await login({ email: identifier.trim(), password, rememberMe: true, ...(needsCode ? { mfaCode } : {}) });
       navigate({ to: '/' });
     } catch (err) {
+      if (err instanceof LivingApiError && err.error === 'MfaRequiredException') {
+        setNeedsCode(true);
+        toast.message(err.message);
+        return;
+      }
       toast.error(err instanceof LivingApiError ? err.message : 'Unable to sign in');
     } finally {
       setBusy(false);
@@ -55,6 +63,11 @@ export function LoginScreen() {
           hint="Your registered mobile number is your username." />
         <Input label="Password" type="password" autoComplete="current-password"
           placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        {needsCode && (
+          <Input label="Authenticator code" inputMode="numeric" autoComplete="one-time-code"
+            placeholder="6-digit code" maxLength={6} value={mfaCode} autoFocus required
+            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))} />
+        )}
         <Button type="submit" size="lg" block loading={busy} className="mt-2">Sign in</Button>
         {/* Self-service recovery. The dialog now takes its client from the SDK
             context rather than a module-level one, so the same implementation

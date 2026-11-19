@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { PasswordPolicyService } from './password-policy.service';
+import { SessionSecurityService } from './session-security.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TokensService } from './tokens.service';
 
@@ -19,7 +20,7 @@ import { TokensService } from './tokens.service';
     RbacModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokensService, JwtStrategy, PasswordPolicyService, OtpService],
-  exports: [AuthService, TokensService, PasswordPolicyService],
+  providers: [AuthService, TokensService, JwtStrategy, PasswordPolicyService, OtpService, SessionSecurityService],
+  exports: [AuthService, TokensService, PasswordPolicyService, SessionSecurityService],
 })
 export class AuthModule {}

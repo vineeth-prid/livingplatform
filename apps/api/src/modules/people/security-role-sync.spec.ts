@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 
 import type { PrismaService } from '../prisma/prisma.service';
 import { ROLE_KEYS } from '../rbac/rbac.constants';
@@ -15,11 +14,8 @@ function makeService(roleExists = true) {
     },
   } as unknown as PrismaService;
 
-  const config = {
-    get: () => ({ defaultPassword: 'Living@123' }),
-  } as unknown as ConfigService;
 
-  return { service: new AccountProvisioningService(prisma, config as never), prisma };
+  return { service: new AccountProvisioningService(prisma), prisma };
 }
 
 describe('isSecurityJobRole', () => {

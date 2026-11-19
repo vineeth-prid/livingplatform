@@ -6,6 +6,7 @@ import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 import type { Resident } from '@living/types';
 
 import { living } from '../../lib/living';
+import { announceTemporaryPassword } from '../shared/reset-password-button';
 import { SelectField, TextAreaField } from '../shared/form-kit';
 import { opt, GENDER, RESIDENT_STATUS } from '../master-data/options';
 
@@ -121,7 +122,7 @@ export function ResidentForm({
           notes: values.notes || undefined,
         });
       } else {
-        await living.people.createResident(communityId, {
+        const created = await living.people.createResident(communityId, {
           firstName: values.firstName, lastName: values.lastName, mobile: values.mobile,
           email: values.email || undefined, gender: values.gender || undefined,
           occupation: values.occupation || undefined, status: values.status || undefined,
@@ -130,6 +131,7 @@ export function ResidentForm({
           emergencyContactPhone: values.emergencyContactPhone || undefined,
           notes: values.notes || undefined,
         });
+        announceTemporaryPassword(`${values.firstName} ${values.lastName}`.trim(), created);
       }
       await qc.invalidateQueries({ queryKey: ['residents'] });
       if (editing) await qc.invalidateQueries({ queryKey: ['resident', resident.id] });
@@ -149,7 +151,7 @@ export function ResidentForm({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent open={open} side="right"
         title={editing ? 'Edit resident' : 'Add resident'}
-        description={editing ? undefined : 'A login is created — username is the mobile number, password Living@123 (changed on first sign-in). Resident code is auto-generated.'}
+        description={editing ? undefined : 'A login is created — username is the mobile number, with a one-time password shown to you after saving (changed on first sign-in). Resident code is auto-generated.'}
         className="w-[min(94vw,560px)]">
         <div className="flex flex-col gap-4">
           {editing && (

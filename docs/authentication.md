@@ -9,7 +9,7 @@ RBAC architecture is unchanged — this documents what Sprint 11 added around it
 
 | User kind | Username | Password |
 | --- | --- | --- |
-| Resident / Staff / Vendor | **Mobile number** (digits only) | `AUTH_DEFAULT_PASSWORD`, forced change on first sign-in |
+| Resident / Staff / Vendor | **Mobile number** (digits only) | Per-account random one-time password shown once to the admin; the API restricts the session until it is changed |
 | Platform / Association Admin | Email | Set at provisioning |
 
 `POST /auth/login` accepts either in the same field: the identifier is matched
@@ -23,7 +23,7 @@ cross-kind reuse is a conflict.
 ### The default password is configuration
 
 ```dotenv
-AUTH_DEFAULT_PASSWORD=Living@123   # CHANGE THIS IN PRODUCTION
+# No shared default password: each account gets its own one-time password.
 ```
 
 `AccountProvisioningService` reads it from config. The `ONE_TIME_PASSWORD`
@@ -133,7 +133,8 @@ number.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `AUTH_DEFAULT_PASSWORD` | `Living@123` | One-time password for provisioned accounts |
+| `AUTH_LOGIN_MAX_FAILURES` / `AUTH_LOGIN_LOCKOUT` | `10` / `15m` | Per-account lockout |
+| `AUTH_MFA_REQUIRED_ROLES` | — | Roles that must use two-factor (TOTP) sign-in |
 | `AUTH_PASSWORD_HISTORY_SIZE` | `5` | `0` disables reuse checking |
 | `AUTH_PASSWORD_MIN_LENGTH` | `8` | |
 | `AUTH_OTP_TTL` | `10m` | Mobile reset code lifetime |
@@ -146,7 +147,7 @@ number.
 
 | Check | How |
 | --- | --- |
-| Mobile login | Sign in with the phone number + `AUTH_DEFAULT_PASSWORD` |
+| Mobile login | Sign in with the phone number + the one-time password the admin was shown |
 | First-login change | Portal blocks on the change-password gate until set |
 | Reset by mobile | Login → *Forgot password?* → enter mobile → OTP arrives on WhatsApp → set new password |
 | Reset by email, mobile account | Same dialog with the email → the OTP screen opens (not the link screen) and the code redeems |

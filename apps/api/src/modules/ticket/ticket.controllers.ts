@@ -62,8 +62,12 @@ export class TicketController {
   @Get('communities/:communityId/tickets')
   @RequirePermissions(PERMISSIONS.TICKET_VIEW)
   @ApiOperation({ summary: 'List tickets (filter/search/sort/paginate)' })
-  list(@Param('communityId') communityId: string, @Query() query: QueryTicketDto) {
-    return this.tickets.findMany(communityId, query);
+  list(
+    @Param('communityId') communityId: string,
+    @Query() query: QueryTicketDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.tickets.findMany(communityId, query, user);
   }
 
   @Get('communities/:communityId/tickets/dashboard')
@@ -123,8 +127,8 @@ export class TicketController {
   @Get('tickets/:id/timeline')
   @RequirePermissions(PERMISSIONS.TICKET_VIEW)
   @ApiOperation({ summary: 'Structured ticket timeline' })
-  timeline(@Param('id') id: string) {
-    return this.tickets.getTimeline(id);
+  timeline(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.tickets.getTimeline(id, user);
   }
 }
 
@@ -161,8 +165,8 @@ export class TicketAttachmentController {
 
   @Get('tickets/:id/attachments')
   @RequirePermissions(PERMISSIONS.TICKET_VIEW)
-  list(@Param('id') id: string) {
-    return this.attachments.list(id);
+  list(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.attachments.list(id, user);
   }
 
   @Post('tickets/:id/attachments/upload-url')
@@ -171,8 +175,9 @@ export class TicketAttachmentController {
   uploadUrl(
     @Param('id') id: string,
     @Body() dto: RequestAttachmentUploadUrlDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.attachments.requestUploadUrl(id, dto);
+    return this.attachments.requestUploadUrl(id, dto, user);
   }
 
   @Post('tickets/:id/attachments')

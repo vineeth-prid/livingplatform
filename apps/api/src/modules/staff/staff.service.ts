@@ -36,16 +36,20 @@ export class StaffService {
       await this.userLink.assertLinkable(dto.userId, community.tenantId);
     }
 
-    const userId = dto.userId ?? (await this.accounts.provisionLogin({
-      kind: 'staff',
-      tenantId: community.tenantId,
-      communityId,
-      phone: dto.phone,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      email: dto.email,
-      actorId: actor.id,
-    }));
+    // A NEW login comes back with its own one-time password, shown to the admin once.
+    const login = dto.userId
+      ? { userId: dto.userId, temporaryPassword: null }
+      : await this.accounts.provisionLoginWithCredential({
+          kind: 'staff',
+          tenantId: community.tenantId,
+          communityId,
+          phone: dto.phone,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          actorId: actor.id,
+        });
+    const userId = login.userId;
     const employeeId = dto.employeeId ?? (await this.nextEmployeeId(communityId));
 
     const staff = await this.prisma.staff.create({
@@ -82,7 +86,7 @@ export class StaffService {
       entityId: staff.id,
       data: { employeeId: staff.employeeId, role: staff.role },
     });
-    return this.present(staff);
+    return { ...(await this.present(staff)), temporaryPassword: login.temporaryPassword };
   }
 
   /**
@@ -99,7 +103,7 @@ export class StaffService {
       where: { userId: user.id, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
-    return { items: staff.map((s) => this.present(s)) };
+    return { items: await Promise.all(staff.map((s) => this.present(s))) };
   }
 
   async findMany(communityId: string, query: QueryStaffDto): Promise<Paginated<unknown>> {
@@ -131,7 +135,7 @@ export class StaffService {
       }),
       this.prisma.staff.count({ where }),
     ]);
-    return paginate(items.map((s) => this.present(s)), total, query);
+    return paginate(await Promise.all(items.map((s) => this.present(s))), total, query);
   }
 
   async findOne(id: string) {
@@ -164,6 +168,7 @@ export class StaffService {
       });
     }
 
+    await this.storage.assertOwnedKey(dto.photoKey, `communities/${existing.communityId}`, existing.photoKey);
     const staff = await this.prisma.staff.update({
       where: { id },
       data: {
@@ -261,7 +266,7 @@ export class StaffService {
     return `EMP-${String(count + 1).padStart(4, '0')}`;
   }
 
-  private present<T extends { photoKey: string | null }>(staff: T) {
-    return { ...staff, photoUrl: this.storage.resolveUrl(staff.photoKey) };
+  private async present<T extends { photoKey: string | null }>(staff: T) {
+    return { ...staff, photoUrl: await this.storage.signedUrl(staff.photoKey) };
   }
 }

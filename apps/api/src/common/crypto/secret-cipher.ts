@@ -32,9 +32,13 @@ const PREFIX = 'v1';
 export class SecretCipher {
   private readonly logger = new Logger(SecretCipher.name);
   private readonly key: Buffer | null;
+  /** Old key accepted for DECRYPTION only, while secrets are re-saved under the new one. */
+  private readonly previousKey: Buffer | null;
 
   constructor(config: ConfigService<AppConfig, true>) {
-    this.key = deriveKey(config.get('security', { infer: true }).encryptionKey);
+    const security = config.get('security', { infer: true });
+    this.key = deriveKey(security.encryptionKey);
+    this.previousKey = deriveKey(security.previousEncryptionKey);
     if (!this.key) {
       this.logger.warn(
         'APP_ENCRYPTION_KEY is not set — payment/WhatsApp secrets cannot be stored until it is',
@@ -60,14 +64,20 @@ export class SecretCipher {
     if (version !== PREFIX || !ivB64 || !tagB64 || !dataB64) {
       throw new InternalServerErrorException('Stored secret is malformed');
     }
-    try {
-      const decipher = createDecipheriv(ALGORITHM, key, unb64(ivB64));
-      decipher.setAuthTag(unb64(tagB64));
-      return Buffer.concat([decipher.update(unb64(dataB64)), decipher.final()]).toString('utf8');
-    } catch {
-      // Wrong key or tampered ciphertext — never echo the payload.
-      throw new InternalServerErrorException('Stored secret could not be decrypted');
+    // Key rotation: set APP_ENCRYPTION_KEY to the new key and
+    // APP_ENCRYPTION_KEY_PREVIOUS to the old one; existing secrets keep
+    // decrypting (GCM's auth tag tells the keys apart) until they are re-saved.
+    for (const k of this.previousKey ? [key, this.previousKey] : [key]) {
+      try {
+        const decipher = createDecipheriv(ALGORITHM, k, unb64(ivB64));
+        decipher.setAuthTag(unb64(tagB64));
+        return Buffer.concat([decipher.update(unb64(dataB64)), decipher.final()]).toString('utf8');
+      } catch {
+        // try the next key
+      }
     }
+    // Wrong key or tampered ciphertext — never echo the payload.
+    throw new InternalServerErrorException('Stored secret could not be decrypted');
   }
 
   /** Decrypt, returning null instead of throwing when the value is absent. */

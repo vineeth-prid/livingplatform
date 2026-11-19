@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  NotFoundException,
   Get,
   HttpCode,
   HttpStatus,
@@ -8,12 +9,15 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AllowRestrictedSession } from '../../common/guards/restricted-session.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import type { AppConfig } from '../../config/configuration';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AuthService } from './auth.service';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -21,8 +25,10 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import {
   AdminResetPasswordDto,
   ChangePasswordDto,
+  DisableMfaDto,
   ForgotPasswordDto,
   LoginDto,
+  MfaCodeDto,
   RefreshTokenDto,
   RegisterDto,
   ResendVerificationDto,
@@ -41,18 +47,28 @@ function meta(req: Request) {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
 
   @Public()
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Register a new account (sends a verification email)' })
   register(@Body() dto: RegisterDto) {
+    // Accounts are provisioned by communities; open sign-up is off in
+    // production unless AUTH_SELF_REGISTRATION=true (no app uses it today).
+    if (!this.config.get('auth', { infer: true }).selfRegistration) {
+      throw new NotFoundException();
+    }
     return this.auth.register(dto);
   }
 
   @Public()
   @Post('verify-email')
+  // Each attempt costs an argon2 verify; cap it like the other public auth routes.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm an email address with a token' })
   verifyEmail(@Body() dto: VerifyEmailDto) {
@@ -94,6 +110,7 @@ export class AuthController {
   }
 
   @Post('logout-all')
+  @AllowRestrictedSession()
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke every refresh token for the current user' })
@@ -148,14 +165,53 @@ export class AuthController {
   }
 
   @Post('change-password')
+  @AllowRestrictedSession()
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change the current user’s password (first-login flow)' })
-  changePassword(@CurrentUser('id') userId: string, @Body() dto: ChangePasswordDto) {
-    return this.auth.changePassword(userId, dto.currentPassword, dto.password);
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Change the current user’s password — signs out other sessions and returns a fresh token pair',
+  })
+  changePassword(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.changePassword(userId, dto.currentPassword, dto.password, meta(req));
+  }
+
+  // ── Two-factor sign-in (TOTP authenticator app) ──
+
+  @Post('mfa/setup')
+  @AllowRestrictedSession()
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start two-factor enrolment — returns the secret and otpauth:// URL' })
+  startMfa(@CurrentUser('id') userId: string) {
+    return this.auth.startMfaSetup(userId);
+  }
+
+  @Post('mfa/enable')
+  @AllowRestrictedSession()
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Confirm enrolment with the first code (returns a fresh token pair)' })
+  enableMfa(@CurrentUser('id') userId: string, @Body() dto: MfaCodeDto, @Req() req: Request) {
+    return this.auth.confirmMfaSetup(userId, dto.code, meta(req));
+  }
+
+  @Post('mfa/disable')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Turn two-factor off (password + current code)' })
+  disableMfa(@CurrentUser('id') userId: string, @Body() dto: DisableMfaDto) {
+    return this.auth.disableMfa(userId, dto.password, dto.code);
   }
 
   @Get('me')
+  @AllowRestrictedSession()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get the current authenticated user' })
   me(@CurrentUser() user: AuthenticatedUser) {

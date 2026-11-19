@@ -17,6 +17,9 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [forgot, setForgot] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Second step, shown only when the account has two-factor sign-in on.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
 
   if (status === 'authenticated') return <Navigate to="/" />;
 
@@ -24,10 +27,15 @@ export function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await login({ email, password, rememberMe: true });
+      await login({ email, password, rememberMe: true, ...(needsCode ? { mfaCode } : {}) });
       toast.success('Welcome back');
       navigate({ to: '/' });
     } catch (err) {
+      if (err instanceof LivingApiError && err.error === 'MfaRequiredException') {
+        setNeedsCode(true);
+        toast.message(err.message);
+        return;
+      }
       const message = err instanceof LivingApiError ? err.message : 'Unable to sign in';
       toast.error(message);
     } finally {
@@ -79,6 +87,19 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            {needsCode && (
+              <Input
+                label="Authenticator code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                maxLength={6}
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                autoFocus
+                required
+              />
+            )}
             <Button type="submit" block loading={submitting} className="mt-1">
               Sign in
             </Button>

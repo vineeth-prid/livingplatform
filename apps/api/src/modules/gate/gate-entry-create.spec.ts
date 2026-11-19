@@ -58,7 +58,7 @@ function build() {
   const svc = new GateEntryService(
     prisma as never,
     { assert: jest.fn().mockResolvedValue({ tenantId: 't-1' }) } as never,
-    {} as never,
+    { assertOwnedKey: jest.fn().mockResolvedValue(undefined) } as never,
     { publish: jest.fn((e: { name: string }) => published.push(e.name)) } as never,
     { publish: jest.fn() } as never,
   );

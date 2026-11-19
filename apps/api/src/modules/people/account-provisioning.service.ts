@@ -1,8 +1,7 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 
-import type { AppConfig } from '../../config/configuration';
+import { generateTemporaryPassword } from '../auth/temporary-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { ROLE_KEYS, type RoleKey } from '../rbac/rbac.constants';
 import type { ProfileKind } from './user-link.service';
@@ -47,7 +46,8 @@ export interface ProvisionLoginInput {
 
 /**
  * Creates the login account for a person (resident/staff/vendor): username =
- * mobile number, common one-time password, forced change on first login.
+ * mobile number, a per-account random one-time password, forced change on
+ * first login.
  *
  * Phone uniqueness rule: one phone → one user account. A second RESIDENT
  * profile with the same phone is allowed (an owner can own several flats) and
@@ -57,19 +57,8 @@ export interface ProvisionLoginInput {
 @Injectable()
 export class AccountProvisioningService {
   private readonly logger = new Logger(AccountProvisioningService.name);
-  private readonly oneTimePassword: string;
 
-  constructor(
-    private readonly prisma: PrismaService,
-    config: ConfigService<AppConfig, true>,
-  ) {
-    this.oneTimePassword = config.get('auth', { infer: true }).defaultPassword;
-  }
-
-  /** The one-time password this deployment hands out (for admin-facing copy). */
-  get defaultPassword(): string {
-    return this.oneTimePassword;
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Returns the userId to link on the new profile row, or null when the
@@ -77,6 +66,17 @@ export class AccountProvisioningService {
    * Throws ConflictException when the phone is taken by a different kind.
    */
   async provisionLogin(input: ProvisionLoginInput): Promise<string | null> {
+    return (await this.provisionLoginWithCredential(input)).userId;
+  }
+
+  /**
+   * Same as provisionLogin, plus the one-time password when a NEW account was
+   * minted (null when an existing account was reused — it keeps its password).
+   * The caller shows it to the admin once; it is never stored in clear.
+   */
+  async provisionLoginWithCredential(
+    input: ProvisionLoginInput,
+  ): Promise<{ userId: string | null; temporaryPassword: string | null }> {
     const username = normalizePhone(input.phone);
     if (username.length !== MOBILE_DIGITS) {
       throw new ConflictException(
@@ -144,7 +144,7 @@ export class AccountProvisioningService {
       // Link this profile to the account only when nothing else claims that
       // slot. A second resident row for a multi-flat owner shares the account
       // without being the linked one, which is unchanged.
-      return linkedKind === null ? existing.id : null;
+      return { userId: linkedKind === null ? existing.id : null, temporaryPassword: null };
     }
 
     const role = await this.prisma.role.findFirst({
@@ -158,7 +158,8 @@ export class AccountProvisioningService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    const passwordHash = await argon2.hash(this.oneTimePassword, { type: argon2.argon2id });
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await argon2.hash(temporaryPassword, { type: argon2.argon2id });
     const user = await this.prisma.user.create({
       data: {
         tenantId: input.tenantId,
@@ -188,7 +189,7 @@ export class AccountProvisioningService {
     if (!role) {
       this.logger.warn(`No system role for kind "${input.kind}" — account ${user.id} created without a role grant`);
     }
-    return user.id;
+    return { userId: user.id, temporaryPassword };
   }
 
   /**
@@ -289,7 +290,7 @@ export class AccountProvisioningService {
    */
   async provisionMissingLogin(input: ProvisionLoginInput): Promise<{
     userId: string;
-    temporaryPassword: string;
+    temporaryPassword: string | null;
   }> {
     const username = normalizePhone(input.phone);
     const existing = await this.prisma.user.findUnique({
@@ -298,16 +299,17 @@ export class AccountProvisioningService {
     });
 
     // The number already has an account — link to it rather than minting a
-    // second login for one human. Resetting it is then an ordinary reset.
+    // second login for one human. It keeps its own password (null here); the
+    // admin uses an ordinary reset if the person needs a new one.
     if (existing) {
-      return { userId: existing.id, temporaryPassword: this.oneTimePassword };
+      return { userId: existing.id, temporaryPassword: null };
     }
 
-    const userId = await this.provisionLogin(input);
+    const { userId, temporaryPassword } = await this.provisionLoginWithCredential(input);
     if (!userId) {
       throw new ConflictException('Could not create a login for this person');
     }
-    return { userId, temporaryPassword: this.oneTimePassword };
+    return { userId, temporaryPassword };
   }
 
   async syncSecurityRole(

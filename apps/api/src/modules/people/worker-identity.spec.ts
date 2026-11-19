@@ -49,7 +49,7 @@ describe('StaffService.findMine', () => {
     const prisma = {
       staff: { findMany: jest.fn().mockResolvedValue(rows) },
     } as unknown as PrismaService;
-    const storage = { resolveUrl: jest.fn().mockReturnValue(null) };
+    const storage = { signedUrl: jest.fn().mockResolvedValue(null) };
     const service = new StaffService(
       prisma,
       {} as never,

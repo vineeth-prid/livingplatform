@@ -49,17 +49,20 @@ export class VendorService {
     }
     if (dto.userId) await this.userLink.assertLinkable(dto.userId, tenantId);
 
-    // Vendor login: username = phone, common one-time password (tenant-scoped role).
-    const userId = dto.userId ?? (await this.accounts.provisionLogin({
-      kind: 'vendor',
-      tenantId,
-      communityId: null,
-      phone: dto.phone,
-      firstName: dto.name,
-      lastName: dto.companyName ?? '',
-      email: dto.email,
-      actorId: actor.id,
-    }));
+    // Vendor login: username = phone, its own one-time password (tenant-scoped role).
+    const login = dto.userId
+      ? { userId: dto.userId, temporaryPassword: null }
+      : await this.accounts.provisionLoginWithCredential({
+          kind: 'vendor',
+          tenantId,
+          communityId: null,
+          phone: dto.phone,
+          firstName: dto.name,
+          lastName: dto.companyName ?? '',
+          email: dto.email,
+          actorId: actor.id,
+        });
+    const userId = login.userId;
 
     const code = dto.code ?? (await this.nextVendorCode(tenantId));
 
@@ -96,7 +99,7 @@ export class VendorService {
       entityId: vendor.id,
       data: { name: vendor.name, category: vendor.category },
     });
-    return vendor;
+    return { ...vendor, temporaryPassword: login.temporaryPassword };
   }
 
   /**

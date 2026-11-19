@@ -28,6 +28,7 @@ export class AmenityService {
 
   async create(communityId: string, dto: CreateAmenityDto, actor: AuthenticatedUser) {
     await this.access.assert(communityId);
+    await this.storage.assertOwnedKey(dto.imageKey, `communities/${communityId}`);
     const amenity = await this.prisma.amenity.create({
       data: {
         communityId,
@@ -84,7 +85,7 @@ export class AmenityService {
       }),
       this.prisma.amenity.count({ where }),
     ]);
-    return paginate(items.map((a) => this.present(a)), total, query);
+    return paginate(await Promise.all(items.map((a) => this.present(a))), total, query);
   }
 
   async findOne(id: string) {
@@ -97,7 +98,8 @@ export class AmenityService {
   }
 
   async update(id: string, dto: UpdateAmenityDto, actor: AuthenticatedUser) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
+    await this.storage.assertOwnedKey(dto.imageKey, `communities/${current.communityId}`, current.imageKey);
     const updated = await this.prisma.amenity.update({
       where: { id },
       data: {
@@ -130,7 +132,9 @@ export class AmenityService {
     return { id, deleted: true };
   }
 
-  private present<T extends { imageKey: string | null }>(amenity: T) {
-    return { ...amenity, imageUrl: this.storage.resolveUrl(amenity.imageKey) };
+  private async present<T extends { imageKey: string | null }>(amenity: T) {
+    // Signed, short-lived link: the bucket is private (a public-read bucket
+    // would expose every document in it), so an unsigned URL only 403s.
+    return { ...amenity, imageUrl: await this.storage.signedUrl(amenity.imageKey) };
   }
 }

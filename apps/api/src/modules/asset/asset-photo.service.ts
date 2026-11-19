@@ -31,6 +31,8 @@ export class AssetPhotoService {
 
   async add(assetId: string, dto: CreateAssetPhotoDto, actor: AuthenticatedUser) {
     const asset = await this.assertAccess(assetId);
+    await this.storage.assertOwnedKey(dto.storageKey, `assets/${assetId}/photos`);
+    await this.storage.assertOwnedKey(dto.storageKey, `assets/${assetId}/photos`);
     const photo = await this.prisma.assetPhoto.create({
       data: {
         assetId,

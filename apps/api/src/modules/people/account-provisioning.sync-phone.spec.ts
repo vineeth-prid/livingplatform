@@ -1,5 +1,4 @@
 import { ConflictException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 
 import type { PrismaService } from '../prisma/prisma.service';
 import { AccountProvisioningService } from './account-provisioning.service';
@@ -23,11 +22,8 @@ function makeService(user: Record<string, unknown> | null, clash?: Record<string
     user: { findUnique, update: jest.fn().mockResolvedValue({}) },
   } as unknown as PrismaService;
 
-  const config = {
-    get: () => ({ defaultPassword: 'Living@123' }),
-  } as unknown as ConfigService<never, true>;
 
-  return { service: new AccountProvisioningService(prisma, config as never), prisma };
+  return { service: new AccountProvisioningService(prisma), prisma };
 }
 
 const USER = {

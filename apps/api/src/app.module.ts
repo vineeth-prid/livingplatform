@@ -11,6 +11,7 @@ import { ClientIpThrottlerGuard } from './common/guards/client-ip-throttler.guar
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ModuleEnabledGuard } from './common/guards/module-enabled.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { RestrictedSessionGuard } from './common/guards/restricted-session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -169,6 +170,8 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     // Guard chain: rate-limit → authenticate → authorize (permissions, roles).
     { provide: APP_GUARD, useClass: ClientIpThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // One-time-password / 2FA-enrolment sessions reach only the routes that resolve them.
+    { provide: APP_GUARD, useClass: RestrictedSessionGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     // Community module toggles run last: authenticate and authorize first, then
