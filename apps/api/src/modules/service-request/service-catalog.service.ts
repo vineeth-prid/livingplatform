@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -88,7 +89,10 @@ export class ServiceCatalogService {
     });
     const byService = new Map(overrides.map((o) => [o.serviceId, o]));
 
-    const effective = services.map((service) => {
+    // A platform service this tenant has adopted (edited into its own copy,
+    // same key) is shown once — as the copy — not twice.
+    const ownedKeys = new Set(services.filter((s) => s.tenantId !== null).map((s) => s.key));
+    const effective = services.filter((s) => s.tenantId !== null || !ownedKeys.has(s.key)).map((service) => {
       const override = byService.get(service.id);
       return {
         ...service,
@@ -159,10 +163,33 @@ export class ServiceCatalogService {
     return { openRequests, packages };
   }
 
-  create(dto: CreateServiceDto) {
+  async create(dto: CreateServiceDto) {
     const tenantId = this.tenant.isPlatform
       ? (dto.tenantId ?? null)
       : this.tenant.tenantId;
+    // The DB unique (tenantId, key) cannot catch platform rows — Postgres treats
+    // NULL tenantIds as distinct — nor a tenant reusing a platform key or name.
+    // Check the catalog this tenant actually sees.
+    const clash = await this.prisma.service.findFirst({
+      where: {
+        deletedAt: null,
+        AND: [
+          { OR: [{ tenantId: null }, { tenantId }] },
+          {
+            OR: [
+              { key: { equals: dto.key, mode: Prisma.QueryMode.insensitive } },
+              { name: { equals: dto.name.trim(), mode: Prisma.QueryMode.insensitive } },
+            ],
+          },
+        ],
+      },
+      select: { name: true },
+    });
+    if (clash) {
+      throw new ConflictException(
+        `"${clash.name}" already exists with this name or key — edit or re-activate it instead`,
+      );
+    }
     return this.prisma.service.create({
       data: {
         tenantId,

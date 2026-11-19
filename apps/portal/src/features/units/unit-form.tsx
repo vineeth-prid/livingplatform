@@ -6,6 +6,7 @@ import type { Floor, Unit } from '@living/types';
 import { living } from '../../lib/living';
 import { FormDrawer, type FieldDef } from '../master-data';
 import { opt, OWNERSHIP, UNIT_STATUS } from '../master-data/options';
+import { announceTemporaryPassword } from '../shared/reset-password-button';
 
 /**
  * Floor picker scoped to the selected block.
@@ -155,6 +156,7 @@ export function UnitForm({
           : await living.community.createUnit(communityId, values);
         await qc.invalidateQueries({ queryKey: ['units'] });
         if (editing) await qc.invalidateQueries({ queryKey: ['unit', unit.id] });
+        else announceTemporaryPassword(String(values.ownerName ?? '').trim(), result);
         onSaved?.();
         return result;
       }}

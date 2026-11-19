@@ -62,8 +62,21 @@ export class ResidentService {
     // admin while the resident appeared in the list anyway, unattached and
     // duplicated on the next attempt. Nothing here is transactional across the
     // account provisioning, so the only reliable fix is to fail before writing.
+    // An OWNER belongs on the unit whether or not they live there, so a tenant
+    // in the flat never blocks recording one (see attachOwner).
+    const asOwner = !!dto.unitId && dto.occupiedBy === 'OWNER';
     if (dto.unitId) {
-      await this.assertUnitAssignable(communityId, dto.unitId, dto.occupiedBy);
+      await this.assertUnitAssignable(communityId, dto.unitId, asOwner ? 'FAMILY_MEMBER' : dto.occupiedBy);
+    }
+    if (asOwner) {
+      // Already known by this number — typically the owner the unit form just
+      // created, whose details this form auto-fills. Same person: attach them
+      // to the unit instead of refusing a "duplicate". Their login is untouched.
+      const known = await this.findByMobile(communityId, dto.mobile);
+      if (known) {
+        await this.attachOwner(known.id, communityId, dto.unitId!, dto.moveInDate, actor);
+        return { ...(await this.findOne(known.id)), temporaryPassword: null };
+      }
     }
     await this.assertMobileUnused(communityId, dto.mobile);
 
@@ -112,7 +125,9 @@ export class ResidentService {
     });
 
     // Optional unit mapping on create — "Occupied By" becomes the assignment role.
-    if (dto.unitId) {
+    if (asOwner) {
+      await this.attachOwner(resident.id, communityId, dto.unitId!, dto.moveInDate, actor);
+    } else if (dto.unitId) {
       await this.assignUnit(resident.id, { unitId: dto.unitId, role: dto.occupiedBy }, actor);
     }
 
@@ -451,19 +466,7 @@ export class ResidentService {
       goes through the ownership actions on the unit.
     */
     if (role === 'OWNER') {
-      await this.prisma.unitOwnership.upsert({
-        where: { unitId_residentId: { unitId: dto.unitId, residentId } },
-        create: {
-          communityId: resident.communityId,
-          unitId: dto.unitId,
-          residentId,
-          isPrimary: true,
-          startDate: dto.moveInDate ?? new Date(),
-          createdById: actor.id,
-          updatedById: actor.id,
-        },
-        update: { status: 'ACTIVE', endDate: null, deletedAt: null, updatedById: actor.id },
-      });
+      await this.recordOwnership(resident.communityId, dto.unitId, residentId, dto.moveInDate, actor);
     }
     this.events.publish({
       name: DomainEventName.ResidentAssignedToUnit,
@@ -472,6 +475,56 @@ export class ResidentService {
       data: { residentCode: resident.residentCode, unitId: dto.unitId },
     });
     return assignment;
+  }
+
+  /**
+   * Record an owner on a unit. They also become its occupant only when the flat
+   * is free and they don't already live in another one; with a tenant in place
+   * the tenant stays the occupant and the owner holds just the ownership. Both
+   * keep their own login either way.
+   */
+  private async attachOwner(
+    residentId: string,
+    communityId: string,
+    unitId: string,
+    moveInDate: Date | undefined,
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    const [occupant, home] = await Promise.all([
+      this.occupantOf(unitId, residentId),
+      this.prisma.residentUnit.findUnique({ where: { residentId }, select: { unitId: true } }),
+    ]);
+    if (!occupant && (!home || home.unitId === unitId)) {
+      await this.assignUnit(residentId, { unitId, role: 'OWNER', moveInDate }, actor);
+      return;
+    }
+    await this.recordOwnership(communityId, unitId, residentId, moveInDate, actor);
+  }
+
+  /** Upsert an ACTIVE ownership; primary only when the unit has no other owner. */
+  private async recordOwnership(
+    communityId: string,
+    unitId: string,
+    residentId: string,
+    startDate: Date | undefined,
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    const others = await this.prisma.unitOwnership.count({
+      where: { unitId, status: 'ACTIVE', deletedAt: null, residentId: { not: residentId } },
+    });
+    await this.prisma.unitOwnership.upsert({
+      where: { unitId_residentId: { unitId, residentId } },
+      create: {
+        communityId,
+        unitId,
+        residentId,
+        isPrimary: others === 0,
+        startDate: startDate ?? new Date(),
+        createdById: actor.id,
+        updatedById: actor.id,
+      },
+      update: { status: 'ACTIVE', endDate: null, deletedAt: null, updatedById: actor.id },
+    });
   }
 
   /**
@@ -562,15 +615,7 @@ export class ResidentService {
     // conflict — the whole point is that a household shares one flat.
     if (role === 'FAMILY_MEMBER') return;
 
-    const occupant = await this.prisma.residentUnit.findFirst({
-      where: {
-        unitId,
-        residentId: { not: residentId },
-        role: { not: 'FAMILY_MEMBER' },
-        resident: { deletedAt: null },
-      },
-      select: { resident: { select: { firstName: true, lastName: true } } },
-    });
+    const occupant = await this.occupantOf(unitId, residentId);
     if (!occupant) return;
 
     const name = `${occupant.resident.firstName} ${occupant.resident.lastName}`.trim();
@@ -582,6 +627,19 @@ export class ResidentService {
         'family member of that household, or — if they are the owner rather than an occupant — ' +
         'record them under Ownership on the unit instead.',
     );
+  }
+
+  /** The unit's (non-family) occupant other than `residentId`, if any. */
+  private occupantOf(unitId: string, residentId: string) {
+    return this.prisma.residentUnit.findFirst({
+      where: {
+        unitId,
+        residentId: { not: residentId },
+        role: { not: 'FAMILY_MEMBER' },
+        resident: { deletedAt: null },
+      },
+      select: { resident: { select: { firstName: true, lastName: true } } },
+    });
   }
 
   /** Remove the current unit assignment (no history kept). */

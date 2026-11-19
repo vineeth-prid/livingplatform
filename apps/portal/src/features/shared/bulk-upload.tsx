@@ -93,7 +93,7 @@ export function BulkUploadDrawer({
     created: number;
     failed: number;
     errors: { row: number; error: string }[];
-    /** One-time passwords for the logins this upload created (residents only). */
+    /** One-time passwords for the logins this upload created (residents, unit owners). */
     credentials?: { row: number; name: string; mobile: string; temporaryPassword: string }[];
   } | null>(null);
 

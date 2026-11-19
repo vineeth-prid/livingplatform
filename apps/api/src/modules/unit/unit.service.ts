@@ -58,14 +58,18 @@ export class UnitService {
         updatedById: actor.id,
       },
     });
-    await this.recordOwnerOrRollBack(communityId, unit.id, dto.ownerName, dto.ownerPhone, actor);
+    const temporaryPassword = await this.recordOwnerOrRollBack(
+      communityId, unit.id, dto.ownerName, dto.ownerPhone, actor,
+    );
     this.events.publish({
       name: DomainEventName.UnitCreated,
       ...this.events.from(actor, communityId),
       entityId: unit.id,
       data: { unitNumber: unit.unitNumber },
     });
-    return unit;
+    // The owner's one-time password (null when an existing person was linked) —
+    // the admin's only chance to see it; it is stored hashed.
+    return { ...unit, temporaryPassword };
   }
 
   /**
@@ -79,6 +83,7 @@ export class UnitService {
     const floorCache = new Map<string, string>(); // key: `${blockId}:${level}` → floorId
     let created = 0;
     const errors: { row: number; unitNumber: string; error: string }[] = [];
+    const credentials: { row: number; name: string; mobile: string; temporaryPassword: string }[] = [];
 
     for (let i = 0; i < dto.rows.length; i++) {
       const row = dto.rows[i]!;
@@ -116,8 +121,13 @@ export class UnitService {
             updatedById: actor.id,
           },
         });
-        await this.recordOwnerOrRollBack(communityId, unit.id, row.ownerName, row.ownerPhone, actor);
+        const temporaryPassword = await this.recordOwnerOrRollBack(
+          communityId, unit.id, row.ownerName, row.ownerPhone, actor,
+        );
         created++;
+        if (temporaryPassword) {
+          credentials.push({ row: i + 1, name: row.ownerName.trim(), mobile: row.ownerPhone, temporaryPassword });
+        }
       } catch (err) {
         errors.push({
           row: i + 1,
@@ -126,7 +136,7 @@ export class UnitService {
         });
       }
     }
-    return { created, failed: errors.length, errors };
+    return { created, failed: errors.length, errors, credentials };
   }
 
   /**
@@ -141,15 +151,16 @@ export class UnitService {
     ownerName: string | undefined,
     ownerPhone: string | undefined,
     actor: AuthenticatedUser,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const [firstName, ...rest] = (ownerName ?? '').trim().split(/\s+/);
     try {
-      await this.owners.add(
+      const owner = await this.owners.add(
         communityId,
         unitId,
         { firstName, lastName: rest.join(' ') || undefined, mobile: ownerPhone?.trim(), isPrimary: true },
         actor,
       );
+      return owner.temporaryPassword;
     } catch (err) {
       await this.prisma.unit.delete({ where: { id: unitId } });
       throw err;

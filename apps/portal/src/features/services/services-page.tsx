@@ -269,7 +269,7 @@ function StatusSwitch({
       className="flex items-center gap-2 focus-visible:outline-none focus-visible:shadow-ring rounded-pill"
     >
       <span
-        className={`relative h-5 w-9 rounded-full transition-colors ${
+        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
           service.isActive ? 'bg-success-solid' : 'bg-sunken'
         } ${disabled ? 'opacity-50' : ''}`}
       >
@@ -279,7 +279,7 @@ function StatusSwitch({
           }`}
         />
       </span>
-      <span className={`text-sm ${service.isActive ? 'text-success-fg' : 'text-subtle'}`}>
+      <span className={`whitespace-nowrap text-sm ${service.isActive ? 'text-success-fg' : 'text-subtle'}`}>
         {service.isActive ? 'Active' : 'Inactive'}
       </span>
     </button>

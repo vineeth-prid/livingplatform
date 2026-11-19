@@ -50,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(buttonVariants({ variant, size, block }), className)}
-        disabled={disabled ?? loading}
+        disabled={disabled || loading}
         {...props}
       >
         {/* Slot (asChild) requires exactly one child — never inject a sibling. */}
