@@ -270,8 +270,9 @@ export class BillingResource {
   invoice(communityId: string, id: string): Promise<MaintenanceInvoice> {
     return this.http.get(`/communities/${communityId}/maintenance-invoices/${id}`);
   }
-  myDues(communityId: string): Promise<ResidentDues> {
-    return this.http.get(`/communities/${communityId}/maintenance-invoices/my-dues`);
+  /** `unitId` narrows to one of the caller's own homes (an owner of several). */
+  myDues(communityId: string, unitId?: string): Promise<ResidentDues> {
+    return this.http.get(`/communities/${communityId}/maintenance-invoices/my-dues`, unitId ? { unitId } : undefined);
   }
   summary(communityId: string, months?: number): Promise<CollectionSummary> {
     return this.http.get(`/communities/${communityId}/maintenance-invoices/summary`, { months });

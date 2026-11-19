@@ -27,7 +27,7 @@ function makeService(existingUser: { id: string } | null, opts: { linked?: 'resi
             ? {
                 ...existingUser,
                 tenantId: 't-other',
-                residentProfile: opts.linked === 'resident' ? { id: 'r1' } : null,
+                residentProfiles: opts.linked === 'resident' ? [{ communityId: 'c-1' }] : [],
                 staffProfile: opts.linked === 'staff' ? { id: 's1' } : null,
                 vendorProfile: opts.linked === 'vendor' ? { id: 'v1' } : null,
               }
@@ -101,6 +101,15 @@ describe('a phone number already known to the platform', () => {
     // Nothing linked → this profile takes the link.
     const unlinked = makeService({ id: 'user-1' });
     await expect(unlinked.service.provisionLogin(input('staff', 'c-2'))).resolves.toBe('user-1');
+  });
+
+  it('links an owner\'s resident record in EACH community to the same login', async () => {
+    // Already a resident in c-1 → the c-2 record is linked too, so their app
+    // sees both societies' homes and dues.
+    const { service } = makeService({ id: 'user-1' }, { linked: 'resident' });
+    await expect(service.provisionLogin(input('resident', 'c-2'))).resolves.toBe('user-1');
+    // …but never a second linked record in the SAME community.
+    await expect(service.provisionLogin(input('resident', 'c-1'))).resolves.toBeNull();
   });
 
   it('still creates a fresh account for a number nobody has used', async () => {

@@ -67,6 +67,7 @@ export class ResidentService {
     const asOwner = !!dto.unitId && dto.occupiedBy === 'OWNER';
     if (dto.unitId) {
       await this.assertUnitAssignable(communityId, dto.unitId, asOwner ? 'FAMILY_MEMBER' : dto.occupiedBy);
+      if (!asOwner) await this.assertUnitHasOwner(dto.unitId);
     }
     if (asOwner) {
       // Already known by this number — typically the owner the unit form just
@@ -437,6 +438,12 @@ export class ResidentService {
 
     const role = dto.role ?? 'PRIMARY';
     await this.assertUnitAvailable(dto.unitId, residentId, role);
+    if (role !== 'OWNER') {
+      // Only a NEW placement is checked, so re-saving someone already living in
+      // a legacy ownerless unit keeps working.
+      const current = await this.prisma.residentUnit.findUnique({ where: { residentId }, select: { unitId: true } });
+      if (current?.unitId !== dto.unitId) await this.assertUnitHasOwner(dto.unitId);
+    }
 
     const data = {
       unitId: dto.unitId,
@@ -626,6 +633,21 @@ export class ResidentService {
       `This unit is already occupied by ${name}. Move them out first, add this person as a ` +
         'family member of that household, or — if they are the owner rather than an occupant — ' +
         'record them under Ownership on the unit instead.',
+    );
+  }
+
+  /**
+   * Nobody moves into a unit the association has no owner for: maintenance is
+   * billed only to owners, so an ownerless unit is a gap to close first.
+   */
+  private async assertUnitHasOwner(unitId: string): Promise<void> {
+    const owner = await this.prisma.unitOwnership.findFirst({
+      where: { unitId, status: 'ACTIVE', deletedAt: null, resident: { deletedAt: null } },
+      select: { id: true },
+    });
+    if (owner) return;
+    throw new BadRequestException(
+      'This unit has no owner on record. Add the owner first (unit → Owners, or choose "Owner" here), then add tenants or family.',
     );
   }
 

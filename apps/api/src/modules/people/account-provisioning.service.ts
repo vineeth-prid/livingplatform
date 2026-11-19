@@ -88,7 +88,7 @@ export class AccountProvisioningService {
     const existing = await this.prisma.user.findUnique({
       where: { username },
       include: {
-        residentProfile: { select: { id: true } },
+        residentProfiles: { where: { deletedAt: null }, select: { communityId: true } },
         staffProfile: { select: { id: true } },
         vendorProfile: { select: { id: true } },
       },
@@ -133,7 +133,15 @@ export class AccountProvisioningService {
         }
       }
 
-      const linkedKind: ProfileKind | null = existing.residentProfile
+      // A resident record is linked once PER COMMUNITY: an owner with flats in
+      // two societies needs both records on their login, or the second
+      // community's homes and dues never reach their app.
+      if (input.kind === 'resident') {
+        const here = existing.residentProfiles.some((r) => r.communityId === input.communityId);
+        return { userId: here ? null : existing.id, temporaryPassword: null };
+      }
+
+      const linkedKind: ProfileKind | null = existing.residentProfiles.length
         ? 'resident'
         : existing.staffProfile
           ? 'staff'
@@ -141,9 +149,8 @@ export class AccountProvisioningService {
             ? 'vendor'
             : null;
 
-      // Link this profile to the account only when nothing else claims that
-      // slot. A second resident row for a multi-flat owner shares the account
-      // without being the linked one, which is unchanged.
+      // Staff and vendor links are single: link only when nothing else claims
+      // that slot.
       return { userId: linkedKind === null ? existing.id : null, temporaryPassword: null };
     }
 

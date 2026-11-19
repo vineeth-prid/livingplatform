@@ -577,9 +577,9 @@ model User {
   verificationTokens VerificationToken[]
   passwordHistory    PasswordHistory[]
   profile            UserProfile?
-  // People Foundation — a user represents at most ONE of these (enforced in
-  // UserLinkService; each link column is independently unique).
-  residentProfile    Resident?
+  // People Foundation. Staff/vendor: at most one each (unique link columns).
+  // Residents: one per community the person lives in or owns in.
+  residentProfiles   Resident[]
   vendorProfile      Vendor?
   staffProfile       Staff?
   /// Web Push devices (Gate Management, Sprint 13).
@@ -1093,8 +1093,10 @@ model Resident {
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
-  // Optional login link — unique so a user backs at most one resident.
-  userId String? @unique
+  // Optional login link. One login may back one resident record PER COMMUNITY
+  // (an owner with flats in two societies); within a community the mobile —
+  // which is the username — is unique, so one record per person there.
+  userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   residentCode String
@@ -1140,6 +1142,7 @@ model Resident {
   @@unique([communityId, residentCode])
   @@index([communityId])
   @@index([status])
+  @@index([userId])
   @@index([mobile])
   @@map("residents")
 }

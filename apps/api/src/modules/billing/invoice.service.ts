@@ -318,6 +318,7 @@ export class InvoiceService {
   async myDues(
     communityId: string,
     actor: AuthenticatedUser,
+    unitId?: string,
   ): Promise<{
     outstanding: number;
     currentDue: InvoiceView | null;
@@ -333,7 +334,9 @@ export class InvoiceService {
       because nothing is wrong: the community does not bill them. The owner of
       the same flat gets the identical numbers the admin sees.
     */
-    const unitIds = await this.ownership.financiallyVisibleUnitIds(actor, communityId);
+    const owned = await this.ownership.financiallyVisibleUnitIds(actor, communityId);
+    // Narrowed to one home for an owner of several; never widened past what they own.
+    const unitIds = unitId ? owned.filter((id) => id === unitId) : owned;
     if (unitIds.length === 0) {
       return { outstanding: 0, currentDue: null, nextDue: null, overdueCount: 0, recent: [] };
     }

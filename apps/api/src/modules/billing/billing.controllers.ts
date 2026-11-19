@@ -119,8 +119,13 @@ export class MaintenanceInvoiceController {
   @Get('my-dues')
   @RequirePermissions(PERMISSIONS.BILLING_INVOICE_READ)
   @ApiOperation({ summary: 'The signed-in resident current due, next due and history' })
-  myDues(@Param('communityId') communityId: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.invoices.myDues(communityId, user);
+  myDues(
+    @Param('communityId') communityId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    // Optional: one of the caller's own homes. Anything else simply matches nothing.
+    @Query('unitId') unitId?: string,
+  ) {
+    return this.invoices.myDues(communityId, user, unitId);
   }
 
   @Get('summary')

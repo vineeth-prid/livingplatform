@@ -45,12 +45,15 @@ export function MaintenanceScreen() {
     regardless — this is what lets the screen SAY so instead of showing an empty
     dues page that reads as a bug.
   */
-  const { ownsAUnit, isLoading: ownershipLoading } = useMyResident();
+  const { ownsAUnit, ownedUnits, isLoading: ownershipLoading } = useMyResident();
   const canSeeDues = billingOn && ownsAUnit;
+  // An owner of several homes here can look at one at a time; null = all of them.
+  const [unitId, setUnitId] = useState<string | null>(null);
+  const homeId = ownedUnits.some((u) => u.unitId === unitId) ? unitId : null;
 
   const dues = useQuery({
-    queryKey: ['maintenance', 'my-dues', communityId],
-    queryFn: () => living.billing.myDues(communityId!),
+    queryKey: ['maintenance', 'my-dues', communityId, homeId],
+    queryFn: () => living.billing.myDues(communityId!, homeId ?? undefined),
     enabled: !!communityId && canSeeDues,
   });
   const payments = useQuery({
@@ -129,6 +132,27 @@ export function MaintenanceScreen() {
     <div>
       <ScreenHeader title="Maintenance" subtitle="Your dues" />
       <div className="px-4">
+        {ownedUnits.length > 1 && (
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Your homes">
+            {[{ unitId: null, label: 'All homes' }, ...ownedUnits.map((u) => ({
+              unitId: u.unitId as string | null,
+              label: u.blockName ? `${u.blockName} · ${u.unitNumber}` : u.unitNumber,
+            }))].map((h) => (
+              <button
+                key={h.unitId ?? 'all'}
+                type="button"
+                role="tab"
+                aria-selected={homeId === h.unitId}
+                onClick={() => setUnitId(h.unitId)}
+                className={`shrink-0 whitespace-nowrap rounded-pill px-3 py-1.5 text-xs font-medium transition-colors ${
+                  homeId === h.unitId ? 'bg-tint text-brand' : 'bg-sunken text-body hover:bg-tint'
+                }`}
+              >
+                {h.label}
+              </button>
+            ))}
+          </div>
+        )}
         {dues.isLoading ? (
           <Skeleton className="mb-6 h-32 rounded-card" />
         ) : !d || (d.outstanding === 0 && d.recent.length === 0) ? (
@@ -240,7 +264,10 @@ function InvoiceRow({
   return (
     <Card variant="elevated" className="flex items-center gap-3">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-strong">{invoice.invoiceNumber}</p>
+        <p className="truncate text-sm font-medium text-strong">
+          {invoice.invoiceNumber}
+          {invoice.unitNumber && <span className="font-normal text-subtle"> · {invoice.unitNumber}</span>}
+        </p>
         <p className="text-xs text-subtle">
           {new Date(invoice.periodStart).toLocaleDateString(undefined, {
             month: 'short',

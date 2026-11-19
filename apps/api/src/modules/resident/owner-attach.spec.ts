@@ -8,7 +8,9 @@ describe('ResidentService.create — owners', () => {
   const actor = { id: 'admin-1' } as never;
   const tenant = { residentId: 'tenant-1', resident: { firstName: 'Tara', lastName: 'Tenant' } };
 
-  function build({ occupant, known }: { occupant: unknown; known?: { id: string; mobile: string } }) {
+  function build({ occupant, known, owner = { id: 'own-1' } }: {
+    occupant: unknown; known?: { id: string; mobile: string }; owner?: unknown;
+  }) {
     const prisma = {
       unit: { findFirst: jest.fn().mockResolvedValue({ communityId: 'c1' }) },
       resident: {
@@ -21,7 +23,11 @@ describe('ResidentService.create — owners', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn(),
       },
-      unitOwnership: { count: jest.fn().mockResolvedValue(0), upsert: jest.fn() },
+      unitOwnership: {
+        count: jest.fn().mockResolvedValue(0),
+        upsert: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(owner),
+      },
     };
     const accounts = {
       provisionLoginWithCredential: jest.fn().mockResolvedValue({ userId: 'u-owner', temporaryPassword: 'ABCD-EFGH-JKMN' }),
@@ -67,6 +73,20 @@ describe('ResidentService.create — owners', () => {
     expect(res.temporaryPassword).toBeNull();
     expect(accounts.provisionLoginWithCredential).not.toHaveBeenCalled();
     expect(prisma.resident.create).not.toHaveBeenCalled();
+    expect(prisma.unitOwnership.upsert).toHaveBeenCalled();
+  });
+
+  it('refuses a tenant (or anyone but the owner) in a unit with no owner on record', async () => {
+    const { svc, accounts } = build({ occupant: null, owner: null });
+    await expect(svc.create('c1', { ...(dto as object), occupiedBy: 'TENANT' } as never, actor)).rejects.toThrow(
+      /no owner on record/,
+    );
+    expect(accounts.provisionLoginWithCredential).not.toHaveBeenCalled(); // nothing written
+  });
+
+  it('still lets the OWNER be added to an ownerless unit — that is how the gap closes', async () => {
+    const { svc, prisma } = build({ occupant: null, owner: null });
+    await svc.create('c1', dto, actor);
     expect(prisma.unitOwnership.upsert).toHaveBeenCalled();
   });
 
