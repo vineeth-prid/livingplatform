@@ -3,7 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
-import { CreateGateDto } from './dto/gate-entry.dto';
+import { CreateGateDto, UpdateGateDto } from './dto/gate-entry.dto';
 
 /**
  * The community's physical gates. Intentionally minimal: a gate is a label on
@@ -40,7 +40,7 @@ export class GateService {
     });
   }
 
-  async update(communityId: string, id: string, dto: CreateGateDto, actor: AuthenticatedUser) {
+  async update(communityId: string, id: string, dto: UpdateGateDto, actor: AuthenticatedUser) {
     await this.assertOwned(communityId, id);
     return this.prisma.gate.update({
       where: { id },

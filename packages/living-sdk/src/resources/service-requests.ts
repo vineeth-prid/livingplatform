@@ -27,6 +27,10 @@ export class ServiceRequestResource {
   changeStatus(id: string, status: string, note?: string): Promise<ServiceRequest> {
     return this.http.patch(`/service-requests/${id}/status`, { status, note });
   }
+  /** A resident cancelling their own booking (before it is accepted, never once paid). */
+  cancel(id: string, note?: string): Promise<ServiceRequest> {
+    return this.http.post(`/service-requests/${id}/cancel`, note ? { note } : {});
+  }
   assign(id: string, input: { staffId?: string; vendorId?: string; note?: string }): Promise<ServiceRequest> {
     return this.http.put(`/service-requests/${id}/assignment`, input);
   }

@@ -100,6 +100,10 @@ export function RequestDetailScreen() {
             <PayNow requestId={id} amount={data.totalPrice} />
           )}
 
+          {kind === 'service' && !data.paidAt && (data.status === 'REQUESTED' || data.status === 'ASSIGNED') && (
+            <CancelBooking requestId={id} />
+          )}
+
           <Card variant="elevated">
             <p className="whitespace-pre-wrap text-sm text-body">{data.description}</p>
           </Card>
@@ -199,6 +203,45 @@ function PayNow({ requestId, amount }: { requestId: string; amount?: number | st
       <Button className="mt-3" block loading={paying} onClick={() => void pay()}>
         Pay{amount != null ? ` ₹${Number(amount).toLocaleString('en-IN')}` : ''}
       </Button>
+    </Card>
+  );
+}
+
+/** Withdraw a booking before anyone has accepted it. Paid bookings go through the office. */
+function CancelBooking({ requestId }: { requestId: string }) {
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function cancel() {
+    setBusy(true);
+    try {
+      await living.serviceRequest.cancel(requestId);
+      toast.success('Booking cancelled');
+      void qc.invalidateQueries({ queryKey: ['request', 'service', requestId] });
+      void qc.invalidateQueries({ queryKey: ['my', 'service-requests'] });
+    } catch (err) {
+      toast.error(err instanceof LivingApiError ? err.message : 'Could not cancel the booking');
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  if (!confirming) {
+    return (
+      <Button variant="secondary" block onClick={() => setConfirming(true)}>
+        Cancel booking
+      </Button>
+    );
+  }
+  return (
+    <Card variant="elevated">
+      <p className="text-sm font-medium text-strong">Cancel this booking?</p>
+      <div className="mt-3 flex gap-2">
+        <Button variant="secondary" block onClick={() => setConfirming(false)} disabled={busy}>Keep it</Button>
+        <Button block loading={busy} onClick={() => void cancel()}>Yes, cancel</Button>
+      </div>
     </Card>
   );
 }

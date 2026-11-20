@@ -12,6 +12,7 @@ import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { UnitOwnershipService } from '../ownership/unit-ownership.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ResidentService } from '../resident/resident.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
   BulkUnitUploadDto,
@@ -29,6 +30,7 @@ export class UnitService {
     private readonly access: CommunityAccessService,
     private readonly events: DomainEventsService,
     private readonly owners: UnitOwnershipService,
+    private readonly residents: ResidentService,
   ) {}
 
   async create(communityId: string, dto: CreateUnitDto, actor: AuthenticatedUser) {
@@ -59,7 +61,7 @@ export class UnitService {
       },
     });
     const temporaryPassword = await this.recordOwnerOrRollBack(
-      communityId, unit.id, dto.ownerName, dto.ownerPhone, actor,
+      communityId, unit.id, dto.ownerName, dto.ownerPhone, dto.ownership === 'OWNER_OCCUPIED', actor,
     );
     this.events.publish({
       name: DomainEventName.UnitCreated,
@@ -122,7 +124,7 @@ export class UnitService {
           },
         });
         const temporaryPassword = await this.recordOwnerOrRollBack(
-          communityId, unit.id, row.ownerName, row.ownerPhone, actor,
+          communityId, unit.id, row.ownerName, row.ownerPhone, row.ownership === 'OWNER_OCCUPIED', actor,
         );
         created++;
         if (temporaryPassword) {
@@ -144,12 +146,18 @@ export class UnitService {
    * anyone else is created with a login. A unit must never exist without an
    * owner (maintenance is billed only to owners), so if this fails the
    * just-created unit is removed and the error surfaces to the admin.
+   *
+   * An OWNER_OCCUPIED unit also gets the owner as its occupant — otherwise the
+   * owner could see dues but not book services, invite visitors or add family
+   * until an admin added them again under Residents. An owner who already
+   * lives in another flat stays there; this one is recorded as owned only.
    */
   private async recordOwnerOrRollBack(
     communityId: string,
     unitId: string,
     ownerName: string | undefined,
     ownerPhone: string | undefined,
+    livesHere: boolean,
     actor: AuthenticatedUser,
   ): Promise<string | null> {
     const [firstName, ...rest] = (ownerName ?? '').trim().split(/\s+/);
@@ -160,6 +168,13 @@ export class UnitService {
         { firstName, lastName: rest.join(' ') || undefined, mobile: ownerPhone?.trim(), isPrimary: true },
         actor,
       );
+      if (livesHere) {
+        const home = await this.prisma.residentUnit.findUnique({
+          where: { residentId: owner.residentId },
+          select: { unitId: true },
+        });
+        if (!home) await this.residents.assignUnit(owner.residentId, { unitId, role: 'OWNER' }, actor);
+      }
       return owner.temporaryPassword;
     } catch (err) {
       await this.prisma.unit.delete({ where: { id: unitId } });

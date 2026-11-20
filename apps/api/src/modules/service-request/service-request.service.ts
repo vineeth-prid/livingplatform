@@ -382,6 +382,35 @@ export class ServiceRequestService {
     return this.present(updated);
   }
 
+  /**
+   * A resident withdrawing their own booking. Allowed until the vendor or staff
+   * member accepts the job; after that it is work in hand and goes through the
+   * office. A paid booking needs a refund, which only management can issue.
+   */
+  async cancelMine(id: string, note: string | undefined, actor: AuthenticatedUser) {
+    const request = await this.loadOrThrow(id, actor);
+    const forMe =
+      request.requestedById === actor.id ||
+      (!!request.residentId &&
+        !!(await this.prisma.resident.findFirst({
+          where: { id: request.residentId, userId: actor.id, deletedAt: null },
+          select: { id: true },
+        })));
+    if (!forMe) throw new ForbiddenException('You can only cancel your own bookings');
+    if (request.status !== S.REQUESTED && request.status !== S.ASSIGNED) {
+      throw new BadRequestException('This booking has already been accepted — contact management to cancel it');
+    }
+    if (request.paidAt) {
+      throw new BadRequestException('This booking is paid — contact management to cancel it and arrange a refund');
+    }
+    const updated = await this.prisma.serviceRequest.update({
+      where: { id },
+      data: { status: S.CANCELLED, notes: note || undefined, updatedById: actor.id },
+    });
+    this.publish(DomainEventName.ServiceCancelled, updated, actor, { fromStatus: request.status, status: S.CANCELLED });
+    return this.present(updated);
+  }
+
   async assign(id: string, dto: AssignServiceRequestDto, actor: AuthenticatedUser) {
     const request = await this.loadOrThrow(id, actor);
     if (request.paymentRequired && !request.paidAt) {

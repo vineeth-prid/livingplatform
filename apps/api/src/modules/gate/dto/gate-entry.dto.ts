@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { GateEntryStatus, GateEntryType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
@@ -165,6 +165,9 @@ export class CreateGateDto {
   @ApiPropertyOptional({ default: true })
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
+
+/** Editing a gate changes only what is sent — a toggle need not resend the name. */
+export class UpdateGateDto extends PartialType(CreateGateDto) {}
 
 /**
  * A resident announcing a visitor of their own.

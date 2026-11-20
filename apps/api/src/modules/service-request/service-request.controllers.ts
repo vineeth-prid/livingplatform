@@ -25,6 +25,7 @@ import {
 } from './dto/service.dto';
 import {
   AssignServiceRequestDto,
+  CancelServiceRequestDto,
   ChangeServiceRequestStatusDto,
   CreateServiceRequestDto,
   CreateTicketFromRequestDto,
@@ -91,6 +92,17 @@ export class ServiceRequestController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.requests.changeStatus(id, dto, user);
+  }
+
+  @Post('service-requests/:id/cancel')
+  @RequirePermissions(PERMISSIONS.SERVICE_CREATE)
+  @ApiOperation({ summary: 'Resident cancels their own booking (before it is accepted, and not once paid)' })
+  cancelMine(
+    @Param('id') id: string,
+    @Body() dto: CancelServiceRequestDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.requests.cancelMine(id, dto.note, user);
   }
 
   @Put('service-requests/:id/assignment')

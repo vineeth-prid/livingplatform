@@ -78,6 +78,11 @@ export class ChangeServiceRequestStatusDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) note?: string;
 }
 
+/** A resident cancelling their own booking. */
+export class CancelServiceRequestDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
 export class AssignServiceRequestDto {
   @ApiPropertyOptional({ description: 'Assign to staff (XOR vendorId)' })
   @IsOptional() @IsString() staffId?: string;

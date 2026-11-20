@@ -43,6 +43,7 @@ const RULES: Record<Kind, string[]> = {
     // “RENTED”, which is not in the enum at all — an admin who followed the
     // instructions had every row of the file refused.
     `“ownership” must be one of ${OWNERSHIP.join(', ')}.`,
+    'Use OWNER_OCCUPIED when the owner lives in the flat — they are then recorded as its resident too. Use TENANTED for a rented flat and add the tenant under Residents.',
     // Omitting this used to fall through to the schema's VACANT default, which
     // then read as an empty flat when maintenance charges were generated.
     `“status” must be one of ${UNIT_STATUS.join(', ')}. Leave it empty only for a genuinely vacant unit — a row with owner details should say OCCUPIED.`,

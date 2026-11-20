@@ -13,6 +13,7 @@ import { GateEntryService } from './gate-entry.service';
 import { GateService } from './gate.service';
 import {
   CreateGateDto,
+  UpdateGateDto,
   CreateGateEntryDto,
   GateDecisionDto,
   GateStatisticsQueryDto,
@@ -227,7 +228,7 @@ export class GateController {
   update(
     @Param('communityId') communityId: string,
     @Param('id') id: string,
-    @Body() dto: CreateGateDto,
+    @Body() dto: UpdateGateDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.gates.update(communityId, id, dto, user);

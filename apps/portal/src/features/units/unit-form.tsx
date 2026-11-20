@@ -134,6 +134,7 @@ export function UnitForm({
       open={open}
       onOpenChange={onOpenChange}
       title={editing ? 'Edit unit' : 'Add unit'}
+      description={editing ? undefined : "Choose “Owner occupied” if the owner lives here. They are then recorded as the flat's resident and can use the app for this home."}
       fields={fields}
       submitLabel={editing ? 'Save changes' : 'Add unit'}
       initial={
