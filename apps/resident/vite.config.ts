@@ -57,6 +57,20 @@ export default defineConfig({
     }),
   ],
   server: { port: 5174 },
-  // The resident PWA is a single precached bundle (offline-first); ~200 kB gzip.
-  build: { chunkSizeWarningLimit: 800 },
+  // Screens are lazy routes (still all precached for offline use). Libraries
+  // that rarely change get their own files, so a deploy re-downloads only the
+  // app's own code and a phone keeps React & co. cached.
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          router: ['@tanstack/react-router'],
+          query: ['@tanstack/react-query'],
+          motion: ['framer-motion'],
+        },
+      },
+    },
+  },
 });

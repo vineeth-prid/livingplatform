@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -38,6 +38,25 @@ interface RequestMeta {
  *    revokes the old row and mints a new one in the same family. Re-use of an
  *    already-rotated/revoked token revokes the ENTIRE family (theft detection).
  */
+/**
+ * Refresh secrets are 256 random bits, so a fast hash protects them exactly as
+ * well as a slow one — argon2's cost only helps for guessable inputs such as
+ * passwords. It was adding ~100 ms to every sign-in and every token refresh.
+ * Rows hashed with argon2 before this change still verify.
+ */
+const SHA256_PREFIX = 'sha256:';
+export function hashRefreshSecret(secret: string): string {
+  return SHA256_PREFIX + createHash('sha256').update(secret).digest('hex');
+}
+export async function verifyRefreshSecret(stored: string, secret: string): Promise<boolean> {
+  if (stored.startsWith(SHA256_PREFIX)) {
+    const a = Buffer.from(stored);
+    const b = Buffer.from(hashRefreshSecret(secret));
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
+  return argon2.verify(stored, secret).catch(() => false);
+}
+
 @Injectable()
 export class TokensService {
   private readonly logger = new Logger(TokensService.name);
@@ -107,7 +126,7 @@ export class TokensService {
       throw new UnauthorizedException('Refresh token has expired');
     }
 
-    const valid = await argon2.verify(row.tokenHash, secret);
+    const valid = await verifyRefreshSecret(row.tokenHash, secret);
     if (!valid) throw new UnauthorizedException('Invalid refresh token');
 
     if (!row.user || row.user.deletedAt || row.user.status !== 'ACTIVE') {
@@ -142,7 +161,7 @@ export class TokensService {
   async revoke(presented: string): Promise<void> {
     const { id, secret } = this.split(presented);
     const row = await this.prisma.refreshToken.findUnique({ where: { id }, select: { tokenHash: true } });
-    if (!row || !(await argon2.verify(row.tokenHash, secret).catch(() => false))) return;
+    if (!row || !(await verifyRefreshSecret(row.tokenHash, secret))) return;
     await this.prisma.refreshToken.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -205,7 +224,7 @@ export class TokensService {
     });
 
     const secret = randomBytes(32).toString('base64url');
-    const tokenHash = await argon2.hash(secret, { type: argon2.argon2id });
+    const tokenHash = hashRefreshSecret(secret);
     const ttl = rememberMe
       ? this.authCfg.refreshTtlRemember
       : this.authCfg.refreshTtl;

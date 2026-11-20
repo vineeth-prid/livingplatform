@@ -5,27 +5,30 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router';
-import { DashboardPage } from './features/dashboard/dashboard-page';
-import { TicketsListPage } from './features/tickets/tickets-list';
-import { TicketDetailPage } from './features/tickets/ticket-detail';
-import { ServiceRequestsListPage } from './features/service-requests/sr-list';
-import { ServiceRequestDetailPage } from './features/service-requests/sr-detail';
-import { WorkOrdersListPage } from './features/work-orders/wo-list';
-import { WorkOrderDetailPage } from './features/work-orders/wo-detail';
 import { DashboardLayout } from './routes/dashboard-layout';
-import { DesignSystemPage } from './pages/design-system';
 import { LoginPage } from './pages/login';
 import { NotFoundPage } from './pages/not-found';
 import { parseListSearch } from './features/master-data';
-import { CommunityOverviewPage } from './features/community/community-overview';
-import { ResidentsListPage } from './features/residents/residents-list';
-import { ResidentDetailPage } from './features/residents/resident-detail';
-import { StaffListPage } from './features/staff/staff-list';
-import { StaffDetailPage } from './features/staff/staff-detail';
-import { VendorsListPage } from './features/vendors/vendors-list';
-import { VendorDetailPage } from './features/vendors/vendor-detail';
-import { UnitsListPage } from './features/units/units-list';
-import { UnitDetailPage } from './features/units/unit-detail';
+
+// Every page is loaded on first visit, so the first screen downloads only what
+// it needs. These used to ship in the main bundle (incl. the design showcase).
+const DashboardPage = lazy(() => import('./features/dashboard/dashboard-page').then((m) => ({ default: m.DashboardPage })));
+const TicketsListPage = lazy(() => import('./features/tickets/tickets-list').then((m) => ({ default: m.TicketsListPage })));
+const TicketDetailPage = lazy(() => import('./features/tickets/ticket-detail').then((m) => ({ default: m.TicketDetailPage })));
+const ServiceRequestsListPage = lazy(() => import('./features/service-requests/sr-list').then((m) => ({ default: m.ServiceRequestsListPage })));
+const ServiceRequestDetailPage = lazy(() => import('./features/service-requests/sr-detail').then((m) => ({ default: m.ServiceRequestDetailPage })));
+const WorkOrdersListPage = lazy(() => import('./features/work-orders/wo-list').then((m) => ({ default: m.WorkOrdersListPage })));
+const WorkOrderDetailPage = lazy(() => import('./features/work-orders/wo-detail').then((m) => ({ default: m.WorkOrderDetailPage })));
+const DesignSystemPage = lazy(() => import('./pages/design-system').then((m) => ({ default: m.DesignSystemPage })));
+const CommunityOverviewPage = lazy(() => import('./features/community/community-overview').then((m) => ({ default: m.CommunityOverviewPage })));
+const ResidentsListPage = lazy(() => import('./features/residents/residents-list').then((m) => ({ default: m.ResidentsListPage })));
+const ResidentDetailPage = lazy(() => import('./features/residents/resident-detail').then((m) => ({ default: m.ResidentDetailPage })));
+const StaffListPage = lazy(() => import('./features/staff/staff-list').then((m) => ({ default: m.StaffListPage })));
+const StaffDetailPage = lazy(() => import('./features/staff/staff-detail').then((m) => ({ default: m.StaffDetailPage })));
+const VendorsListPage = lazy(() => import('./features/vendors/vendors-list').then((m) => ({ default: m.VendorsListPage })));
+const VendorDetailPage = lazy(() => import('./features/vendors/vendor-detail').then((m) => ({ default: m.VendorDetailPage })));
+const UnitsListPage = lazy(() => import('./features/units/units-list').then((m) => ({ default: m.UnitsListPage })));
+const UnitDetailPage = lazy(() => import('./features/units/unit-detail').then((m) => ({ default: m.UnitDetailPage })));
 
 // Asset Management (Frontend Sprint 7) — route-level code splitting.
 const AssetsListPage = lazy(() => import('./features/assets/assets-list').then((m) => ({ default: m.AssetsListPage })));

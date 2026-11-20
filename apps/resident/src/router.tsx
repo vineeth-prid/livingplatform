@@ -1,21 +1,26 @@
-import { type FC } from 'react';
+import { type FC, lazy } from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
 
 import { MobileShell } from './shell';
 import { LoginScreen } from './screens/login';
 import { HomeScreen } from './screens/home';
-import { ServicesScreen } from './screens/services';
-import { RequestsScreen } from './screens/requests';
-import { RequestDetailScreen } from './screens/request-detail';
-import { CommunityScreen } from './screens/community';
-import { ProfileScreen } from './screens/profile';
-import { AnnouncementsScreen } from './screens/announcements';
-import { VisitorsScreen } from './screens/visitors';
-import { BookingsScreen } from './screens/bookings';
-import { AmenitiesScreen } from './screens/amenities';
-import { MaintenanceScreen } from './screens/maintenance';
-import { MyPackagesScreen } from './screens/my-packages';
-import { GateEntryScreen, GateHistoryScreen } from './screens/gate';
+
+// Login and Home ship in the first download; every other screen loads the
+// first time it is opened (and is preloaded on intent), so a phone parses far
+// less JavaScript before the app is usable.
+const ServicesScreen = lazy(() => import('./screens/services').then((m) => ({ default: m.ServicesScreen })));
+const RequestsScreen = lazy(() => import('./screens/requests').then((m) => ({ default: m.RequestsScreen })));
+const RequestDetailScreen = lazy(() => import('./screens/request-detail').then((m) => ({ default: m.RequestDetailScreen })));
+const CommunityScreen = lazy(() => import('./screens/community').then((m) => ({ default: m.CommunityScreen })));
+const ProfileScreen = lazy(() => import('./screens/profile').then((m) => ({ default: m.ProfileScreen })));
+const AnnouncementsScreen = lazy(() => import('./screens/announcements').then((m) => ({ default: m.AnnouncementsScreen })));
+const VisitorsScreen = lazy(() => import('./screens/visitors').then((m) => ({ default: m.VisitorsScreen })));
+const BookingsScreen = lazy(() => import('./screens/bookings').then((m) => ({ default: m.BookingsScreen })));
+const AmenitiesScreen = lazy(() => import('./screens/amenities').then((m) => ({ default: m.AmenitiesScreen })));
+const MaintenanceScreen = lazy(() => import('./screens/maintenance').then((m) => ({ default: m.MaintenanceScreen })));
+const MyPackagesScreen = lazy(() => import('./screens/my-packages').then((m) => ({ default: m.MyPackagesScreen })));
+const GateHistoryScreen = lazy(() => import('./screens/gate').then((m) => ({ default: m.GateHistoryScreen })));
+const GateEntryScreen = lazy(() => import('./screens/gate').then((m) => ({ default: m.GateEntryScreen })));
 
 const rootRoute = createRootRoute({ component: Outlet });
 

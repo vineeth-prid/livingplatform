@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Home, LayoutGrid, ListChecks, Sparkles, User } from 'lucide-react';
@@ -38,7 +38,10 @@ export function MobileShell() {
     <div className="mx-auto flex h-dvh max-w-md flex-col bg-page sm:my-4 sm:h-[calc(100dvh-2rem)] sm:rounded-2xl sm:border sm:border-border-subtle sm:shadow-lg sm:overflow-hidden">
       <main className="flex-1 overflow-y-auto overscroll-contain pb-24">
         <PageFade key={pathname}>
-          <Outlet />
+          {/* Screens load on first open; show the app's own loader meanwhile. */}
+          <Suspense fallback={<LoadingState className="h-[60vh]" />}>
+            <Outlet />
+          </Suspense>
         </PageFade>
       </main>
       {/* Sits above the tab bar; renders nothing unless the app is installable. */}
