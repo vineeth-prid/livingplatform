@@ -12,6 +12,8 @@ type Body = Record<string, unknown>;
 export interface CommunityFeatures {
   maintenanceBilling: boolean;
   servicePackages: boolean;
+  /** Master switch for the whole Services section. Each service keeps its own ON/OFF. */
+  services: boolean;
   /** Gate Management (Sprint 13) — delivery entries and gate notifications. */
   gateManagement: boolean;
   /** Whether a gate entry waits for the resident's Approve/Reject. */
@@ -36,6 +38,17 @@ export class CommunityResource {
   }
   update(id: string, input: Body): Promise<Community> {
     return this.http.patch(`/communities/${id}`, input);
+  }
+
+  // ── Branding (logo) ──
+  logoUploadUrl(id: string, fileName: string, contentType: string): Promise<{ key: string; uploadUrl: string; maxBytes: number }> {
+    return this.http.post(`/communities/${id}/logo/upload-url`, { fileName, contentType });
+  }
+  setLogo(id: string, key: string): Promise<Community> {
+    return this.http.put(`/communities/${id}/logo`, { key });
+  }
+  removeLogo(id: string): Promise<Community> {
+    return this.http.delete(`/communities/${id}/logo`);
   }
   archive(id: string): Promise<Community> {
     return this.http.post(`/communities/${id}/archive`);

@@ -51,6 +51,7 @@ const PlatformPaymentsPage = lazy(() => import('./features/platform-admin/platfo
 
 // Payments & Maintenance Billing (Sprint 11).
 const PaymentSettingsPage = lazy(() => import('./features/billing/payment-settings').then((m) => ({ default: m.PaymentSettingsPage })));
+const ExpensesPage = lazy(() => import('./features/expenses/expenses-page').then((m) => ({ default: m.ExpensesPage })));
 const MaintenanceConfigPage = lazy(() => import('./features/billing/maintenance-config').then((m) => ({ default: m.MaintenanceConfigPage })));
 const CollectionDashboardPage = lazy(() => import('./features/billing/collection-dashboard').then((m) => ({ default: m.CollectionDashboardPage })));
 const NotificationPreferencesPage = lazy(() => import('./features/billing/notification-preferences').then((m) => ({ default: m.NotificationPreferencesPage })));
@@ -170,6 +171,7 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => dashboardRoute, path: '/billing', component: CollectionDashboardPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/billing/charges', component: MaintenanceConfigPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/billing/payment-settings', component: PaymentSettingsPage }),
+    createRoute({ getParentRoute: () => dashboardRoute, path: '/expenses', component: ExpensesPage }),
     createRoute({ getParentRoute: () => dashboardRoute, path: '/billing/notifications', component: NotificationPreferencesPage }),
 
     // Community configuration, catalog and packages (Sprint 12)

@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, WorkOrderEventType, WorkOrderStatus } from '@prisma/client';
 
@@ -17,6 +18,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { ExpenseService } from '../expense/expense.service';
 import { VendorAutoAssignService } from '../vendor/vendor-auto-assign.service';
 import {
   ApproveWorkOrderDto,
@@ -25,6 +27,7 @@ import {
   CreateWorkOrderDto,
   QueryWorkOrderDto,
   RejectWorkOrderDto,
+  SetActualCostDto,
   UpdateWorkOrderDto,
   VerifyWorkOrderDto,
 } from './dto/work-order.dto';
@@ -50,6 +53,8 @@ export class WorkOrderService {
     private readonly storage: StorageService,
     private readonly events: DomainEventsService,
     private readonly autoAssign: VendorAutoAssignService,
+    // Optional so the engine still constructs where the ledger is not wired (tests).
+    @Optional() private readonly expenses?: ExpenseService,
   ) {}
 
   /**
@@ -363,6 +368,18 @@ export class WorkOrderService {
   }
 
   /** Estimated total is stored (labour + material) whenever either is provided. */
+  /** Actual cost columns from a DTO; total = labour + material, null when both are cleared. */
+  private actualCostFields(dto: { actualLabourCost?: number | null; actualMaterialCost?: number | null }) {
+    const { actualLabourCost: labour, actualMaterialCost: material } = dto;
+    if (labour === undefined && material === undefined) return {};
+    const total = (labour ?? 0) + (material ?? 0);
+    return {
+      actualLabourCost: labour ?? null,
+      actualMaterialCost: material ?? null,
+      actualTotalCost: labour == null && material == null ? null : Math.round(total * 100) / 100,
+    };
+  }
+
   private costFields(dto: { estimatedLabourCost?: number; estimatedMaterialCost?: number }) {
     const { estimatedLabourCost: labour, estimatedMaterialCost: material } = dto;
     return {
@@ -556,6 +573,8 @@ export class WorkOrderService {
 
     const eventName = this.domainEventForStatus(to);
     if (eventName) this.publish(eventName, workOrder, actor, { status: to });
+    // Closing (or cancelling) can change whether the cost counts — reconcile.
+    await this.expenses?.syncWorkOrder(id, actor.id);
     return this.present(updated);
   }
 
@@ -570,6 +589,7 @@ export class WorkOrderService {
         verifiedById: actor.id,
         verifiedDate: new Date(),
         verificationRemarks: dto.remarks,
+        ...this.actualCostFields(dto),
         updatedById: actor.id,
       },
     });
@@ -580,6 +600,35 @@ export class WorkOrderService {
       metadata: dto.remarks ? { remarks: dto.remarks } : undefined,
     });
     this.publish(DomainEventName.WorkVerified, workOrder, actor, { status: W.VERIFIED });
+    // Verification is when a manager confirms the work and its actual cost — the
+    // point a cost becomes a community expense.
+    await this.expenses?.syncWorkOrder(id, actor.id);
+    return this.present(updated);
+  }
+
+  /**
+   * Record or correct what the work actually cost. Allowed once the work is done
+   * (including after closing — the bill often arrives later). Kept separate from
+   * the general edit because it moves money: it is a manager action (verify
+   * permission) and is mirrored into the expense ledger straight away.
+   */
+  async setActualCost(id: string, dto: SetActualCostDto, actor: AuthenticatedUser) {
+    const workOrder = await this.loadOrThrow(id);
+    const done: WorkOrderStatus[] = [W.COMPLETED, W.VERIFIED, W.CLOSED];
+    if (!done.includes(workOrder.status)) {
+      throw new BadRequestException('Record the actual cost once the work is completed');
+    }
+    const updated = await this.prisma.workOrder.update({
+      where: { id },
+      data: { ...this.actualCostFields(dto), updatedById: actor.id },
+    });
+    await this.timeline.record({
+      workOrderId: id,
+      type: WorkOrderEventType.COST_RECORDED,
+      actorId: actor.id,
+      metadata: { actualTotalCost: updated.actualTotalCost === null ? null : Number(updated.actualTotalCost) },
+    });
+    await this.expenses?.syncWorkOrder(id, actor.id);
     return this.present(updated);
   }
 
@@ -633,6 +682,7 @@ export class WorkOrderService {
       where: { id },
       data: { deletedAt: new Date(), updatedById: actor.id },
     });
+    await this.expenses?.syncWorkOrder(id, actor.id);
     return { id, deleted: true };
   }
 

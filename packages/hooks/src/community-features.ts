@@ -7,6 +7,7 @@ import { useLiving } from './sdk-context';
 const DEFAULTS: CommunityFeatures = {
   maintenanceBilling: true,
   servicePackages: true,
+  services: true,
   gateManagement: true,
   gateApproval: true,
   gateSound: true,

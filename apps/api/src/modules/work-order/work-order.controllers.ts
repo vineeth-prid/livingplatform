@@ -28,6 +28,7 @@ import {
   QueryWorkOrderDto,
   RejectWorkOrderDto,
   UpdateWorkOrderDto,
+  SetActualCostDto,
   VerifyWorkOrderDto,
 } from './dto/work-order.dto';
 import { WorkOrderAttachmentService } from './work-order-attachment.service';
@@ -152,6 +153,17 @@ export class WorkOrderController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.workOrders.verify(id, dto, user);
+  }
+
+  @Put('work-orders/:id/actual-cost')
+  @RequirePermissions(PERMISSIONS.WORKORDER_VERIFY)
+  @ApiOperation({ summary: 'Record/correct the actual cost (kept in step with the expense ledger)' })
+  setActualCost(
+    @Param('id') id: string,
+    @Body() dto: SetActualCostDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.workOrders.setActualCost(id, dto, user);
   }
 
   @Delete('work-orders/:id')

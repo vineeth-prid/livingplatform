@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Package, Plus, Trash2 } from 'lucide-react';
 import type { PackageInput, ServicePackage } from '@living/living-sdk';
 import type { Service } from '@living/types';
-import { useAuth } from '@living/hooks';
+import { useAuth, useCommunityFeatures } from '@living/hooks';
 import {
   Badge, Button, Card, DataTable, EmptyState, Input, LoadingState, PageContainer, PageHeader,
   Sheet, SheetContent, toast, useConfirm, type Column,
@@ -13,6 +13,7 @@ import { living } from '../../lib/living';
 import { useCommunity } from '../community/community-context';
 import { inr } from '../billing/queries';
 import { FormGrid, FormSection, FullWidth, SelectField, TextAreaField } from '../shared/form-kit';
+import { ServicesOffNotice } from '../shared/services-off';
 
 /**
  * Service Packages — bundles of services that already exist in the catalog.
@@ -24,6 +25,7 @@ import { FormGrid, FormSection, FullWidth, SelectField, TextAreaField } from '..
 export function PackagesPage() {
   const { communityId } = useCommunity();
   const { hasPermission } = useAuth();
+  const servicesOn = useCommunityFeatures(communityId).services;
   const qc = useQueryClient();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<ServicePackage | null>(null);
@@ -192,6 +194,15 @@ export function PackagesPage() {
         ) : null,
     },
   ];
+
+  if (!servicesOn) {
+    return (
+      <PageContainer>
+        <PageHeader title="Packages" description="Bundles of services sold at a package price." />
+        <ServicesOffNotice detail="Residents cannot see or buy packages. Packages already bought are kept." />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>

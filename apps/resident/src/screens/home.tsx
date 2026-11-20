@@ -52,6 +52,18 @@ export function HomeScreen() {
   return (
     <div className="px-4">
       <header className="pb-4 pt-8">
+        {/* The community's own logo when it has one; the name stays as text
+            either way, so it reads the same with or without branding. */}
+        {community?.logoUrl && (
+          <img
+            src={community.logoUrl}
+            alt={`${community.name} logo`}
+            className="mb-3 h-10 max-w-[160px] object-contain object-left"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
         <p className="text-2xs font-semibold uppercase tracking-wider text-subtle">
           {community?.name ?? 'Living'}
         </p>
@@ -72,7 +84,7 @@ export function HomeScreen() {
       <Section title="Quick actions">
         <div className="grid grid-cols-2 gap-3">
           <QuickAction icon={Plus} label="Raise a complaint" onClick={() => setComplaint(true)} />
-          <QuickAction icon={LayoutGrid} label="Book a service" to="/services" />
+          {features.services && <QuickAction icon={LayoutGrid} label="Book a service" to="/services" />}
           <QuickAction icon={UserRound} label="Invite a visitor" to="/visitors" />
           <QuickAction icon={CalendarPlus} label="Book an amenity" to="/amenities" />
           <QuickAction icon={PackageOpen} label="At the gate" to="/gate" />

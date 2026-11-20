@@ -192,6 +192,8 @@ export interface WorkOrder extends AuditFields {
   recommendedById?: ID | null; approvedById?: ID | null; approvedDate?: ISODate | null;
   rejectionReason?: string | null;
   estimatedLabourCost?: string | null; estimatedMaterialCost?: string | null; estimatedTotalCost?: string | null;
+  /** What the work actually cost — confirmed by a manager; mirrored into the expense ledger. */
+  actualLabourCost?: string | null; actualMaterialCost?: string | null; actualTotalCost?: string | null;
   estimatedHours?: number | null; actualHours?: number | null;
   dueDate?: ISODate | null; startedDate?: ISODate | null; completedDate?: ISODate | null;
   verifiedDate?: ISODate | null; verificationRemarks?: string | null;

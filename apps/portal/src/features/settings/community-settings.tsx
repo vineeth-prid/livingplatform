@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BellRing, GripVertical, Image, Mail, MessageCircle, PhoneCall, Plus, Receipt, ShieldCheck,
-  Sparkles, Trash2, Truck, Volume2,
+  Sparkles, Trash2, Truck, Volume2, Wrench,
 } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { useAuth } from '@living/hooks';
 import {
-  Button, Card, Input, LoadingState, PageContainer, PageHeader, toast, useConfirm,
+  Button, Card, CommunityLogo, Input, LoadingState, PageContainer, PageHeader, toast, useConfirm,
 } from '@living/ui';
 
 import { living } from '../../lib/living';
@@ -33,6 +34,8 @@ interface EmergencyContact {
 interface SettingsDocument {
   maintenanceBillingEnabled: boolean;
   servicePackagesEnabled: boolean;
+  /** Master switch for the Services section (optional: older documents predate it). */
+  servicesEnabled?: boolean;
   homeBanners: HomeBanner[] | null;
   // Gate Management (Sprint 13). Optional so a settings document written before
   // this sprint still parses; the defaults below mirror the schema defaults.
@@ -83,6 +86,8 @@ export function CommunitySettingsPage() {
         title="Community settings"
         description={`Modules and resident app content for ${community?.name ?? 'this community'}.`}
       />
+
+      <BrandingCard canEdit={hasPermission('community:update')} />
 
       <ModuleToggles
         settings={settings.data}
@@ -381,6 +386,23 @@ function ModuleToggles({
     onChange({ maintenanceBillingEnabled: next });
   }
 
+  const servicesOn = settings.servicesEnabled ?? true;
+  async function toggleServices(next: boolean) {
+    if (!next) {
+      const ok = await confirm({
+        title: 'Turn off the whole Services section?',
+        description:
+          'Residents will no longer see or book services or packages, and the catalogue is hidden from ' +
+          'the menu. Existing requests and work in progress are kept, and every service keeps its own ' +
+          'on/off for when you switch this back on.',
+        confirmLabel: 'Turn off',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    onChange({ servicesEnabled: next });
+  }
+
   return (
     <Card variant="elevated" className="mb-6">
       <h2 className="mb-1 font-display text-h4 tracking-tight text-strong">Modules</h2>
@@ -398,16 +420,145 @@ function ModuleToggles({
         onChange={toggleMaintenance}
       />
       <ModuleRow
+        icon={Wrench}
+        title="Services"
+        description="The whole Services section: the catalogue, resident bookings and packages. Each service keeps its own on/off below this switch."
+        enabled={servicesOn}
+        disabled={!canEdit || saving}
+        onChange={toggleServices}
+      />
+      {servicesOn ? (
+        <p className="-mt-2 mb-2 pl-[52px] text-sm">
+          <Link to={'/services' as string} className="text-brand hover:underline">
+            Turn individual services on or off →
+          </Link>
+        </p>
+      ) : (
+        <p className="-mt-2 mb-2 pl-[52px] text-sm text-muted">
+          Hidden from residents and the portal menu. Existing requests stay under Service requests, and
+          each service&apos;s own on/off is kept for when you switch this back on.
+        </p>
+      )}
+      <ModuleRow
         icon={Sparkles}
         title="Service packages"
         description="Bundles of services sold at a package price inside the resident app."
         enabled={settings.servicePackagesEnabled}
-        disabled={!canEdit || saving}
+        disabled={!canEdit || saving || !servicesOn}
         onChange={(next) => onChange({ servicePackagesEnabled: next })}
       />
     </Card>
   );
 }
+
+/**
+ * Community logo. Shown in this portal's sidebar and throughout the resident
+ * app for THIS community only; without one, the default Living tile shows.
+ * The file goes to storage through a signed upload; the API checks it is really
+ * a PNG/JPG/WebP under 2 MB before using it, and removes the replaced file.
+ */
+function BrandingCard({ canEdit }: { canEdit: boolean }) {
+  const { communityId, community } = useCommunity();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const logoUrl = (community as { logoUrl?: string | null } | null)?.logoUrl ?? null;
+
+  async function refresh() {
+    await qc.invalidateQueries({ queryKey: ['communities'] });
+  }
+
+  async function upload(file: File) {
+    if (!communityId) return;
+    if (!LOGO_TYPES.includes(file.type)) return toast.error('Upload a PNG, JPG or WebP image');
+    if (file.size > LOGO_MAX_BYTES) return toast.error('The image must be 2 MB or smaller');
+    setBusy(true);
+    try {
+      const { key, uploadUrl } = await living.community.logoUploadUrl(communityId, file.name, file.type);
+      const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'content-type': file.type }, body: file });
+      if (!put.ok) throw new Error('The upload did not go through — try again');
+      await living.community.setLogo(communityId, key);
+      await refresh();
+      toast.success('Logo updated');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!communityId) return;
+    const ok = await confirm({
+      title: 'Remove the community logo?',
+      description: 'The portal and the resident app go back to the default Living branding.',
+      confirmLabel: 'Remove logo',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await living.community.removeLogo(communityId);
+      await refresh();
+      toast.success('Default branding restored');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card variant="elevated" className="mb-6">
+      <h2 className="mb-1 font-display text-h4 tracking-tight text-strong">Branding</h2>
+      <p className="mb-4 text-sm text-muted">
+        Your community&apos;s logo, shown in the portal and the resident app. PNG, JPG or WebP, up to 2 MB. A
+        transparent background works best.
+      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex h-20 w-40 items-center justify-center rounded-control border border-border-subtle bg-sunken p-2">
+          {logoUrl ? (
+            <img src={logoUrl} alt={`${community?.name ?? 'Community'} logo`} className="max-h-full max-w-full object-contain" />
+          ) : (
+            <div className="flex flex-col items-center gap-1 text-center">
+              <CommunityLogo name={community?.name} className="h-9 w-9 text-base" />
+              <span className="text-2xs text-subtle">Default Living branding</span>
+            </div>
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex flex-wrap gap-2">
+            <label
+              className={`inline-flex cursor-pointer items-center gap-2 rounded-control border border-border-subtle bg-card px-3 py-2 text-sm font-medium text-strong hover:bg-sunken focus-within:shadow-ring ${busy ? 'pointer-events-none opacity-60' : ''}`}
+            >
+              <Image className="h-4 w-4" />
+              {busy ? 'Saving…' : logoUrl ? 'Replace logo' : 'Upload logo'}
+              <input
+                type="file"
+                accept={LOGO_TYPES.join(',')}
+                className="sr-only"
+                disabled={busy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void upload(file);
+                }}
+              />
+            </label>
+            {logoUrl && (
+              <Button variant="ghost" onClick={() => void remove()} disabled={busy}>
+                Remove · use default
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 function ModuleRow({
   icon: Icon,

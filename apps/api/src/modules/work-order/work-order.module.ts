@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ExpenseModule } from '../expense/expense.module';
 import { VendorModule } from '../vendor/vendor.module';
 import {
   WorkOrderAttachmentController,
@@ -21,7 +22,7 @@ import { WorkOrderService } from './work-order.service';
 @Module({
   // VendorModule supplies the auto-assignment picker. It is a leaf (vendors know
   // nothing about work orders), so this does not create a cycle.
-  imports: [VendorModule],
+  imports: [VendorModule, ExpenseModule],
   controllers: [
     WorkOrderController,
     WorkOrderUpdateController,

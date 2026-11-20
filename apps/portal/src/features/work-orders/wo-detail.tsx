@@ -19,6 +19,7 @@ import { WO_ORIGIN_LABEL, WO_ORIGIN_TONES, WO_TONES, woWorkflow } from './config
 import { AttachmentPanel } from '../shared/attachment-panel';
 import { WorkOrderProgress } from './wo-progress';
 import { WorkOrderVerification } from './wo-verification';
+import { WorkOrderActualCost } from './wo-actual-cost';
 import { WorkOrderForm } from './wo-form';
 import { useWorkOrder, useWorkOrderMutations } from './queries';
 
@@ -153,6 +154,7 @@ export function WorkOrderDetailPage() {
                   <Field label="Total" value={w.estimatedTotalCost != null ? formatMoney(w.estimatedTotalCost) : null} />
                 </FieldGrid>
               </DetailSection>
+              <DetailSection title="Actual cost"><WorkOrderActualCost workOrder={w} /></DetailSection>
               <DetailSection title="Assignment">
                 <OperationsAssignment communityId={communityId} assignee={w.assignee} canAssign={hasPermission('workorder:assign')} pending={assign.isPending} onAssign={onAssign} />
               </DetailSection>

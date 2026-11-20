@@ -90,11 +90,26 @@ export function ServicesScreen() {
   const packages = useQuery({
     queryKey: ['packages', 'available', communityId],
     queryFn: () => living.packages.available(communityId!),
-    enabled: !!communityId && features.servicePackages,
+    enabled: !!communityId && features.servicePackages && features.services,
   });
 
   const packageRows = packages.data ?? [];
   const serviceRows = services.data ?? [];
+
+  // Reached from an old link or bookmark while the community has Services off.
+  if (!features.isLoading && !features.services) {
+    return (
+      <div>
+        <ScreenHeader title="Services" />
+        <div className="px-4">
+          <EmptyState
+            title="Services aren’t available right now"
+            description="Your community has turned off booking services in the app. Your past requests are still under Requests."
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

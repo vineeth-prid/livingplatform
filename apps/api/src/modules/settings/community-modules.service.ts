@@ -6,6 +6,8 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface CommunityFeatures {
   maintenanceBilling: boolean;
   servicePackages: boolean;
+  /** Master switch for the whole Services section (catalogue, bookings, packages). */
+  services: boolean;
   // Gate Management (Sprint 13). Carried here rather than on the settings
   // document because residents need them and hold no `settings:read` — this
   // endpoint exists precisely to answer "what should I render?" cheaply.
@@ -19,6 +21,7 @@ export interface CommunityFeatures {
 const DEFAULTS: CommunityFeatures = {
   maintenanceBilling: true,
   servicePackages: true,
+  services: true,
   gateManagement: true,
   gateApproval: true,
   gateSound: true,
@@ -63,6 +66,7 @@ export class CommunityModulesService {
       select: {
         maintenanceBillingEnabled: true,
         servicePackagesEnabled: true,
+        servicesEnabled: true,
         gateManagementEnabled: true,
         gateApprovalEnabled: true,
         gateSoundEnabled: true,
@@ -72,6 +76,7 @@ export class CommunityModulesService {
     return {
       maintenanceBilling: row.maintenanceBillingEnabled,
       servicePackages: row.servicePackagesEnabled,
+      services: row.servicesEnabled,
       gateManagement: row.gateManagementEnabled,
       gateApproval: row.gateApprovalEnabled,
       gateSound: row.gateSoundEnabled,
@@ -92,7 +97,9 @@ export class CommunityModulesService {
     throw new NotFoundException(
       feature === 'maintenanceBilling'
         ? 'Maintenance billing is not enabled for this community'
-        : 'Service packages are not enabled for this community',
+        : feature === 'services'
+          ? 'Services are turned off for this community'
+          : 'Service packages are not enabled for this community',
     );
   }
 

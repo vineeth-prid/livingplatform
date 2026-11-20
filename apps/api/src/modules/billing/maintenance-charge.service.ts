@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type MaintenanceCharge } from '@prisma/client';
+import { BillingCycle, ChargeCalculationMethod, Prisma, type MaintenanceCharge } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
 import { resolveSort } from '../../common/dto/list-query.dto';
@@ -8,7 +8,7 @@ import { DomainEventName } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
-import { chargeInForce } from './billing.math';
+import { ALL_UNIT_TYPES, areaInSqft, chargeInForce, perSqftAmount } from './billing.math';
 import type {
   QueryMaintenanceChargeDto,
   UpsertMaintenanceChargeDto,
@@ -21,6 +21,9 @@ export interface MaintenanceChargeView {
   id: string;
   communityId: string;
   propertyType: string;
+  calculationMethod: ChargeCalculationMethod;
+  /** ₹ per sq. ft. per month (PER_SQFT only). */
+  ratePerSqft: number | null;
   monthlyAmount: number;
   quarterlyAmount: number | null;
   yearlyAmount: number | null;
@@ -132,6 +135,46 @@ export class MaintenanceChargeService {
       .map(([type, unitCount]) => ({ type, unitCount, configured: configured.has(type) }));
   }
 
+  /**
+   * What a per-sq-ft rate would bill each unit per month, before it is saved —
+   * real amounts from real areas, plus the units that have no area recorded and
+   * would therefore be left unbilled.
+   */
+  async previewPerSqft(communityId: string, ratePerSqft: number, propertyType?: string) {
+    await this.access.assert(communityId);
+    const units = await this.prisma.unit.findMany({
+      where: {
+        communityId,
+        deletedAt: null,
+        ...(propertyType && propertyType !== ALL_UNIT_TYPES ? { type: propertyType } : {}),
+      },
+      select: { id: true, unitNumber: true, type: true, builtUpArea: true, areaUnit: true },
+      orderBy: { unitNumber: 'asc' },
+    });
+    const rows = units.map((u) => {
+      const area = areaInSqft(u.builtUpArea, u.areaUnit);
+      return {
+        unitId: u.id,
+        unitNumber: u.unitNumber,
+        type: u.type,
+        areaSqft: area ? area.toNumber() : null,
+        monthlyAmount: area ? perSqftAmount(area, ratePerSqft, BillingCycle.MONTHLY) : null,
+      };
+    });
+    const billable = rows.filter((r) => r.monthlyAmount !== null);
+    return {
+      ratePerSqft,
+      unitCount: rows.length,
+      billableCount: billable.length,
+      totalMonthly: billable
+        .reduce((sum, r) => sum.plus(r.monthlyAmount!), new Prisma.Decimal(0))
+        .toDecimalPlaces(2)
+        .toNumber(),
+      missingArea: rows.filter((r) => r.areaSqft === null).map((r) => r.unitNumber),
+      sample: billable.slice(0, 10),
+    };
+  }
+
   async create(
     communityId: string,
     dto: UpsertMaintenanceChargeDto,
@@ -158,9 +201,7 @@ export class MaintenanceChargeService {
       data: {
         communityId,
         propertyType: dto.propertyType,
-        monthlyAmount: dto.monthlyAmount,
-        quarterlyAmount: dto.quarterlyAmount ?? null,
-        yearlyAmount: dto.yearlyAmount ?? null,
+        ...pricingFor(dto),
         lateFeeAmount: dto.lateFeeAmount ?? 0,
         lateFeePercent: dto.lateFeePercent ?? 0,
         gracePeriodDays: dto.gracePeriodDays ?? 0,
@@ -183,13 +224,33 @@ export class MaintenanceChargeService {
   ): Promise<MaintenanceChargeView> {
     await this.access.assert(communityId);
     await this.assertOwned(communityId, id);
+    const current = await this.prisma.maintenanceCharge.findUniqueOrThrow({ where: { id } });
+    const method = dto.calculationMethod ?? current.calculationMethod;
+    if (method !== current.calculationMethod) {
+      // Bills already raised on this rate keep their amounts either way, but a
+      // rate that changes method in place no longer explains them. A change of
+      // method is a new rate card from a new date.
+      const billed = await this.prisma.maintenanceInvoice.count({ where: { chargeId: id } });
+      if (billed > 0) {
+        throw new BadRequestException(
+          `This rate has already billed ${billed} invoice${billed === 1 ? '' : 's'} — add a new rate with a later "effective from" date to change how it is calculated`,
+        );
+      }
+    }
+    // A FIXED rate that stays FIXED is edited exactly as before.
+    const pricing =
+      method === ChargeCalculationMethod.FIXED && current.calculationMethod === ChargeCalculationMethod.FIXED
+        ? { monthlyAmount: dto.monthlyAmount, quarterlyAmount: dto.quarterlyAmount, yearlyAmount: dto.yearlyAmount }
+        : pricingFor({
+            ...dto,
+            calculationMethod: method,
+            ratePerSqft: dto.ratePerSqft ?? (current.ratePerSqft === null ? undefined : Number(current.ratePerSqft)),
+          });
     const row = await this.prisma.maintenanceCharge.update({
       where: { id },
       data: {
         propertyType: dto.propertyType,
-        monthlyAmount: dto.monthlyAmount,
-        quarterlyAmount: dto.quarterlyAmount,
-        yearlyAmount: dto.yearlyAmount,
+        ...pricing,
         lateFeeAmount: dto.lateFeeAmount,
         lateFeePercent: dto.lateFeePercent,
         gracePeriodDays: dto.gracePeriodDays,
@@ -260,6 +321,8 @@ function toView(row: MaintenanceCharge, current: boolean): MaintenanceChargeView
     id: row.id,
     communityId: row.communityId,
     propertyType: row.propertyType,
+    calculationMethod: row.calculationMethod,
+    ratePerSqft: row.ratePerSqft === null ? null : Number(row.ratePerSqft),
     monthlyAmount: Number(row.monthlyAmount),
     quarterlyAmount: row.quarterlyAmount === null ? null : Number(row.quarterlyAmount),
     yearlyAmount: row.yearlyAmount === null ? null : Number(row.yearlyAmount),
@@ -281,4 +344,32 @@ function startOfDay(d: Date): Date {
 
 function endOfDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
+/**
+ * The price columns for a new (or re-priced) rate card. FIXED fills the original
+ * amount fields; PER_SQFT stores the rate and zeroes the amounts, which only
+ * FIXED billing reads.
+ */
+function pricingFor(dto: Partial<UpsertMaintenanceChargeDto>) {
+  if (dto.calculationMethod === ChargeCalculationMethod.PER_SQFT) {
+    if (!dto.ratePerSqft || dto.ratePerSqft <= 0) {
+      throw new BadRequestException('A per-sq-ft rate needs a rate per sq. ft. greater than 0');
+    }
+    return {
+      calculationMethod: ChargeCalculationMethod.PER_SQFT,
+      ratePerSqft: new Prisma.Decimal(dto.ratePerSqft),
+      monthlyAmount: 0,
+      quarterlyAmount: null,
+      yearlyAmount: null,
+    };
+  }
+  if (dto.monthlyAmount === undefined) throw new BadRequestException('A fixed rate needs a monthly amount');
+  return {
+    calculationMethod: ChargeCalculationMethod.FIXED,
+    ratePerSqft: null,
+    monthlyAmount: dto.monthlyAmount,
+    quarterlyAmount: dto.quarterlyAmount ?? null,
+    yearlyAmount: dto.yearlyAmount ?? null,
+  };
 }

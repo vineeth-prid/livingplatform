@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Wrench } from 'lucide-react';
 import type { Service, ServiceVariant } from '@living/types';
-import { useAuth } from '@living/hooks';
+import { useAuth, useCommunityFeatures } from '@living/hooks';
 import {
   Badge, Button, Card, DataTable, EmptyState, Input, LoadingState, PageContainer, PageHeader,
   SearchInput, Sheet, SheetContent, toast, useConfirm, type Column,
 } from '@living/ui';
 
 import { living } from '../../lib/living';
+import { useCommunity } from '../community/community-context';
 import { FormGrid, FormSection, FullWidth, TextAreaField } from '../shared/form-kit';
+import { ServicesOffNotice } from '../shared/services-off';
 
 /**
  * The service catalog a community offers.
@@ -26,6 +28,8 @@ import { FormGrid, FormSection, FullWidth, TextAreaField } from '../shared/form-
  */
 export function ServicesPage() {
   const { hasPermission } = useAuth();
+  const { communityId } = useCommunity();
+  const servicesOn = useCommunityFeatures(communityId).services;
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Service | null>(null);
@@ -173,6 +177,16 @@ export function ServicesPage() {
         ) : null,
     },
   ];
+
+  // Reached by an old link while the section is off: say so, keep settings intact.
+  if (!servicesOn) {
+    return (
+      <PageContainer>
+        <PageHeader title="Services" description="The catalogue residents book from." />
+        <ServicesOffNotice />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>

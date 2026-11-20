@@ -53,6 +53,8 @@ export class PackageController {
   }
 
   @Get('available')
+  // Replaces the class gate, so it names both: packages AND the Services section.
+  @RequireCommunityModule('servicePackages', 'services')
   @RequirePermissions(PERMISSIONS.PACKAGE_READ)
   @ApiOperation({
     summary: 'Active packages a resident may buy, filtered to their property type',
@@ -142,6 +144,7 @@ export class PackageController {
   }
 
   @Post('purchase')
+  @RequireCommunityModule('servicePackages', 'services')
   @RequirePermissions(PERMISSIONS.PACKAGE_PURCHASE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

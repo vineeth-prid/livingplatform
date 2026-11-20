@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BillingCycle, InvoiceStatus } from '@prisma/client';
+import { BillingCycle, ChargeCalculationMethod, InvoiceStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -12,6 +12,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 import { ListQueryDto } from '../../../common/dto/list-query.dto';
@@ -24,11 +25,28 @@ export class UpsertMaintenanceChargeDto {
   @MaxLength(60)
   propertyType!: string;
 
-  @ApiProperty({ description: 'Monthly maintenance amount (₹)' })
+  @ApiPropertyOptional({
+    enum: ChargeCalculationMethod,
+    default: ChargeCalculationMethod.FIXED,
+    description: 'FIXED bills the amounts below; PER_SQFT bills built-up area × ratePerSqft',
+  })
+  @IsOptional()
+  @IsEnum(ChargeCalculationMethod)
+  calculationMethod?: ChargeCalculationMethod;
+
+  @ApiPropertyOptional({ example: 3, description: '₹ per sq. ft. per month — required for PER_SQFT' })
+  @ValidateIf((o: UpsertMaintenanceChargeDto) => o.calculationMethod === ChargeCalculationMethod.PER_SQFT)
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0.0001)
+  ratePerSqft?: number;
+
+  @ApiProperty({ description: 'Monthly maintenance amount (₹) — required for FIXED' })
+  @ValidateIf((o: UpsertMaintenanceChargeDto) => o.calculationMethod !== ChargeCalculationMethod.PER_SQFT)
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  monthlyAmount!: number;
+  monthlyAmount?: number;
 
   @ApiPropertyOptional({ description: 'Quarterly amount (₹). Defaults to 3× monthly.' })
   @IsOptional()
@@ -224,4 +242,12 @@ export class CollectionSummaryQueryDto {
   @Min(1)
   @Max(24)
   months?: number;
+}
+
+export class PerSqftPreviewQueryDto {
+  @ApiProperty({ example: 3, description: '₹ per sq. ft. per month' })
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0.0001) ratePerSqft!: number;
+
+  @ApiPropertyOptional({ description: 'Limit to one property type; "ALL" or empty for every unit' })
+  @IsOptional() @IsString() @MaxLength(60) propertyType?: string;
 }

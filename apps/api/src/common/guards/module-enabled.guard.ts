@@ -6,7 +6,7 @@ import { CommunityModulesService } from '../../modules/settings/community-module
 export const REQUIRE_MODULE_KEY = 'requireCommunityModule';
 
 /** Optional community modules a route can be gated on. */
-export type CommunityModule = 'maintenanceBilling' | 'servicePackages';
+export type CommunityModule = 'maintenanceBilling' | 'servicePackages' | 'services';
 
 /**
  * Gate a controller (or one route) on a community module toggle.
@@ -18,8 +18,12 @@ export type CommunityModule = 'maintenanceBilling' | 'servicePackages';
  * including ones added later, which is the point: a per-method check is one
  * `git push` away from being forgotten on a new endpoint.
  */
-export const RequireCommunityModule = (module: CommunityModule) =>
-  SetMetadata(REQUIRE_MODULE_KEY, module);
+/**
+ * Every module named must be on. A handler-level decorator replaces the class
+ * one (as before), so a handler that needs an extra module names all of them.
+ */
+export const RequireCommunityModule = (...modules: CommunityModule[]) =>
+  SetMetadata(REQUIRE_MODULE_KEY, modules.length === 1 ? modules[0] : modules);
 
 /**
  * Resolves `:communityId` from the route and refuses when the module is off.
@@ -46,12 +50,13 @@ export class ModuleEnabledGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<CommunityModule>(REQUIRE_MODULE_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const metadata = this.reflector.getAllAndOverride<CommunityModule | CommunityModule[] | undefined>(
+      REQUIRE_MODULE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     // The overwhelming majority of routes are not gated — leave before any I/O.
-    if (!required) return true;
+    if (!metadata) return true;
+    const required = Array.isArray(metadata) ? metadata : [metadata];
 
     // Non-HTTP execution contexts (cron, events) carry no route to gate.
     if (context.getType() !== 'http') return true;
@@ -61,7 +66,7 @@ export class ModuleEnabledGuard implements CanActivate {
     // No community in the route → nothing community-scoped to gate.
     if (!communityId) return true;
 
-    await this.modules.assertEnabled(communityId, required);
+    for (const module of required) await this.modules.assertEnabled(communityId, module);
     return true;
   }
 }

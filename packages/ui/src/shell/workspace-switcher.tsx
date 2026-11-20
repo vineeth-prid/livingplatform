@@ -9,11 +9,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/dropdown-menu';
+import { CommunityLogo } from '../components/community-logo';
 
 export interface Workspace {
   id: string;
   name: string;
   subtitle?: string;
+  /** The community's own logo; the initial tile is shown without one. */
+  logoUrl?: string | null;
 }
 
 /**
@@ -35,9 +38,7 @@ export function WorkspaceSwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex w-full items-center gap-2.5 rounded-control border border-border-subtle bg-card px-3 py-2 text-left transition-colors hover:bg-sunken focus-visible:shadow-ring focus-visible:outline-none">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand font-display text-sm text-brand-fg">
-            {active?.name?.[0]?.toUpperCase() ?? 'L'}
-          </span>
+          <CommunityLogo src={active?.logoUrl} name={active?.name} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-strong">
               {active?.name ?? 'Select workspace'}

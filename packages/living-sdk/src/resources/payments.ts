@@ -85,10 +85,28 @@ export interface Payment {
   createdAt: string;
 }
 
+/** FIXED bills the amounts on the rate card; PER_SQFT bills built-up area × ratePerSqft. */
+export type ChargeCalculationMethod = 'FIXED' | 'PER_SQFT';
+
+/** propertyType of a rate card that applies to every unit type without its own rate. */
+export const ALL_UNIT_TYPES = 'ALL';
+
+export interface PerSqftPreview {
+  ratePerSqft: number;
+  unitCount: number;
+  billableCount: number;
+  totalMonthly: number;
+  /** Unit numbers with no built-up area — they would be left unbilled. */
+  missingArea: string[];
+  sample: Array<{ unitId: string; unitNumber: string; type: string | null; areaSqft: number; monthlyAmount: number }>;
+}
+
 export interface MaintenanceCharge {
   id: string;
   communityId: string;
   propertyType: string;
+  calculationMethod: ChargeCalculationMethod;
+  ratePerSqft: number | null;
   monthlyAmount: number;
   quarterlyAmount: number | null;
   yearlyAmount: number | null;
@@ -118,6 +136,9 @@ export interface MaintenanceInvoice {
   issueDate: string;
   dueDate: string;
   baseAmount: number;
+  /** Per-sq-ft invoices: the area and rate billed on (null for fixed rates). */
+  billedAreaSqft?: number | null;
+  ratePerSqft?: number | null;
   lateFee: number;
   adjustment: number;
   totalAmount: number;
@@ -159,6 +180,8 @@ export interface GenerationResult {
   totalBilled: number;
   dryRun: boolean;
   missingRates: string[];
+  /** Units on a per-sq-ft rate with no built-up area recorded — left unbilled. */
+  missingArea?: string[];
 }
 
 /**
@@ -248,6 +271,12 @@ export class BillingResource {
     communityId: string,
   ): Promise<Array<{ type: string; unitCount: number; configured: boolean }>> {
     return this.http.get(`/communities/${communityId}/maintenance-charges/property-types`);
+  }
+  perSqftPreview(communityId: string, ratePerSqft: number, propertyType?: string): Promise<PerSqftPreview> {
+    return this.http.get(`/communities/${communityId}/maintenance-charges/per-sqft-preview`, {
+      ratePerSqft,
+      ...(propertyType ? { propertyType } : {}),
+    });
   }
   createCharge(communityId: string, input: Record<string, unknown>): Promise<MaintenanceCharge> {
     return this.http.post(`/communities/${communityId}/maintenance-charges`, input);

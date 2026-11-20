@@ -54,6 +54,7 @@ export class SettingsService {
       pushEnabled: dto.pushEnabled,
       maintenanceBillingEnabled: dto.maintenanceBillingEnabled,
       servicePackagesEnabled: dto.servicePackagesEnabled,
+      servicesEnabled: dto.servicesEnabled,
       gateManagementEnabled: dto.gateManagementEnabled,
       gateApprovalEnabled: dto.gateApprovalEnabled,
       gatePushEnabled: dto.gatePushEnabled,

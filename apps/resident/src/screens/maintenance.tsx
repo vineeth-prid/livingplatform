@@ -275,6 +275,12 @@ function InvoiceRow({
           })}{' '}
           · due {new Date(invoice.dueDate).toLocaleDateString()}
         </p>
+        {/* A per-sq-ft bill explains itself: the area and rate it was billed on. */}
+        {invoice.billedAreaSqft != null && invoice.ratePerSqft != null && (
+          <p className="text-2xs text-subtle">
+            {invoice.billedAreaSqft.toLocaleString('en-IN')} sq ft × {inr(invoice.ratePerSqft)}/sq ft
+          </p>
+        )}
         <div className="mt-1 flex items-center gap-2">
           <Badge tone={STATUS_TONE[invoice.status] ?? 'neutral'} size="sm" dot>
             {invoice.status.replace(/_/g, ' ').toLowerCase()}

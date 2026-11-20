@@ -21,6 +21,12 @@ import { UpdateCommunityDto } from './dto/update-community.dto';
 
 const SORTABLE = ['name', 'code', 'createdAt', 'status', 'type'] as const;
 
+// Community logos: raster only (an SVG can carry script), and small — it is
+// shown on every screen of both apps.
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const logoScope = (communityId: string) => `communities/${communityId}/branding`;
+
 @Injectable()
 export class CommunityService {
   constructor(
@@ -147,6 +153,47 @@ export class CommunityService {
         documents: community._count.documents,
       },
     };
+  }
+
+  // ── Branding (logo) ────────────────────────────────────────────────────────
+
+  /** Signed upload for a new logo. Only raster formats; the bytes are checked on save. */
+  async logoUploadUrl(id: string, fileName: string, contentType: string) {
+    await this.access.assert(id);
+    if (!LOGO_TYPES.includes(contentType)) {
+      throw new BadRequestException('Upload a PNG, JPG or WebP image');
+    }
+    const key = this.storage.buildKey(logoScope(id), fileName);
+    const signed = await this.storage.signUpload(key, { contentType });
+    return { key, uploadUrl: signed.url, expiresAt: signed.expiresAt, maxBytes: LOGO_MAX_BYTES };
+  }
+
+  /**
+   * Make an uploaded image this community's logo. The key must have been issued
+   * for THIS community (so another community's logo can never be attached), and
+   * the file must really be a PNG/JPG/WebP under the size limit. The previous
+   * logo file is deleted rather than left orphaned in storage.
+   */
+  async setLogo(id: string, key: string, actor: AuthenticatedUser) {
+    await this.access.assert(id);
+    const current = await this.prisma.community.findUniqueOrThrow({ where: { id }, select: { logoKey: true } });
+    if (key === current.logoKey) return this.findOne(id);
+    await this.storage.assertOwnedKey(key, logoScope(id));
+    await this.storage.assertImage(key, LOGO_MAX_BYTES);
+    await this.prisma.community.update({ where: { id }, data: { logoKey: key, updatedById: actor.id } });
+    if (current.logoKey) await this.storage.delete(current.logoKey).catch(() => undefined);
+    return this.findOne(id);
+  }
+
+  /** Back to the default Living branding. */
+  async removeLogo(id: string, actor: AuthenticatedUser) {
+    await this.access.assert(id);
+    const current = await this.prisma.community.findUniqueOrThrow({ where: { id }, select: { logoKey: true } });
+    if (current.logoKey) {
+      await this.prisma.community.update({ where: { id }, data: { logoKey: null, updatedById: actor.id } });
+      await this.storage.delete(current.logoKey).catch(() => undefined);
+    }
+    return this.findOne(id);
   }
 
   async update(id: string, dto: UpdateCommunityDto, actor: AuthenticatedUser) {

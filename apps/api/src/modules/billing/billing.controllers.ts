@@ -21,6 +21,7 @@ import {
   CollectionSummaryQueryDto,
   GenerateInvoicesDto,
   QueryInvoiceDto,
+  PerSqftPreviewQueryDto,
   QueryMaintenanceChargeDto,
   RecordOfflinePaymentDto,
   UpdateInvoiceDto,
@@ -55,6 +56,13 @@ export class MaintenanceChargeController {
   @ApiOperation({ summary: 'The rate in force today, one row per property type' })
   current(@Param('communityId') communityId: string) {
     return this.charges.current(communityId);
+  }
+
+  @Get('per-sqft-preview')
+  @RequirePermissions(PERMISSIONS.BILLING_CHARGE_READ)
+  @ApiOperation({ summary: 'Monthly amount per unit for a per-sq-ft rate, and units missing an area' })
+  perSqftPreview(@Param('communityId') communityId: string, @Query() query: PerSqftPreviewQueryDto) {
+    return this.charges.previewPerSqft(communityId, query.ratePerSqft, query.propertyType);
   }
 
   @Get('property-types')

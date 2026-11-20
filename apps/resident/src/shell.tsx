@@ -2,10 +2,11 @@ import { type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Home, LayoutGrid, ListChecks, Sparkles, User } from 'lucide-react';
-import { useAuth } from '@living/hooks';
+import { useAuth, useCommunityFeatures } from '@living/hooks';
 import { LoadingState, PasswordChangeGate } from '@living/ui';
 import { cn } from '@living/utils';
 
+import { useResidentCommunity } from './community';
 import { CommunitySwitcher } from './community-switcher';
 
 import { GateAlerts } from './gate/gate-alerts';
@@ -64,6 +65,10 @@ function PageFade({ children }: { children: ReactNode }) {
 }
 
 function BottomNav({ pathname }: { pathname: string }) {
+  // The Services tab follows the community's Services switch.
+  const { communityId } = useResidentCommunity();
+  const servicesOn = useCommunityFeatures(communityId).services;
+  const tabs = servicesOn ? TABS : TABS.filter((t) => t.to !== '/services');
   return (
     <nav
       aria-label="Primary"
@@ -71,7 +76,7 @@ function BottomNav({ pathname }: { pathname: string }) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-around">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const active = t.match(pathname);
           return (
             <li key={t.to} className="flex-1">

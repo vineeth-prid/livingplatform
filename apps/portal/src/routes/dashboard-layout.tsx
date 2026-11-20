@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import {
   Activity, BellRing, Boxes, Building2, CalendarCheck, CalendarClock, CreditCard, DoorOpen,
   FileSignature, FileText, Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, MessageCircle,
-  Package, Receipt, Server, Settings, ShieldCheck, Sparkles, Store, Tags, TrendingUp, Truck,
+  Package, Receipt, ReceiptIndianRupee, Server, Settings, ShieldCheck, Sparkles, Store, Tags, TrendingUp, Truck,
   User, UserRound, Users, Wallet, Wrench,
 } from 'lucide-react';
 import { useAuth, useCommunityFeatures } from '@living/hooks';
@@ -20,7 +20,7 @@ import { RequireAuth } from './guards';
 
 // Foundation nav — feature sprints extend these sections. Hrefs are illustrative;
 // the pages themselves are built in later sprints (this sprint ships only the shell).
-const sections: NavSection[] = [
+export const sections: NavSection[] = [
   {
     items: [
       { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
@@ -52,6 +52,7 @@ const sections: NavSection[] = [
     title: 'Billing',
     items: [
       { label: 'Collection', icon: Wallet, href: '/billing' },
+      { label: 'Expenses', icon: ReceiptIndianRupee, href: '/expenses' },
       { label: 'Maintenance charges', icon: Receipt, href: '/billing/charges' },
       { label: 'Payment settings', icon: CreditCard, href: '/billing/payment-settings' },
       { label: 'Notifications', icon: BellRing, href: '/billing/notifications' },
@@ -102,9 +103,10 @@ const adminSection: NavSection = {
  * The API already 404s those routes, so this is not the security boundary — it
  * is what stops the portal advertising a module the community does not run.
  */
-function applyModuleToggles(
+export function applyModuleToggles(
   navSections: NavSection[],
-  features: { maintenanceBilling: boolean; servicePackages: boolean },
+  features: { maintenanceBilling: boolean; servicePackages: boolean; services: boolean },
+  canReadExpenses: boolean,
 ): NavSection[] {
   const hidden = new Set<string>();
   if (!features.maintenanceBilling) {
@@ -113,6 +115,13 @@ function applyModuleToggles(
     hidden.add('/billing/payment-settings');
   }
   if (!features.servicePackages) hidden.add('/packages');
+  // Services section off: the catalogue and packages go. Service requests stay
+  // as read-only history so open jobs can still be followed and closed.
+  if (!features.services) {
+    hidden.add('/services');
+    hidden.add('/packages');
+  }
+  if (!canReadExpenses) hidden.add('/expenses');
   if (hidden.size === 0) return navSections;
 
   return navSections
@@ -122,7 +131,7 @@ function applyModuleToggles(
 
 /** The authenticated dashboard shell wrapping every protected route. */
 export function DashboardLayout() {
-  const { session, logout } = useAuth();
+  const { session, logout, hasPermission } = useAuth();
   const { communities, communityId, setCommunityId } = useCommunity();
   const navigate = useNavigate();
   const commandPalette = useCommandPalette();
@@ -133,9 +142,10 @@ export function DashboardLayout() {
   // association that runs each community, so a Platform Admin never sees them.
   const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const features = useCommunityFeatures(isPlatform ? null : communityId);
+  const canReadExpenses = hasPermission('expense:read');
   const visibleSections = useMemo(
-    () => (isPlatform ? [adminSection] : applyModuleToggles(sections, features)),
-    [isPlatform, features],
+    () => (isPlatform ? [adminSection] : applyModuleToggles(sections, features, canReadExpenses)),
+    [isPlatform, features, canReadExpenses],
   );
 
   // A Platform Admin has no operational dashboard — land them on the executive one.
@@ -192,6 +202,7 @@ export function DashboardLayout() {
                 id: c.id,
                 name: c.name,
                 subtitle: [c.city, c.state].filter(Boolean).join(', ') || undefined,
+                logoUrl: c.logoUrl,
               }))}
               activeId={communityId ?? undefined}
               onSelect={setCommunityId}

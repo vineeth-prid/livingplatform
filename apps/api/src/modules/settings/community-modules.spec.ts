@@ -82,6 +82,7 @@ describe('CommunityModulesService', () => {
     await expect(makeService(null).features('c1')).resolves.toEqual({
       maintenanceBilling: true,
       servicePackages: true,
+      services: true,
       ...GATE_ON,
     });
   });

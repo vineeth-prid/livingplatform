@@ -34,7 +34,16 @@ export function useWorkOrderMutations(id: string) {
     onSuccess: invalidate,
   });
   const verify = useMutation({
-    mutationFn: (remarks?: string) => living.workOrder.verify(id, remarks),
+    mutationFn: (input: { remarks?: string; actualLabourCost?: number; actualMaterialCost?: number }) =>
+      living.workOrder.verify(id, input.remarks, {
+        actualLabourCost: input.actualLabourCost,
+        actualMaterialCost: input.actualMaterialCost,
+      }),
+    onSuccess: invalidate,
+  });
+  const setActualCost = useMutation({
+    mutationFn: (input: { actualLabourCost: number | null; actualMaterialCost: number | null }) =>
+      living.workOrder.setActualCost(id, input),
     onSuccess: invalidate,
   });
   const approve = useMutation({
@@ -53,5 +62,5 @@ export function useWorkOrderMutations(id: string) {
   // Attachments live in the shared AttachmentPanel — it owns the signed-URL
   // flow, the byte PUT and the BEFORE/AFTER tag for work orders and tickets
   // alike, so there is nothing left for this hook to duplicate.
-  return { changeStatus, assign, verify, approve, reject, addUpdate };
+  return { changeStatus, assign, verify, setActualCost, approve, reject, addUpdate };
 }

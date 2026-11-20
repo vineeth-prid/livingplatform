@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { detectImageKind, type ImageKind } from './image-signature';
 import type { AppConfig } from '../../config/configuration';
 import {
   STORAGE_PROVIDER,
@@ -112,6 +113,29 @@ export class StorageService {
           : 'That type of file cannot be uploaded',
       );
     }
+  }
+
+  /**
+   * Stricter check for an uploaded IMAGE (a logo): under `maxBytes` and really a
+   * PNG, JPEG or WebP by its file signature — not just by the type the upload
+   * claimed. A file that fails is deleted so it cannot linger as an orphan.
+   * Skipped where the provider stores no bytes (the local stub).
+   */
+  async assertImage(key: string, maxBytes: number): Promise<ImageKind | null> {
+    if (!this.provider.stat) return null;
+    const reject = async (message: string): Promise<never> => {
+      await this.provider.delete(key).catch(() => undefined);
+      throw new BadRequestException(message);
+    };
+    const stat = await this.provider.stat(key);
+    if (!stat) throw new BadRequestException('The file was not uploaded — try again');
+    if (stat.size > maxBytes) return reject(`The image must be ${Math.round(maxBytes / 1048576)} MB or smaller`);
+
+    const { url } = await this.provider.getSignedDownloadUrl(key);
+    const res = await fetch(url, { headers: { Range: 'bytes=0-15' } });
+    const kind = res.ok ? detectImageKind(new Uint8Array(await res.arrayBuffer())) : null;
+    if (!kind) return reject('Upload a PNG, JPG or WebP image');
+    return kind;
   }
 
   /** Internal readiness probe — delegates to the provider (no-op if unsupported). */

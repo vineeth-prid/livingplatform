@@ -476,6 +476,11 @@ function GenerateDialog({
                 No rate configured for: {preview.missingRates.join(', ')}
               </p>
             )}
+            {(preview.missingArea?.length ?? 0) > 0 && (
+              <p className="mt-1 text-warning-fg">
+                No built-up area, so not billed per sq ft: {preview.missingArea!.join(', ')}
+              </p>
+            )}
           </div>
         )}
 

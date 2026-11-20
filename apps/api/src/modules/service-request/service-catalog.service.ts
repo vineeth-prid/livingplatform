@@ -4,11 +4,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 
 import { Prisma, ServiceRequestStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { CommunityModulesService } from '../settings/community-modules.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
 import {
@@ -28,7 +30,29 @@ export class ServiceCatalogService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly access: CommunityAccessService,
+    @Optional() private readonly modules?: CommunityModulesService,
   ) {}
+
+  /**
+   * Catalogue changes belong to the Services section: while Services is switched
+   * off they are refused, and every service keeps its own ON/OFF exactly as it
+   * was. Platform admins editing the shared catalogue are not affected.
+   */
+  private async assertServicesOn(): Promise<void> {
+    const tenantId = this.tenant.tenantId;
+    if (this.tenant.isPlatform || !this.modules || !tenantId) return;
+    const communities = await this.prisma.community.findMany({
+      where: { tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (communities.length === 0) return;
+    const on = await Promise.all(communities.map((c) => this.modules!.isEnabled(c.id, 'services')));
+    if (!on.some(Boolean)) {
+      throw new BadRequestException(
+        'Services are turned off for this community — turn them on in Settings to change the catalogue',
+      );
+    }
+  }
 
   /**
    * The catalog as THIS tenant sees it.
@@ -46,6 +70,11 @@ export class ServiceCatalogService {
     const tenantId = query.communityId
       ? (await this.access.assert(query.communityId)).tenantId
       : this.tenant.tenantId;
+    // Residents browse active services for their community. With the Services
+    // section switched off there is nothing to offer them.
+    if (query.communityId && query.activeOnly && this.modules && !(await this.modules.isEnabled(query.communityId, 'services'))) {
+      return [];
+    }
     const scope = this.tenant.isPlatform && !query.communityId
       ? []
       : [{ OR: [{ tenantId: null }, { tenantId }] }];
@@ -117,6 +146,7 @@ export class ServiceCatalogService {
    * untouched. Nothing is lost, and no report develops a hole.
    */
   async setStatus(id: string, isActive: boolean) {
+    await this.assertServicesOn();
     const service = await this.prisma.service.findFirst({
       where: { id, deletedAt: null },
     });
@@ -164,6 +194,7 @@ export class ServiceCatalogService {
   }
 
   async create(dto: CreateServiceDto) {
+    await this.assertServicesOn();
     const tenantId = this.tenant.isPlatform
       ? (dto.tenantId ?? null)
       : this.tenant.tenantId;
@@ -218,6 +249,7 @@ export class ServiceCatalogService {
    * the row they were booked against.
    */
   async update(id: string, dto: UpdateServiceDto) {
+    await this.assertServicesOn();
     const service = await this.prisma.service.findFirst({ where: { id, deletedAt: null } });
     if (!service) throw new NotFoundException('Service not found');
 
@@ -301,6 +333,7 @@ export class ServiceCatalogService {
     id: string,
     variants: { id?: string; name: string; price: number; durationMinutes?: number | null }[],
   ) {
+    await this.assertServicesOn();
     await this.load(id);
 
     const existing = await this.prisma.serviceVariant.findMany({
@@ -350,6 +383,7 @@ export class ServiceCatalogService {
   }
 
   async remove(id: string) {
+    await this.assertServicesOn();
     await this.load(id);
     await this.prisma.service.update({
       where: { id },

@@ -186,6 +186,9 @@ export const PERMISSIONS = {
   BILLING_INVOICE_GENERATE: 'billing:invoice:generate',
   BILLING_INVOICE_UPDATE: 'billing:invoice:update',
   BILLING_DASHBOARD_READ: 'billing:dashboard:read',
+  // Community expense ledger (categories, expenses, work-order costs).
+  EXPENSE_READ: 'expense:read',
+  EXPENSE_MANAGE: 'expense:manage',
 
   // Payments (transaction history + initiating a checkout).
   PAYMENT_READ: 'payment:read',
@@ -422,6 +425,8 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.PAYMENT_READ,
       P.PAYMENT_CREATE,
       P.PAYMENT_REFUND,
+      P.EXPENSE_READ,
+      P.EXPENSE_MANAGE,
       // Notification routing & message templates for its communities.
       P.NOTIFICATION_PREFERENCE_READ,
       P.NOTIFICATION_PREFERENCE_UPDATE,
@@ -536,6 +541,8 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.BILLING_INVOICE_GENERATE,
       P.BILLING_INVOICE_UPDATE,
       P.BILLING_DASHBOARD_READ,
+      // Sees community spending; recording it stays with the Association Admin.
+      P.EXPENSE_READ,
       P.PAYMENT_READ,
       P.NOTIFICATION_PREFERENCE_READ,
       P.NOTIFICATION_TEMPLATE_READ,

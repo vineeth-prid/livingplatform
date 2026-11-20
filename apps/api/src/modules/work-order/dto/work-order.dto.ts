@@ -112,6 +112,21 @@ export class AssignWorkOrderDto {
 export class VerifyWorkOrderDto {
   @ApiPropertyOptional({ example: 'Checked on site — fittings working, area clean.' })
   @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
+
+  @ApiPropertyOptional({ example: 2500, description: 'Actual labour cost incurred — recorded as a community expense' })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) actualLabourCost?: number;
+
+  @ApiPropertyOptional({ example: 800, description: 'Actual material cost incurred' })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) actualMaterialCost?: number;
+}
+
+/** Record or correct the actual cost. Send null (or 0) for both to withdraw it. */
+export class SetActualCostDto {
+  @ApiPropertyOptional({ example: 2500, nullable: true })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) actualLabourCost?: number | null;
+
+  @ApiPropertyOptional({ example: 800, nullable: true })
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) actualMaterialCost?: number | null;
 }
 
 export class ApproveWorkOrderDto {

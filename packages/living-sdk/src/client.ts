@@ -20,6 +20,7 @@ import { PeopleResource } from './resources/people';
 import { PlatformResource } from './resources/platform';
 import { ProfileResource } from './resources/profile';
 import { PushResource } from './resources/push';
+import { ExpensesResource } from './resources/expenses';
 import { ServiceRequestResource } from './resources/service-requests';
 import { TicketResource } from './resources/tickets';
 import { WorkOrderResource } from './resources/work-orders';
@@ -78,6 +79,7 @@ export class LivingClient {
   // Gate Management + Web Push device registration (Sprint 13).
   readonly gate: GateResource;
   readonly push: PushResource;
+  readonly expenses: ExpensesResource;
   readonly profile: ProfileResource;
 
   constructor(config: LivingClientConfig) {
@@ -113,6 +115,7 @@ export class LivingClient {
     this.insights = new InsightsResource(this.http);
     this.gate = new GateResource(this.http);
     this.push = new PushResource(this.http);
+    this.expenses = new ExpensesResource(this.http);
     this.profile = new ProfileResource(this.http);
   }
 

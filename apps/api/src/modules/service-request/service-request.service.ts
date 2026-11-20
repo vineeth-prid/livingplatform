@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Prisma, ServiceRequestStatus } from '@prisma/client';
@@ -18,6 +19,7 @@ import { DomainEventsService } from '../events/domain-events.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunityAccessService } from '../tenancy/community-access.service';
+import { CommunityModulesService } from '../settings/community-modules.service';
 import { participantWhere } from '../tenancy/participant-scope';
 import { TicketService } from '../ticket/ticket.service';
 import { StaffAutoAssignService } from '../staff/staff-auto-assign.service';
@@ -56,6 +58,8 @@ export class ServiceRequestService {
     private readonly events: DomainEventsService,
     private readonly autoAssign: VendorAutoAssignService,
     private readonly staffAutoAssign: StaffAutoAssignService,
+    // Optional so the engine still constructs in unit tests that do not wire settings.
+    @Optional() private readonly modules?: CommunityModulesService,
   ) {}
 
   /**
@@ -70,6 +74,8 @@ export class ServiceRequestService {
     internal?: { packagePurchaseId?: string },
   ) {
     const community = await this.access.assert(communityId);
+    // The Services master switch. Covers package redemptions too (they book here).
+    await this.modules?.assertEnabled(communityId, 'services');
     await this.assertUnitInCommunity(dto.unitId, communityId);
     await this.catalog.assertUsable(dto.serviceId, community.tenantId);
     if (dto.residentId) await this.assertResidentInCommunity(dto.residentId, communityId);

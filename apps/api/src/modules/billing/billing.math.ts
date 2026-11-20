@@ -1,4 +1,4 @@
-import { BillingCycle } from '@prisma/client';
+import { BillingCycle, Prisma } from '@prisma/client';
 
 /**
  * Pure maintenance-billing arithmetic — no Prisma, no Nest, no I/O, so every
@@ -188,4 +188,46 @@ export function receiptNumber(paidAt: Date, sequence: number): string {
 /** Money rounding — two decimals, no float drift. */
 export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/** propertyType of a rate card that applies to every unit type without its own rate. */
+export const ALL_UNIT_TYPES = 'ALL';
+
+const SQM_TO_SQFT = new Prisma.Decimal('10.7639');
+
+/**
+ * A unit's area in square feet, or null when it cannot be billed by area.
+ * Built-up area is the authoritative field; one recorded in square metres is
+ * converted. Missing, zero or negative areas return null so the caller can
+ * name the unit instead of billing it a wrong amount.
+ */
+export function areaInSqft(area: Prisma.Decimal | number | null | undefined, areaUnit?: string | null): Prisma.Decimal | null {
+  if (area === null || area === undefined) return null;
+  const value = new Prisma.Decimal(area);
+  if (!value.isFinite() || value.lte(0)) return null;
+  const unit = (areaUnit ?? 'sqft').toLowerCase().replace(/[\s._]/g, '');
+  return unit === 'sqm' || unit === 'sqmt' || unit === 'm2' ? value.mul(SQM_TO_SQFT).toDecimalPlaces(2) : value;
+}
+
+/**
+ * Per-square-foot charge for one billing cycle: area × rate × months, in
+ * decimal arithmetic and rounded half-up to the paisa ONCE, at the end — so a
+ * quarterly bill is exactly three months of the rate, not three rounded months.
+ */
+export function perSqftAmount(areaSqft: Prisma.Decimal, ratePerSqft: Prisma.Decimal | number, cycle: BillingCycle): number {
+  return areaSqft
+    .mul(new Prisma.Decimal(ratePerSqft))
+    .mul(monthsIn(cycle))
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    .toNumber();
+}
+
+/** The rate card for a unit: its own type's rate in force, else the all-types rate. */
+export function chargeForUnit<T extends { propertyType: string; effectiveFrom: Date; effectiveTo?: Date | null }>(
+  charges: T[],
+  unitType: string | null | undefined,
+  at: Date,
+): T | null {
+  const own = unitType ? chargeInForce(charges.filter((c) => c.propertyType === unitType), at) : null;
+  return own ?? chargeInForce(charges.filter((c) => c.propertyType === ALL_UNIT_TYPES), at);
 }

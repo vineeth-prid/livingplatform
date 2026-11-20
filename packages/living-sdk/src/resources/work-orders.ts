@@ -48,8 +48,13 @@ export class WorkOrderResource {
   assign(id: string, input: { staffId?: string; vendorId?: string; note?: string }): Promise<WorkOrder> {
     return this.http.put(`/work-orders/${id}/assignment`, input);
   }
-  verify(id: string, remarks?: string): Promise<WorkOrder> {
-    return this.http.post(`/work-orders/${id}/verify`, { remarks });
+  /** Verify completed work. An actual cost given here becomes a community expense. */
+  verify(id: string, remarks?: string, actualCost?: { actualLabourCost?: number; actualMaterialCost?: number }): Promise<WorkOrder> {
+    return this.http.post(`/work-orders/${id}/verify`, { remarks, ...(actualCost ?? {}) });
+  }
+  /** Record or correct the actual cost (null for both withdraws it — the expense is reversed). */
+  setActualCost(id: string, input: { actualLabourCost?: number | null; actualMaterialCost?: number | null }): Promise<WorkOrder> {
+    return this.http.put(`/work-orders/${id}/actual-cost`, input);
   }
   remove(id: string): Promise<unknown> {
     return this.http.delete(`/work-orders/${id}`);

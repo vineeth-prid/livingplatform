@@ -6,6 +6,7 @@ export {
 } from './components/card';
 export { Badge, badgeVariants, type BadgeProps } from './components/badge';
 export { Avatar, type AvatarProps } from './components/avatar';
+export { CommunityLogo } from './components/community-logo';
 export { Skeleton } from './components/skeleton';
 export { Spinner } from './components/spinner';
 

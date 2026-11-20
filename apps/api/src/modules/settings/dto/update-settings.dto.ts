@@ -85,6 +85,9 @@ export class UpdateCommunitySettingsDto {
   @ApiPropertyOptional({ description: 'Whether residents can browse and buy Service Packages.' })
   @IsOptional() @IsBoolean() servicePackagesEnabled?: boolean;
 
+  @ApiPropertyOptional({ description: 'Master switch for the whole Services section. Each service keeps its own ON/OFF.' })
+  @IsOptional() @IsBoolean() servicesEnabled?: boolean;
+
   // ── Gate Management (Sprint 13) ──
   @ApiPropertyOptional({
     description:

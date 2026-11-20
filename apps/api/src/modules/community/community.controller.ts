@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -17,7 +18,7 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityService } from './community.service';
 import { CreateCommunityDto } from './dto/create-community.dto';
 import { QueryCommunityDto } from './dto/query-community.dto';
-import { UpdateCommunityDto } from './dto/update-community.dto';
+import { LogoUploadUrlDto, SetLogoDto, UpdateCommunityDto } from './dto/update-community.dto';
 
 @ApiTags('Communities')
 @ApiBearerAuth()
@@ -44,6 +45,27 @@ export class CommunityController {
   @ApiOperation({ summary: 'Get a community with settings and statistics' })
   findOne(@Param('id') id: string) {
     return this.community.findOne(id);
+  }
+
+  @Post(':id/logo/upload-url')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_UPDATE)
+  @ApiOperation({ summary: 'Signed upload for a community logo (PNG/JPG/WebP, max 2 MB)' })
+  logoUploadUrl(@Param('id') id: string, @Body() dto: LogoUploadUrlDto) {
+    return this.community.logoUploadUrl(id, dto.fileName, dto.contentType);
+  }
+
+  @Put(':id/logo')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_UPDATE)
+  @ApiOperation({ summary: 'Use an uploaded image as the community logo (replaces the previous one)' })
+  setLogo(@Param('id') id: string, @Body() dto: SetLogoDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.community.setLogo(id, dto.key, user);
+  }
+
+  @Delete(':id/logo')
+  @RequirePermissions(PERMISSIONS.COMMUNITY_UPDATE)
+  @ApiOperation({ summary: 'Remove the custom logo — the default Living branding shows again' })
+  removeLogo(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.community.removeLogo(id, user);
   }
 
   @Patch(':id')

@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   BillingCycle,
+  ChargeCalculationMethod,
   InvoiceStatus,
   PaymentPurpose,
   PaymentStatus,
@@ -27,11 +28,13 @@ import { PERMISSIONS } from '../rbac/rbac.constants';
 import { CommunityAccessService } from '../tenancy/community-access.service';
 import {
   amountFor,
-  chargeInForce,
+  areaInSqft,
+  chargeForUnit,
   daysOverdue,
   dueDateFor,
   invoiceNumber,
   lateFeeFor,
+  perSqftAmount,
   periodFor,
   receiptNumber,
   round2,
@@ -62,6 +65,9 @@ export interface InvoiceView {
   issueDate: Date;
   dueDate: Date;
   baseAmount: number;
+  /** Per-sq-ft invoices: the area and rate it was billed on (null for fixed rates). */
+  billedAreaSqft: number | null;
+  ratePerSqft: number | null;
   lateFee: number;
   adjustment: number;
   totalAmount: number;
@@ -85,6 +91,8 @@ export interface GenerationResult {
   dryRun: boolean;
   /** Property types with units but no rate card in force — the actionable gap. */
   missingRates: string[];
+  /** Units on a per-sq-ft rate with no built-up area recorded — left unbilled. */
+  missingArea: string[];
 }
 
 /**
@@ -130,6 +138,8 @@ export class InvoiceService {
           id: true,
           unitNumber: true,
           type: true,
+          builtUpArea: true,
+          areaUnit: true,
           residentUnits: {
             where: { status: 'ACTIVE' },
             orderBy: { role: 'asc' },
@@ -162,6 +172,8 @@ export class InvoiceService {
 
     const alreadyBilled = new Set(existing.map((e) => e.unitId));
     const missingRates = new Set<string>();
+    // Per-sq-ft units with no usable built-up area — named, never billed a guess.
+    const missingArea: string[] = [];
     const rows: Prisma.MaintenanceInvoiceCreateManyInput[] = [];
     let skipped = 0;
     let unpriced = 0;
@@ -173,20 +185,26 @@ export class InvoiceService {
         skipped += 1;
         continue;
       }
-      if (!unit.type) {
-        unpriced += 1;
-        continue;
-      }
-      const charge = chargeInForce(
-        charges.filter((c) => c.propertyType === unit.type),
-        period.start,
-      );
+      // Its own type's rate, else an "all unit types" rate (per-sq-ft communities).
+      const charge = chargeForUnit(charges, unit.type, period.start);
       if (!charge) {
         unpriced += 1;
-        missingRates.add(unit.type);
+        if (unit.type) missingRates.add(unit.type);
         continue;
       }
-      const baseAmount = amountFor(
+      let perSqft: { area: Prisma.Decimal; rate: Prisma.Decimal } | null = null;
+      if (charge.calculationMethod === ChargeCalculationMethod.PER_SQFT) {
+        const area = areaInSqft(unit.builtUpArea, unit.areaUnit);
+        if (!area || !charge.ratePerSqft) {
+          unpriced += 1;
+          missingArea.push(unit.unitNumber);
+          continue;
+        }
+        perSqft = { area, rate: new Prisma.Decimal(charge.ratePerSqft) };
+      }
+      const baseAmount = perSqft
+        ? perSqftAmount(perSqft.area, perSqft.rate, dto.cycle)
+        : amountFor(
         {
           monthlyAmount: Number(charge.monthlyAmount),
           quarterlyAmount: charge.quarterlyAmount === null ? null : Number(charge.quarterlyAmount),
@@ -211,6 +229,8 @@ export class InvoiceService {
         dueDate,
         baseAmount,
         totalAmount: baseAmount,
+        billedAreaSqft: perSqft?.area ?? null,
+        ratePerSqft: perSqft?.rate ?? null,
         status: InvoiceStatus.ISSUED,
         createdById: actor.id,
         updatedById: actor.id,
@@ -242,6 +262,7 @@ export class InvoiceService {
       totalBilled,
       dryRun: dto.dryRun ?? false,
       missingRates: [...missingRates].sort(),
+      missingArea: missingArea.sort(),
     };
   }
 
@@ -767,6 +788,8 @@ function toView(
     issueDate: row.issueDate,
     dueDate: row.dueDate,
     baseAmount: Number(row.baseAmount),
+    billedAreaSqft: row.billedAreaSqft === null ? null : Number(row.billedAreaSqft),
+    ratePerSqft: row.ratePerSqft === null ? null : Number(row.ratePerSqft),
     lateFee: Number(row.lateFee),
     adjustment: Number(row.adjustment),
     totalAmount: total,

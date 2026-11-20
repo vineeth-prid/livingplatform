@@ -287,6 +287,8 @@ enum WorkOrderEventType {
   VERIFIED
   CLOSED
   CANCELLED
+  /// Actual cost recorded or corrected (mirrored into the expense ledger).
+  COST_RECORDED
 }
 
 // ── Asset Foundation (Sprint 7) ──────────────────────────────────────────────
@@ -526,6 +528,8 @@ model Community {
   // Payments & Maintenance Billing (Sprint 11)
   paymentConfigs          CommunityPaymentConfig[]
   maintenanceCharges      MaintenanceCharge[]
+  expenseCategories       ExpenseCategory[]
+  expenses                Expense[]
   maintenanceInvoices     MaintenanceInvoice[]
   unitOwnerships          UnitOwnership[]
   payments                Payment[]
@@ -980,6 +984,10 @@ model CommunitySettings {
   maintenanceBillingEnabled Boolean @default(true)
   /// Whether residents can browse and buy Service Packages.
   servicePackagesEnabled    Boolean @default(true)
+  /// Master switch for the whole Services section (catalogue, bookings,
+  /// packages). Independent of each service's own ON/OFF, which is kept as-is
+  /// while this is OFF and applies again when it is turned back ON.
+  servicesEnabled           Boolean @default(true)
 
   // ── Gate Management (Sprint 13) ──
   /// Master switch for the Gate Management module (delivery entries etc.).
@@ -1660,6 +1668,12 @@ model WorkOrder {
   estimatedMaterialCost Decimal? @db.Decimal(14, 2)
   estimatedTotalCost    Decimal? @db.Decimal(14, 2)
 
+  // Actual cost the community incurred — confirmed by a manager, usually at
+  // verification. Only this (never the estimate) becomes a community expense.
+  actualLabourCost   Decimal? @db.Decimal(14, 2)
+  actualMaterialCost Decimal? @db.Decimal(14, 2)
+  actualTotalCost    Decimal? @db.Decimal(14, 2)
+
   /// Optional loose reference to an Asset (scalar id — NO FK, Asset Engine stays
   /// independent; assets are never owned by a work order). Populated by whoever
   /// links the asset; the Asset Engine records a WORK_ORDER_LINKED event.
@@ -2334,6 +2348,24 @@ enum PaymentGatewayMode {
   LIVE
 }
 
+/// How a maintenance charge prices a unit. FIXED is the original behaviour.
+enum ChargeCalculationMethod {
+  FIXED
+  PER_SQFT
+}
+
+/// Where an expense came from. WORK_ORDER rows are kept in step with the work order.
+enum ExpenseSource {
+  MANUAL
+  WORK_ORDER
+}
+
+/// REVERSED keeps the record (financial history) but leaves it out of totals.
+enum ExpenseStatus {
+  ACTIVE
+  REVERSED
+}
+
 enum BillingCycle {
   MONTHLY
   QUARTERLY
@@ -2435,6 +2467,11 @@ model MaintenanceCharge {
   community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   propertyType String
 
+  /// FIXED (default — every existing rate card) bills the amounts below.
+  /// PER_SQFT bills built-up area × ratePerSqft; the amounts below are then 0.
+  calculationMethod ChargeCalculationMethod @default(FIXED)
+  ratePerSqft       Decimal?                @db.Decimal(10, 4)
+
   monthlyAmount   Decimal  @db.Decimal(14, 2)
   quarterlyAmount Decimal? @db.Decimal(14, 2)
   yearlyAmount    Decimal? @db.Decimal(14, 2)
@@ -2488,6 +2525,10 @@ model MaintenanceInvoice {
   dueDate       DateTime
 
   baseAmount  Decimal       @db.Decimal(14, 2)
+  /// Set for per-sq-ft billing: the area and rate frozen at generation, so the
+  /// bill keeps explaining itself after the unit or the rate card changes.
+  billedAreaSqft Decimal?      @db.Decimal(12, 2)
+  ratePerSqft    Decimal?      @db.Decimal(10, 4)
   lateFee     Decimal       @default(0) @db.Decimal(14, 2)
   adjustment  Decimal       @default(0) @db.Decimal(14, 2)
   totalAmount Decimal       @db.Decimal(14, 2)
@@ -3084,4 +3125,70 @@ model TenantCategorySetting {
   @@unique([tenantId, categoryId])
   @@index([tenantId])
   @@map("tenant_category_settings")
+}
+
+// ── Expense Manager ──────────────────────────────────────────────────────────
+
+/// A community's own expense heads (Electricity, Housekeeping, …). Names are
+/// unique per community (case-insensitive, enforced in the service). A category
+/// in use cannot be deleted; an unused one is removed outright.
+model ExpenseCategory {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  /// The category work-order costs land in by default. Created on demand.
+  isSystem    Boolean   @default(false)
+
+  expenses Expense[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
+
+  @@unique([communityId, name])
+  @@index([communityId])
+  @@map("expense_categories")
+}
+
+/// Money the community spent. MANUAL rows are entered by an admin; WORK_ORDER
+/// rows mirror a verified work order's actual cost (one per work order, kept in
+/// step with it, reversed — never deleted — when the cost is withdrawn).
+model Expense {
+  id          String          @id @default(cuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  title           String
+  amount          Decimal  @db.Decimal(14, 2)
+  /// The day the expense was incurred, stored at midday UTC like billing dates.
+  expenseDate     DateTime
+  description     String?
+  payee           String?
+  referenceNumber String?
+  paymentMethod   String?
+  attachmentKey   String?
+  attachmentName  String?
+
+  source      ExpenseSource @default(MANUAL)
+  /// One expense per work order — the unique key is what makes recording idempotent.
+  workOrderId String?       @unique
+
+  status         ExpenseStatus @default(ACTIVE)
+  reversedAt     DateTime?
+  reversalReason String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  @@index([communityId, expenseDate])
+  @@index([categoryId])
+  @@map("expenses")
 }

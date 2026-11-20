@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
-import { CalendarClock, Plus, Trash2 } from 'lucide-react';
-import type { MaintenanceCharge } from '@living/living-sdk';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, CalendarClock, Plus, Trash2 } from 'lucide-react';
+import { ALL_UNIT_TYPES, type ChargeCalculationMethod, type MaintenanceCharge } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
+import { cn } from '@living/utils';
 import {
   Badge, Button, Card, DataTable, EmptyState, Input, LoadingState, PageContainer, PageHeader,
   Sheet, SheetContent, toast, useConfirm, type Column,
@@ -35,9 +37,11 @@ export function MaintenanceConfigPage() {
   );
 
   const rows = charges.data?.items ?? [];
+  // An "all unit types" rate in force covers every type without its own rate.
+  const allTypesRate = rows.some((r) => r.propertyType === ALL_UNIT_TYPES && r.current);
   const unpriced = useMemo(
-    () => (types.data ?? []).filter((t) => !t.configured && t.unitCount > 0),
-    [types.data],
+    () => (allTypesRate ? [] : (types.data ?? []).filter((t) => !t.configured && t.unitCount > 0)),
+    [types.data, allTypesRate],
   );
 
   const columns: Column<MaintenanceCharge>[] = [
@@ -46,25 +50,51 @@ export function MaintenanceConfigPage() {
       header: 'Property type',
       cell: (c) => (
         <div className="min-w-0">
-          <p className="truncate font-medium text-strong">{c.propertyType}</p>
-          {c.current && (
-            <Badge tone="brand" size="sm" dot>
-              In force
-            </Badge>
-          )}
+          <p className="truncate font-medium text-strong">{typeLabel(c.propertyType)}</p>
+          <div className="mt-0.5 flex flex-wrap gap-1">
+            {c.current && (
+              <Badge tone="brand" size="sm" dot>
+                In force
+              </Badge>
+            )}
+            {c.calculationMethod === 'PER_SQFT' && (
+              <Badge tone="neutral" size="sm">
+                Per sq ft
+              </Badge>
+            )}
+          </div>
         </div>
       ),
     },
-    { key: 'monthly', header: 'Monthly', cell: (c) => <Money value={c.monthlyAmount} /> },
+    {
+      key: 'monthly',
+      header: 'Monthly',
+      cell: (c) =>
+        c.calculationMethod === 'PER_SQFT' ? (
+          <span className="text-sm font-medium text-strong">{inr(c.ratePerSqft)} / sq ft</span>
+        ) : (
+          <Money value={c.monthlyAmount} />
+        ),
+    },
     {
       key: 'quarterly',
       header: 'Quarterly',
-      cell: (c) => <Money value={c.quarterlyAmount} fallback={c.monthlyAmount * 3} />,
+      cell: (c) =>
+        c.calculationMethod === 'PER_SQFT' ? (
+          <span className="text-sm text-subtle">Area × rate × 3</span>
+        ) : (
+          <Money value={c.quarterlyAmount} fallback={c.monthlyAmount * 3} />
+        ),
     },
     {
       key: 'yearly',
       header: 'Yearly',
-      cell: (c) => <Money value={c.yearlyAmount} fallback={c.monthlyAmount * 12} />,
+      cell: (c) =>
+        c.calculationMethod === 'PER_SQFT' ? (
+          <span className="text-sm text-subtle">Area × rate × 12</span>
+        ) : (
+          <Money value={c.yearlyAmount} fallback={c.monthlyAmount * 12} />
+        ),
     },
     {
       key: 'late',
@@ -112,7 +142,7 @@ export function MaintenanceConfigPage() {
               onClick={async () => {
                 if (
                   !(await confirm({
-                    title: `Delete the ${c.propertyType} rate?`,
+                    title: `Delete the ${typeLabel(c.propertyType)} rate?`,
                     description: 'Invoices already issued keep the amount they were billed at.',
                     confirmLabel: 'Delete',
                     tone: 'danger',
@@ -136,7 +166,7 @@ export function MaintenanceConfigPage() {
     <PageContainer>
       <PageHeader
         title="Maintenance charges"
-        description="What each property type pays, and from when. Add a rate with a future start date to schedule a revision."
+        description="What each property type pays, and from when: a fixed amount, or a rate per square foot of built-up area. Add a rate with a future start date to schedule a revision."
         actions={
           canManage ? (
             <Button onClick={() => setCreating(true)}>
@@ -193,6 +223,69 @@ export function MaintenanceConfigPage() {
   );
 }
 
+const typeLabel = (t: string) => (t === ALL_UNIT_TYPES ? 'All unit types' : t);
+
+/**
+ * What the rate would bill, from the community's real unit areas — before the
+ * rate is saved. Units with no built-up area are named: they would be skipped.
+ */
+function PerSqftPreview({ communityId, rate, propertyType }: { communityId: string; rate: number; propertyType: string }) {
+  const [debounced, setDebounced] = useState(rate);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(rate), 350);
+    return () => clearTimeout(t);
+  }, [rate]);
+  const type = propertyType && propertyType !== '__custom__' ? propertyType : undefined;
+  const preview = useQuery({
+    queryKey: ['billing', communityId, 'per-sqft-preview', debounced, type],
+    queryFn: () => living.billing.perSqftPreview(communityId, debounced, type),
+    enabled: debounced > 0,
+  });
+
+  if (!(debounced > 0)) return null;
+  if (preview.isLoading) return <p className="mt-3 text-sm text-muted">Working out amounts…</p>;
+  if (!preview.data) return null;
+  const p = preview.data;
+  return (
+    <div className="mt-4 space-y-3 rounded-control border border-border-subtle bg-sunken/40 p-3">
+      <p className="text-sm text-body">
+        <span className="font-medium text-strong">{p.billableCount}</span> of {p.unitCount} units would be billed{' '}
+        <span className="font-medium text-strong">{inr(p.totalMonthly)}</span> a month in total.
+      </p>
+      {p.sample.length > 0 && (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-subtle">
+              <th className="py-1 font-medium">Unit</th>
+              <th className="py-1 text-right font-medium">Built-up area</th>
+              <th className="py-1 text-right font-medium">Monthly</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {p.sample.slice(0, 5).map((u) => (
+              <tr key={u.unitId} className="border-t border-border-subtle">
+                <td className="py-1 text-body">{u.unitNumber}</td>
+                <td className="py-1 text-right text-muted">{u.areaSqft.toLocaleString('en-IN')} sq ft</td>
+                <td className="py-1 text-right font-medium text-strong">{inr(u.monthlyAmount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {p.missingArea.length > 0 && (
+        <p className="flex items-start gap-2 text-sm text-warning-fg">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {p.missingArea.length} unit{p.missingArea.length === 1 ? ' has' : 's have'} no built-up area and would not be billed:{' '}
+            {p.missingArea.slice(0, 12).join(', ')}
+            {p.missingArea.length > 12 ? ` and ${p.missingArea.length - 12} more` : ''}. Add the area on each unit first.
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Money({ value, fallback }: { value: number | null; fallback?: number }) {
   if (value === null || value === 0) {
     return fallback !== undefined ? (
@@ -220,7 +313,9 @@ function ChargeDrawer({
   const editing = !!charge;
   const [propertyType, setPropertyType] = useState(charge?.propertyType ?? '');
   const [customType, setCustomType] = useState('');
-  const [monthly, setMonthly] = useState(charge ? String(charge.monthlyAmount) : '');
+  const [method, setMethod] = useState<ChargeCalculationMethod>(charge?.calculationMethod ?? 'FIXED');
+  const [rate, setRate] = useState(charge?.ratePerSqft ? String(charge.ratePerSqft) : '');
+  const [monthly, setMonthly] = useState(charge && charge.calculationMethod !== 'PER_SQFT' ? String(charge.monthlyAmount) : '');
   const [quarterly, setQuarterly] = useState(charge?.quarterlyAmount ? String(charge.quarterlyAmount) : '');
   const [yearly, setYearly] = useState(charge?.yearlyAmount ? String(charge.yearlyAmount) : '');
   const [lateFee, setLateFee] = useState(charge ? String(charge.lateFeeAmount) : '0');
@@ -239,15 +334,22 @@ function ChargeDrawer({
   );
 
   const resolvedType = propertyType === '__custom__' ? customType.trim() : propertyType;
-  const valid = resolvedType.length > 0 && Number(monthly) > 0 && effectiveFrom.length > 0;
+  const perSqft = method === 'PER_SQFT';
+  const valid =
+    resolvedType.length > 0 && (perSqft ? Number(rate) > 0 : Number(monthly) > 0) && effectiveFrom.length > 0;
 
   async function onSubmit() {
     try {
       await save.mutateAsync({
         propertyType: resolvedType,
-        monthlyAmount: Number(monthly),
-        quarterlyAmount: quarterly ? Number(quarterly) : undefined,
-        yearlyAmount: yearly ? Number(yearly) : undefined,
+        calculationMethod: method,
+        ...(perSqft
+          ? { ratePerSqft: Number(rate) }
+          : {
+              monthlyAmount: Number(monthly),
+              quarterlyAmount: quarterly ? Number(quarterly) : undefined,
+              yearlyAmount: yearly ? Number(yearly) : undefined,
+            }),
         lateFeeAmount: Number(lateFee || 0),
         lateFeePercent: Number(latePercent || 0),
         gracePeriodDays: Number(grace || 0),
@@ -263,14 +365,44 @@ function ChargeDrawer({
   }
 
   const typeOptions = [
+    { value: ALL_UNIT_TYPES, label: 'All unit types (any type without its own rate)' },
     ...propertyTypes.map((t) => ({ value: t, label: t })),
     { value: '__custom__', label: 'Another property type…' },
   ];
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent open={open} title={editing ? `Edit ${charge!.propertyType} rate` : 'Add a maintenance rate'}>
+      <SheetContent open={open} title={editing ? `Edit ${typeLabel(charge!.propertyType)} rate` : 'Add a maintenance rate'}>
         <div className="space-y-6">
+          <FormSection
+            title="How is it calculated?"
+            description="A fixed amount per flat, or a rate per square foot of each unit's built-up area."
+          >
+            <div role="radiogroup" aria-label="Calculation method" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ['FIXED', 'Fixed amount', 'Every unit of this type pays the same amount.'],
+                  ['PER_SQFT', 'Per square foot', 'Each unit pays its built-up area × the rate.'],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={method === value}
+                  onClick={() => setMethod(value)}
+                  className={cn(
+                    'rounded-control border px-3 py-2.5 text-left transition-colors focus-visible:shadow-ring focus-visible:outline-none',
+                    method === value ? 'border-brand bg-tint' : 'border-border-subtle bg-card hover:bg-sunken',
+                  )}
+                >
+                  <span className="block text-sm font-medium text-strong">{label}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{hint}</span>
+                </button>
+              ))}
+            </div>
+          </FormSection>
+
           <FormSection
             title="Property type"
             description="Types come from the units in this community. Pick one, or name a new one."
@@ -295,6 +427,25 @@ function ChargeDrawer({
             </FormGrid>
           </FormSection>
 
+          {perSqft ? (
+            <FormSection
+              title="Rate"
+              description="Monthly charge = built-up area × rate. Quarterly and yearly bills are 3× and 12× that."
+            >
+              <FormGrid>
+                <Input
+                  label="Rate per sq. ft. per month (₹)"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  required
+                />
+              </FormGrid>
+              <PerSqftPreview communityId={communityId} rate={Number(rate)} propertyType={resolvedType} />
+            </FormSection>
+          ) : (
           <FormSection
             title="Amounts"
             description="Quarterly and yearly are optional — leave blank and they derive from the monthly rate (×3 / ×12)."
@@ -326,6 +477,7 @@ function ChargeDrawer({
               />
             </FormGrid>
           </FormSection>
+          )}
 
           <FormSection title="Late payment" description="Charged once the grace period after the due date has passed.">
             <FormGrid>

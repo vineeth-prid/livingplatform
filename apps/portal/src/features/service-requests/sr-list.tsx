@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { qk } from '@living/hooks';
+import { qk, useCommunityFeatures } from '@living/hooks';
 import type { ServiceRequest } from '@living/types';
 
 import { useCommunity } from '../community/community-context';
@@ -13,6 +13,7 @@ import {
 } from '../operations';
 import { SR_KANBAN, SR_STATUSES, SR_TONES, srWorkflow } from './config';
 import { ServiceRequestForm } from './sr-form';
+import { ServicesOffNotice } from '../shared/services-off';
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 
@@ -36,6 +37,7 @@ export function ServiceRequestsListPage() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [view, setView] = useViewMode('service-requests');
+  const servicesOn = useCommunityFeatures(communityId).services;
 
   const list = useListQuery<ServiceRequest>({
     queryKey: qk.serviceRequests(communityId ?? '', 'list'),
@@ -55,9 +57,14 @@ export function ServiceRequestsListPage() {
 
   return (
     <>
+      {!servicesOn && (
+        <div className="mx-auto mb-4 max-w-7xl px-4 pt-6 sm:px-6">
+          <ServicesOffNotice detail="These are past and in-progress requests, kept so open jobs can be followed and closed. No new requests can be made." />
+        </div>
+      )}
       <ListScaffold
         title="Service requests"
-        description="Planned work requested by residents and staff."
+        description={servicesOn ? 'Planned work requested by residents and staff.' : 'History — Services are turned off for this community.'}
         query={list}
         columns={columns}
         rowKey={(r) => r.id}
@@ -69,7 +76,7 @@ export function ServiceRequestsListPage() {
         ]}
         createPermission="service:create"
         createLabel="New request"
-        onCreate={() => setCreating(true)}
+        onCreate={servicesOn ? () => setCreating(true) : undefined}
         headerActions={<ViewToggle view={view} onChange={setView} />}
         renderContent={view === 'kanban' ? (
           <OperationsKanban

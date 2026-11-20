@@ -50,6 +50,7 @@ export {
   type PaymentConfigStatus, type PaymentConfigInput, type CheckoutSession,
   type Payment, type MaintenanceCharge, type MaintenanceInvoice,
   type CollectionSummary, type ResidentDues, type GenerationResult,
+  type ChargeCalculationMethod, type PerSqftPreview, ALL_UNIT_TYPES,
 } from './resources/payments';
 export {
   PackagesResource, InsightsResource,
@@ -74,3 +75,8 @@ export {
   ProfileResource,
   type MyProfile, type UserProfileDocument, type UpdateProfileInput,
 } from './resources/profile';
+export {
+  ExpensesResource,
+  type Expense, type ExpenseCategory, type ExpenseFilters, type ExpenseInput,
+  type ExpensePeriod, type ExpenseSource, type ExpenseStatus, type ExpenseSummary,
+} from './resources/expenses';
