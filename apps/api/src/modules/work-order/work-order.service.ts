@@ -498,6 +498,9 @@ export class WorkOrderService {
     return {
       ...this.present(workOrder),
       assignee: await this.resolveAssignee(workOrder),
+      people: await this.peopleNames([
+        workOrder.requestedById, workOrder.recommendedById, workOrder.approvedById, workOrder.verifiedById,
+      ]),
       updates: workOrder.updates.filter((u) => canSeeInternal || !u.isInternal),
       // Signed, not public: the bucket is private, so a public URL 403s and the
       // attachment appears broken in the portal.
@@ -508,6 +511,32 @@ export class WorkOrderService {
         })),
       ),
     };
+  }
+
+  /**
+   * Display names for the people recorded on a work order (requested,
+   * recommended, approved, verified), keyed by the stored id. Automatic steps
+   * are stored as "system:<job>" and read back as plain words, so the screen
+   * never shows a raw id.
+   */
+  private async peopleNames(ids: (string | null)[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    const userIds: string[] = [];
+    for (const id of ids) {
+      if (!id || out[id]) continue;
+      if (id.startsWith('system:')) {
+        const job = id.slice('system:'.length).replace(/-/g, ' ');
+        out[id] = `Automatic (${job})`;
+      } else userIds.push(id);
+    }
+    if (userIds.length) {
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      for (const u of users) out[u.id] = `${u.firstName} ${u.lastName}`.trim();
+    }
+    return out;
   }
 
   async update(id: string, dto: UpdateWorkOrderDto, actor: AuthenticatedUser) {

@@ -14,6 +14,12 @@ import { opt, RESIDENT_STATUS } from '../master-data/options';
 import { BulkUploadDrawer } from '../shared/bulk-upload';
 import { ResidentForm } from './resident-form';
 
+/** Unit numbers the resident owns (from the list API's ownedUnits). */
+function ownedUnitNumbers(r: Resident): string[] {
+  const owned = (r as Resident & { ownedUnits?: { unit?: { unitNumber: string } | null }[] }).ownedUnits ?? [];
+  return owned.map((o) => o.unit?.unitNumber).filter((n): n is string => !!n);
+}
+
 const columns: ListColumn<Resident>[] = [
   {
     key: 'name', header: 'Resident', sortKey: 'firstName',
@@ -30,9 +36,15 @@ const columns: ListColumn<Resident>[] = [
   { key: 'mobile', header: 'Mobile', cell: (r) => <span className="font-mono text-sm">{r.mobile}</span> },
   {
     key: 'unit', header: 'Unit',
-    cell: (r) => r.unitAssignment?.unit
-      ? <span className="font-mono">{r.unitAssignment.unit.unitNumber}</span>
-      : <span className="text-subtle">—</span>,
+    // Where they live; for an owner who lives elsewhere (a landlord), the units
+    // they own — so an owner is never shown as "not mapped to a unit".
+    cell: (r) => {
+      if (r.unitAssignment?.unit) return <span className="font-mono">{r.unitAssignment.unit.unitNumber}</span>;
+      const owned = ownedUnitNumbers(r);
+      return owned.length
+        ? <span className="font-mono">{owned.join(', ')}</span>
+        : <span className="text-subtle">—</span>;
+    },
   },
   {
     key: 'occupancy', header: 'Occupancy',
@@ -44,8 +56,9 @@ const columns: ListColumn<Resident>[] = [
     */
     cell: (r) => {
       const label = OCCUPANCY_LABEL[r.unitAssignment?.role ?? ''];
-      return label
-        ? <span className="text-sm">{label}</span>
+      if (label) return <span className="text-sm">{label}</span>;
+      return ownedUnitNumbers(r).length
+        ? <span className="text-sm">Owner <span className="text-subtle">· lives elsewhere</span></span>
         : <span className="text-subtle">—</span>;
     },
   },

@@ -100,9 +100,11 @@ export function DetailSection({
 export function Field({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   const empty = value === null || value === undefined || value === '';
   return (
-    <div>
+    // min-w-0 + overflow-wrap: a long value (an id, an email, a slug) wraps inside
+    // its own column instead of running under the one beside it.
+    <div className="min-w-0">
       <dt className="text-2xs font-semibold uppercase tracking-wider text-subtle">{label}</dt>
-      <dd className={`mt-0.5 text-sm text-body ${mono ? 'font-mono' : ''}`} data-numeric={mono ? '' : undefined}>
+      <dd className={`mt-0.5 text-sm text-body [overflow-wrap:anywhere] ${mono ? 'font-mono' : ''}`} data-numeric={mono ? '' : undefined}>
         {empty ? <span className="text-subtle">—</span> : value}
       </dd>
     </div>

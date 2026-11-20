@@ -47,8 +47,13 @@ export function StatCard({
           </span>
         )}
       </div>
-      <div className="flex items-end justify-between gap-3">
-        <span className="font-display text-display-lg leading-none tracking-tight text-strong" data-numeric>
+      <div className="flex min-w-0 items-end justify-between gap-3">
+        {/* Sized to the viewport within limits (cards share a row of four), and
+            allowed to wrap rather than clip: "₹1,00,900.00" must always show whole. */}
+        <span
+          className="min-w-0 font-display text-[length:clamp(1.5rem,1.9vw,2.75rem)] leading-tight tracking-tight text-strong [overflow-wrap:anywhere]"
+          data-numeric
+        >
           {value}
         </span>
         {delta && (

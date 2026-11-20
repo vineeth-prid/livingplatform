@@ -57,6 +57,11 @@ export class TicketService {
     await this.assertUnitInCommunity(dto.unitId, communityId);
     await this.categories.assertUsable(dto.categoryId, community.tenantId);
     if (dto.residentId) await this.assertResidentInCommunity(dto.residentId, communityId);
+    // Staff and managers raise tickets for any unit; a resident only for a unit
+    // they live in or own. Any unit id used to be accepted.
+    if (!actor.permissions.includes(PERMISSIONS.TICKET_UPDATE)) {
+      await this.assertResidentOfUnit(dto.unitId, communityId, actor);
+    }
 
     // A resident raising their own complaint does not send (and must not have
     // to know) their resident id — the app posts unit/category/title/body only.
@@ -624,6 +629,26 @@ export class TicketService {
         ? 'Take a “before” photo of the site before starting work.'
         : 'Take an “after” photo showing the finished work before resolving this.',
     );
+  }
+
+  /**
+   * A resident may raise a complaint for a unit they live in, or one they own —
+   * a landlord can still report a problem with the flat they let out.
+   */
+  private async assertResidentOfUnit(unitId: string, communityId: string, actor: AuthenticatedUser) {
+    const mine = await this.prisma.resident.findFirst({
+      where: {
+        communityId,
+        userId: actor.id,
+        deletedAt: null,
+        OR: [
+          { unitAssignment: { is: { unitId, status: 'ACTIVE' } } },
+          { ownedUnits: { some: { unitId, status: 'ACTIVE', deletedAt: null } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!mine) throw new ForbiddenException('You can only raise a complaint for a unit you live in or own');
   }
 
   /**

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { OwnershipStatus, Prisma, ResidentRole } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
 import { resolveSort } from '../../common/dto/list-query.dto';
@@ -37,6 +37,14 @@ const UNIT_ASSIGNMENT_INCLUDE = {
     },
   },
 } satisfies Prisma.ResidentInclude;
+
+/** Lives in their flat as its owner, or holds an active ownership anywhere. */
+const OWNS_A_UNIT: Prisma.ResidentWhereInput = {
+  OR: [
+    { unitAssignment: { is: { role: ResidentRole.OWNER } } },
+    { ownedUnits: { some: { status: OwnershipStatus.ACTIVE, deletedAt: null } } },
+  ],
+};
 
 @Injectable()
 export class ResidentService {
@@ -189,14 +197,20 @@ export class ResidentService {
 
   async findMany(communityId: string, query: QueryResidentDto): Promise<Paginated<unknown>> {
     await this.access.assert(communityId);
+    // "Owners" means everyone who OWNS a unit — including a landlord who lives
+    // elsewhere — not only owners who live in their flat. Filtering on the
+    // occupancy role alone left every landlord out of the Owners tab.
+    const owners = query.role === 'OWNER';
     const where: Prisma.ResidentWhereInput = {
       communityId,
       deletedAt: null,
       ...(query.status ? { status: query.status } : {}),
-      ...(query.unitId || query.blockId || query.floorId || query.role
+      // In AND, so it cannot collide with the search filter's own OR.
+      ...(owners ? { AND: [OWNS_A_UNIT] } : {}),
+      ...(query.unitId || query.blockId || query.floorId || (query.role && !owners)
         ? {
             unitAssignment: {
-              ...(query.role ? { role: query.role } : {}),
+              ...(query.role && !owners ? { role: query.role } : {}),
               ...(query.unitId ? { unitId: query.unitId } : {}),
               ...(query.blockId || query.floorId
                 ? {
@@ -214,7 +228,14 @@ export class ResidentService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.resident.findMany({
         where,
-        include: UNIT_ASSIGNMENT_INCLUDE,
+        include: {
+          ...UNIT_ASSIGNMENT_INCLUDE,
+          // Units they own, so the register shows a landlord's units too.
+          ownedUnits: {
+            where: { status: OwnershipStatus.ACTIVE, deletedAt: null },
+            select: { unit: { select: { id: true, unitNumber: true } } },
+          },
+        },
         orderBy: resolveSort(query, SORTABLE, 'createdAt'),
         skip: query.skip,
         take: query.take,

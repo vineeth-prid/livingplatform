@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
@@ -36,6 +36,9 @@ export function WorkOrderDetailPage() {
   const w = q.data;
   const { changeStatus, assign, approve, reject } = useWorkOrderMutations(workOrderId);
   const notFound = q.isError && q.error instanceof LivingApiError && q.error.isNotFound;
+  // Names come from the API (`people`); a raw id is never shown.
+  const people = (w as { people?: Record<string, string> } | undefined)?.people ?? {};
+  const personName = (id?: string | null) => (id ? people[id] ?? 'A former user' : null);
 
   const timeline = useQuery({
     queryKey: ['work-order', workOrderId, 'timeline'],
@@ -115,7 +118,7 @@ export function WorkOrderDetailPage() {
                 <FieldGrid cols={2}>
                   <Field label="Unit" value={w.unit?.unitNumber ? <span className="font-mono">{w.unit.unitNumber}</span> : 'Common area'} />
                   <Field label="Origin" value={WO_ORIGIN_LABEL[w.originType] ?? w.originType} />
-                  <Field label="Source reference" value={w.originId ?? (w.originType === 'MANUAL' ? 'Emergency' : null)} mono />
+                  <Field label="Source" value={originLink(w.originType, w.originId)} />
                   <Field label="Requested" value={w.requestedDate ? formatDate(w.requestedDate) : null} />
                   <Field label="Estimated" value={w.estimatedHours != null ? `${w.estimatedHours}h` : null} mono />
                   <Field label="Actual" value={w.actualHours != null ? `${w.actualHours}h` : null} mono />
@@ -125,10 +128,10 @@ export function WorkOrderDetailPage() {
               </DetailSection>
               <DetailSection title="Approval">
                 <FieldGrid cols={2}>
-                  <Field label="Recommended by" value={w.recommendedById ?? null} mono />
-                  <Field label="Approved by" value={w.approvedById ?? null} mono />
+                  <Field label="Recommended by" value={personName(w.recommendedById)} />
+                  <Field label="Approved by" value={personName(w.approvedById)} />
                   <Field label="Approved date" value={w.approvedDate ? formatDate(w.approvedDate) : null} />
-                  <Field label="Requested by" value={w.requestedById ?? null} mono />
+                  <Field label="Requested by" value={personName(w.requestedById)} />
                 </FieldGrid>
                 {w.rejectionReason && (
                   <p className="mt-3 rounded-control border border-danger-border bg-danger-muted px-3 py-2 text-sm text-danger-fg">
@@ -167,5 +170,27 @@ export function WorkOrderDetailPage() {
         </>
       )}
     </DetailShell>
+  );
+}
+
+/** Where the work order came from, as a link to it — never a raw id. */
+function originLink(type: string, id?: string | null) {
+  const to =
+    !id ? null
+    : type === 'TICKET' ? `/tickets/${id}`
+    : type === 'SERVICE_REQUEST' ? `/service-requests/${id}`
+    : type === 'PREVENTIVE_MAINTENANCE' ? `/maintenance/${id}`
+    : type === 'AMC' ? `/amc/${id}`
+    : null;
+  if (!to) return type === 'MANUAL' ? 'Raised directly (emergency)' : null;
+  const label =
+    type === 'TICKET' ? 'Open the complaint'
+    : type === 'SERVICE_REQUEST' ? 'Open the service request'
+    : type === 'PREVENTIVE_MAINTENANCE' ? 'Open the maintenance plan'
+    : 'Open the AMC contract';
+  return (
+    <Link to={to as string} className="text-brand hover:underline">
+      {label} →
+    </Link>
   );
 }

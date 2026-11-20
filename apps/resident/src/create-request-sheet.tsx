@@ -49,7 +49,17 @@ export function CreateRequestSheet({
   const { communityId, community } = useResidentCommunity();
   const qc = useQueryClient();
 
-  const { units, isLoading: unitsLoading } = useMyResident();
+  const { units: homes, ownedUnits, isLoading: unitsLoading } = useMyResident();
+  // Services are booked for the home you live in. A complaint can also be about
+  // a unit you own and let out — a landlord is not "unlinked" from their flat.
+  const units = useMemo(() => {
+    if (mode !== 'complaint') return homes;
+    const seen = new Set(homes.map((u) => u.id));
+    return [
+      ...homes,
+      ...ownedUnits.filter((u) => !seen.has(u.unitId)).map((u) => ({ id: u.unitId, unitNumber: u.unitNumber })),
+    ];
+  }, [mode, homes, ownedUnits]);
   const [variantId, setVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
 
