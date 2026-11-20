@@ -1,5 +1,5 @@
 import { Link, useParams } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CalendarClock, Send } from 'lucide-react';
 import { useState } from 'react';
 import { LivingApiError } from '@living/living-sdk';
@@ -11,6 +11,8 @@ import {
 import type { ServiceRequest, Ticket, TimelineEvent } from '@living/types';
 
 import { living } from '../lib/living';
+import { useResidentCommunity } from '../community';
+import { payForServiceRequest } from '../payments/pay-service';
 import { StatusPill } from '../components';
 
 const eventLabel = (e: TimelineEvent) =>
@@ -25,6 +27,9 @@ interface RequestDetail {
   ticketNumber?: string;
   requestNumber?: string;
   dueDate?: string | null;
+  paymentRequired?: boolean;
+  paidAt?: string | null;
+  totalPrice?: number | string | null;
   comments?: TicketCommentLite[];
   timeline?: TimelineEvent[];
 }
@@ -90,6 +95,10 @@ export function RequestDetailScreen() {
               )}
             </div>
           </div>
+
+          {kind === 'service' && data.paymentRequired && !data.paidAt && data.status === 'REQUESTED' && (
+            <PayNow requestId={id} amount={data.totalPrice} />
+          )}
 
           <Card variant="elevated">
             <p className="whitespace-pre-wrap text-sm text-body">{data.description}</p>
@@ -157,6 +166,39 @@ function Comments({ ticketId, comments }: { ticketId: string; comments: TicketCo
           className="min-h-11 flex-1 resize-none rounded-control border border-border bg-raised px-3 py-2.5 text-sm text-strong outline-none focus-visible:shadow-ring" />
         <Button size="icon" onClick={send} loading={busy} disabled={!body.trim()} aria-label="Send"><Send className="h-4 w-4" /></Button>
       </div>
+    </Card>
+  );
+}
+
+/** A booking awaiting payment — it is assigned to someone only once paid. */
+function PayNow({ requestId, amount }: { requestId: string; amount?: number | string | null }) {
+  const { communityId, community } = useResidentCommunity();
+  const qc = useQueryClient();
+  const [paying, setPaying] = useState(false);
+
+  async function pay() {
+    if (!communityId) return;
+    setPaying(true);
+    try {
+      if (await payForServiceRequest(communityId, requestId, community?.name)) {
+        toast.success("Paid — we're assigning someone now");
+        void qc.invalidateQueries({ queryKey: ['request', 'service', requestId] });
+        void qc.invalidateQueries({ queryKey: ['my', 'service-requests'] });
+      }
+    } catch (err) {
+      toast.error(err instanceof LivingApiError ? err.message : (err as Error).message);
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  return (
+    <Card variant="elevated">
+      <p className="text-sm font-medium text-strong">Awaiting payment</p>
+      <p className="mt-1 text-sm text-muted">Pay to confirm this booking. We assign someone as soon as it is paid.</p>
+      <Button className="mt-3" block loading={paying} onClick={() => void pay()}>
+        Pay{amount != null ? ` ₹${Number(amount).toLocaleString('en-IN')}` : ''}
+      </Button>
     </Card>
   );
 }

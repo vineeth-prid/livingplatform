@@ -71,7 +71,7 @@ export function JobDetailScreen() {
   const pendingWoQ = useQuery({
     queryKey: ['job', kind, id, 'pending-wo', communityId],
     queryFn: () => living.workOrder.list(communityId!, { limit: 20, status: 'PENDING_APPROVAL' }),
-    enabled: !!communityId && kind !== 'work-order',
+    enabled: !!communityId && kind === 'ticket',
   });
   const pendingWo = (pendingWoQ.data?.items ?? []).find(
     (w) => (w as { originId?: string | null }).originId === id,
@@ -162,12 +162,13 @@ export function JobDetailScreen() {
       )}
 
       {/*
-        Raising work off a ticket or request. Not offered on a work order — one
-        does not beget another — hidden once the job is finished, and hidden
+        Raising work off a ticket. Not offered on a work order — one does not
+        beget another — nor on a service request, which is already paid-for work
+        the resident booked; hidden once the job is finished, and hidden
         while a decision is outstanding: a second estimate for one problem gives
         the manager two answers and leaves whichever they skip pending forever.
       */}
-      {kind !== 'work-order' && communityId && !pendingWo && !['COMPLETED', 'CLOSED', 'CANCELLED', 'RESOLVED'].includes(data.status) && (
+      {kind === 'ticket' && communityId && !pendingWo && !['COMPLETED', 'CLOSED', 'CANCELLED', 'RESOLVED'].includes(data.status) && (
         <div className="mt-3 px-4">
           <Button variant="secondary" size="lg" block onClick={() => setRaising(true)}>
             <Wrench className="h-4 w-4" /> Raise a work order
@@ -184,7 +185,7 @@ export function JobDetailScreen() {
           onOpenChange={setRaising}
           communityId={communityId}
           origin={{
-            kind: kind as 'ticket' | 'service-request',
+            kind: 'ticket',
             id,
             title: data.title,
             unitId: data.unitId ?? null,

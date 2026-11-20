@@ -174,6 +174,8 @@ export interface ServiceRequest extends AuditFields {
   actualStart?: ISODate | null; actualEnd?: ISODate | null; completedDate?: ISODate | null;
   ticketId?: ID | null; service?: Pick<Service, 'id' | 'key' | 'name' | 'color'>;
   unit?: Pick<Unit, 'id' | 'unitNumber'>; assignee?: Assignee | null;
+  /** Pay-first booking: unassigned until paid. */
+  totalPrice?: number | string | null; paymentRequired?: boolean; paidAt?: ISODate | null;
 }
 export interface ServiceFeedback {
   id: ID; serviceRequestId: ID; rating: number; comment?: string | null; createdById: ID; createdAt: ISODate;

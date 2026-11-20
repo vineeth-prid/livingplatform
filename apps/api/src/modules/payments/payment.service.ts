@@ -586,17 +586,22 @@ export class PaymentService {
         'serviceRequestId or packagePurchaseId is required for a service payment',
       );
     }
-    if (!dto.amount) throw new BadRequestException('amount is required for a service payment');
     const sr = await this.prisma.serviceRequest.findFirst({
       where: { id: dto.serviceRequestId, communityId, deletedAt: null },
-      select: { id: true, number: true, unitId: true, residentId: true },
+      select: { id: true, number: true, unitId: true, residentId: true, totalPrice: true, paidAt: true },
     });
     if (!sr) throw new NotFoundException('Service request not found');
     if (!isManager && (!sr.residentId || !mine.includes(sr.residentId))) {
       throw new ForbiddenException('You can only pay for your own service requests');
     }
+    if (sr.paidAt) throw new BadRequestException('This service request is already paid');
+    // The price frozen on the request when it was booked — never one the
+    // client names. A manually-priced request (no catalogue price) may still
+    // take a manager's amount.
+    const amount = sr.totalPrice != null ? Number(sr.totalPrice) : isManager ? dto.amount : undefined;
+    if (!amount) throw new BadRequestException('This service request has no price to pay');
     return {
-      amount: dto.amount,
+      amount,
       invoiceId: null,
       serviceRequestId: sr.id,
       unitId: sr.unitId,

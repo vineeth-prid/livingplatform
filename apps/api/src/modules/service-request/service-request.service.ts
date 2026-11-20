@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Prisma, ServiceRequestStatus } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
@@ -12,7 +13,7 @@ import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { myOccupancies } from '../community-ops/resident-access';
 import { DomainEventName } from '../events/domain-events';
-import type { ServiceRequestEvent } from '../events/domain-events';
+import type { PaymentEvent, ServiceRequestEvent } from '../events/domain-events';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PERMISSIONS } from '../rbac/rbac.constants';
 import { PrismaService } from '../prisma/prisma.service';
@@ -73,6 +74,9 @@ export class ServiceRequestService {
     await this.catalog.assertUsable(dto.serviceId, community.tenantId);
     if (dto.residentId) await this.assertResidentInCommunity(dto.residentId, communityId);
 
+    // Only a resident booking for themselves pays up front. Staff raising a
+    // request on someone's behalf settle it however the community does.
+    let selfBooked = false;
     // Same gap as tickets: the resident app posts service/unit/title only, so a
     // resident's own request was stored with residentId NULL — unattributed,
     // and unreachable by any notification addressed to the person who made it.
@@ -92,6 +96,7 @@ export class ServiceRequestService {
         throw new ForbiddenException('You can only request services for the home you live in');
       }
       residentId = home.residentId;
+      selfBooked = true;
     }
 
     // Price the request ONCE, here, and freeze the result onto the row. A later
@@ -115,8 +120,19 @@ export class ServiceRequestService {
       quantity: dto.quantity,
     });
 
+    // Pay first, then assign: a priced booking from the resident app waits,
+    // unassigned, for its payment. Package redemptions are already paid for,
+    // and a community with no service payment account keeps the old
+    // book-and-assign flow rather than stranding every booking.
+    const paymentRequired =
+      selfBooked &&
+      !internal?.packagePurchaseId &&
+      Number(priced.totalPrice ?? 0) > 0 &&
+      (await this.collectsServicePayments(communityId));
+
     const request = await this.prisma.serviceRequest.create({
       data: {
+        paymentRequired,
         communityId,
         unitId: dto.unitId,
         serviceId: dto.serviceId,
@@ -140,6 +156,7 @@ export class ServiceRequestService {
       },
     });
     this.publish(DomainEventName.ServiceRequestCreated, request, actor);
+    if (paymentRequired) return this.present(request);
 
     // Route it to a vendor immediately where one matches. Best-effort: the
     // request is already valid and saved, so a failure here leaves it
@@ -153,6 +170,46 @@ export class ServiceRequestService {
    * community and offering this service. Returns null (never throws) when
    * nothing matches or anything goes wrong.
    */
+  /**
+   * A pay-first booking is assigned the moment its payment settles. Driven by
+   * the `payment.succeeded` event, like package activation, so the payment
+   * engine knows nothing about services. The conditional update makes the
+   * checkout-callback / webhook race harmless: only one of them flips paidAt.
+   */
+  @OnEvent(DomainEventName.PaymentSucceeded, { async: true })
+  async onPaymentSucceeded(event: PaymentEvent): Promise<void> {
+    const id = event.data.serviceRequestId;
+    if (!id) return;
+    try {
+      const { count } = await this.prisma.serviceRequest.updateMany({
+        where: { id, paymentRequired: true, paidAt: null, deletedAt: null },
+        data: { paidAt: new Date() },
+      });
+      if (!count) return;
+      const request = await this.prisma.serviceRequest.findUniqueOrThrow({ where: { id } });
+      if (request.status !== S.REQUESTED) return; // cancelled meanwhile — nothing to route
+      // Not access.assert: a webhook settles with no signed-in caller to check.
+      const community = await this.prisma.community.findUniqueOrThrow({
+        where: { id: request.communityId },
+        select: { tenantId: true },
+      });
+      // The payer is the actor; only id and tenant are read from it.
+      const payer = { id: event.actorId, tenantId: community.tenantId } as AuthenticatedUser;
+      await this.tryAutoAssign(request, community.tenantId, payer);
+    } catch (err) {
+      this.logger.error(`Could not route paid service request ${id}`, err as Error);
+    }
+  }
+
+  /** Whether this community can take service payments online at all. */
+  private async collectsServicePayments(communityId: string): Promise<boolean> {
+    const config = await this.prisma.communityPaymentConfig.findFirst({
+      where: { communityId, purpose: 'SERVICE', enabled: true, deletedAt: null },
+      select: { id: true },
+    });
+    return !!config;
+  }
+
   private async tryAutoAssign(
     request: { id: string; communityId: string; serviceId: string; status: ServiceRequestStatus },
     tenantId: string,
@@ -327,6 +384,9 @@ export class ServiceRequestService {
 
   async assign(id: string, dto: AssignServiceRequestDto, actor: AuthenticatedUser) {
     const request = await this.loadOrThrow(id, actor);
+    if (request.paymentRequired && !request.paidAt) {
+      throw new BadRequestException("This booking is awaiting the resident's payment — it is assigned once paid");
+    }
     const community = await this.access.assert(request.communityId);
 
     const hasStaff = !!dto.staffId;

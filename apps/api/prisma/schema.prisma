@@ -1547,6 +1547,12 @@ model ServiceRequest {
   /// packages feature — and so counting these rows IS the remaining balance.
   packagePurchaseId String?
 
+  /// Pay-first booking: a resident's priced request waits here, unassigned,
+  /// until its payment settles (paidAt). False for package redemptions, free
+  /// services, staff-raised requests and every request made before this rule.
+  paymentRequired Boolean   @default(false)
+  paidAt          DateTime?
+
   // Scheduling — no calendar engine, no recurrence.
   preferredDate     DateTime?
   preferredTimeSlot String?

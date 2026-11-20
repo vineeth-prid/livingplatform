@@ -12,6 +12,7 @@ import { Button, Input, Sheet, SheetContent, toast } from '@living/ui';
 import { useResidentCommunity } from './community';
 import { useMyResident } from './community-ops';
 import { living } from './lib/living';
+import { payForServiceRequest } from './payments/pay-service';
 
 const inr = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
@@ -45,7 +46,7 @@ export function CreateRequestSheet({
   service?: Service;
   onCreated?: () => void;
 }) {
-  const { communityId } = useResidentCommunity();
+  const { communityId, community } = useResidentCommunity();
   const qc = useQueryClient();
 
   const { units, isLoading: unitsLoading } = useMyResident();
@@ -100,14 +101,23 @@ export function CreateRequestSheet({
         await qc.invalidateQueries({ queryKey: ['my', 'tickets'] });
         toast.success('Complaint raised');
       } else if (serviceId) {
-        await living.serviceRequest.create(communityId, {
+        const request = await living.serviceRequest.create(communityId, {
           serviceId, unitId: values.unitId, title: values.title,
           description: values.description, priority: values.priority,
           variantId: variantId || undefined,
           quantity,
         });
+        // Pay first: the booking is only assigned once the payment settles.
+        const paid = request.paymentRequired
+          ? await payForServiceRequest(communityId, request.id, community?.name).catch((err: Error) => {
+              toast.error(err.message);
+              return false;
+            })
+          : true;
         await qc.invalidateQueries({ queryKey: ['my', 'service-requests'] });
-        toast.success('Service requested');
+        if (!request.paymentRequired) toast.success('Service requested');
+        else if (paid) toast.success("Paid — we're assigning someone now");
+        else toast.info('Booking saved, not paid yet — pay from My requests to confirm it');
       }
       onCreated?.();
       onOpenChange(false);
