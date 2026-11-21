@@ -59,7 +59,6 @@ export class BrandingService {
   async manifest(communityId: string, app: BrandApp) {
     const b = await this.get(communityId);
     const primary = typeof b.theme?.primary === 'string' ? b.theme.primary : '#234b39';
-    const start = `/?c=${b.communityId}`;
     const icon = (name: IconName, purpose: 'any' | 'maskable') => ({
       src: `/brand/${b.communityId}/icon-${name}.png?v=${b.version}`,
       sizes: `${ICON_SIZES[name]}x${ICON_SIZES[name]}`,
@@ -67,12 +66,14 @@ export class BrandingService {
       purpose,
     });
     return {
-      // A distinct id per community: installing Skyline's app and another
-      // community's app on one phone gives two apps, each with its own icon.
-      id: start,
+      // The SAME identity as the stock Living manifest ('/'): the app's own
+      // /manifest.webmanifest serves this (nginx, by the living_c cookie), so a
+      // phone that installed Living earlier sees the same app with a new icon
+      // and name — browsers only update an installed app whose id is unchanged.
+      id: '/',
       name: `${b.name} — ${APP_NAMES[app]}`,
       short_name: b.name.slice(0, 12),
-      start_url: start,
+      start_url: '/',
       scope: '/',
       display: 'standalone',
       background_color: '#ffffff',

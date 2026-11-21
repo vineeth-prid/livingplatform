@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // The manifest is per community (nginx reads the living_c cookie), and
+      // manifest requests only carry cookies with crossorigin="use-credentials".
+      useCredentials: true,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         // `id` pins the app identity — without it a start_url change makes the

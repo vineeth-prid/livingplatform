@@ -33,6 +33,16 @@ describe('community theme → CSS tokens', () => {
     expect(css).not.toContain('--text-muted');
   });
 
+  it('colours the side panel with the primary, with readable text on it', () => {
+    const css = themeCss(skyline);
+    const panel = /\[data-sidebar\]\{([^}]*)\}/.exec(css)![1]!;
+    expect(panel).toContain('background-color:#002A44');
+    const text = /--text-strong:(#[0-9a-f]{6})/i.exec(panel)![1]!;
+    const muted = /--text-subtle:(#[0-9a-f]{6})/i.exec(panel)![1]!;
+    expect(contrast(text, '#002A44')).toBeGreaterThanOrEqual(7);
+    expect(contrast(muted, '#002A44')).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('never touches status colours', () => {
     expect(themeCss(skyline)).not.toMatch(/--(success|warning|danger|info)/);
   });

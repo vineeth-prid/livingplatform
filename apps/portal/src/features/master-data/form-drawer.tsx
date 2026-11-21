@@ -80,7 +80,8 @@ export function FormDrawer({
       toast.success('Saved');
       onOpenChange(false);
     } catch (err) {
-      const message = err instanceof LivingApiError ? err.message : 'Could not save';
+      // A form's own check (thrown before any API call) explains itself too.
+      const message = err instanceof LivingApiError || err instanceof Error ? err.message : 'Could not save';
       toast.error(message);
     } finally {
       setSubmitting(false);

@@ -39,6 +39,8 @@ export function Sidebar({
     <nav
       className={cn('flex h-full w-64 flex-col border-r border-border-subtle bg-raised', className)}
       aria-label="Primary"
+      // A community theme colours the panel through this hook (design-system/community-theme).
+      data-sidebar=""
     >
       {header && <div className="px-4 py-5">{header}</div>}
       <div className="flex-1 overflow-y-auto px-3 py-2">

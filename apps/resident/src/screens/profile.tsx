@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   Bell, BellOff, ChevronRight, DoorOpen, LogOut, Moon, Package, Trash2, UserPlus, Users, Wallet,
@@ -153,8 +153,13 @@ function PushToggle() {
   // turned off before this policy) is re-subscribed silently: no prompt,
   // because permission was already granted. A browser-level "Block" is
   // respected (the 'denied' state below); the app never works around it.
+  // Once per visit: a subscribe that fails returns to 'available', and retrying
+  // on every render would spin forever.
+  const tried = useRef(false);
   useEffect(() => {
+    if (tried.current) return;
     if (state === 'available' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      tried.current = true;
       void subscribe();
     }
   }, [state, subscribe]);

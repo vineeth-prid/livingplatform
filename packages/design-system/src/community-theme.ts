@@ -103,6 +103,19 @@ export function themeCss(t: CommunityTheme | null | undefined): string {
   if (light.length + shared.length) css += `html:not([data-theme="dark"]){${[...light, ...shared].join(';')}}`;
   if (dark.length + shared.length) css += `html[data-theme="dark"]{${[...dark, ...shared].join(';')}}`;
   if (t.headingWeight) css += `.font-display,h1,h2,h3{font-weight:${t.headingWeight}}`;
+  if (ok(t.primary)) {
+    // The admin side panel wears the brand colour (light mode). Every colour
+    // token is re-derived inside it from the primary and the text that reads
+    // on it, so its links, hover, active item and switcher stay legible with
+    // no component knowing about the theme.
+    const p = t.primary;
+    const fg = readableOn(p);
+    css += `html:not([data-theme="dark"]) [data-sidebar]{background-color:${p};border-color:${mix(p, fg, 0.12)};`
+      + `--surface-raised:${mix(p, fg, 0.08)};--surface-card:${mix(p, fg, 0.08)};--surface-sunken:${mix(p, fg, 0.12)};`
+      + `--surface-tint:${mix(p, fg, 0.2)};--text-on-tint:${fg};--text-strong:${fg};--text-body:${mix(fg, p, 0.08)};`
+      + `--text-muted:${mix(fg, p, 0.25)};--text-subtle:${mix(fg, p, 0.35)};--border-subtle:${mix(p, fg, 0.16)};`
+      + `--border-default:${mix(p, fg, 0.24)};--brand-primary:${fg};--brand-on-primary:${p}}`;
+  }
   return css;
 }
 

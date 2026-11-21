@@ -31,7 +31,14 @@ export function useCommunityBranding(
     applyCommunityTheme(data.theme as CommunityTheme | null);
     if (!app) return;
     const v = encodeURIComponent(data.version);
-    setLink('manifest', `/brand/${data.communityId}/manifest.webmanifest?app=${app}&v=${v}`);
+    // The server serves /manifest.webmanifest for the community in this cookie,
+    // at the manifest URL an installed app already knows — that is what lets an
+    // existing install pick up the community icon. `?v` makes the browser (and
+    // the service worker's precache) fetch it fresh when the branding changes.
+    document.cookie = `living_c=${data.communityId}; path=/; max-age=31536000; SameSite=Lax; Secure`;
+    setLink('manifest', `/manifest.webmanifest?v=${v}`);
+    // Manifest requests omit cookies unless asked — the server needs living_c.
+    document.querySelector('link[rel="manifest"]')?.setAttribute('crossorigin', 'use-credentials');
     setLink(
       'apple-touch-icon',
       data.logoUrl ? `/brand/${data.communityId}/icon-180.png?v=${v}` : '/apple-touch-icon.png',

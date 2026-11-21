@@ -1,5 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
+import type { CommissionModel, PayoutFrequency } from '@living/living-sdk';
+import { useAuth } from '@living/hooks';
 import type { Vendor } from '@living/types';
+import { toast } from '@living/ui';
 
 import { living } from '../../lib/living';
 import { announceTemporaryPassword } from '../shared/reset-password-button';
@@ -39,6 +42,28 @@ const fields: FieldDef[] = [
   { name: 'remarks', label: 'Remarks', type: 'textarea' },
 ];
 
+/**
+ * Commission terms captured with a NEW vendor (saved as their first terms,
+ * effective today, right after the vendor is created). Later changes are made
+ * on the vendor page, where each change starts on its own date.
+ */
+const COMMISSION_FIELDS: FieldDef[] = [
+  {
+    name: 'commissionModel', label: 'Commission', type: 'select', half: true, required: true,
+    options: [
+      { value: 'PERCENTAGE', label: 'Percentage of service amount' },
+      { value: 'FIXED', label: 'Fixed amount per service' },
+      { value: 'NONE', label: 'No commission' },
+    ],
+  },
+  { name: 'commissionValue', label: 'Commission % or ₹ per service', type: 'number', min: '0', half: true, placeholder: 'e.g. 10' },
+  {
+    name: 'payoutFrequency', label: 'Payout frequency', type: 'select', half: true, required: true,
+    options: [{ value: 'WEEKLY', label: 'Weekly (Mon–Sun)' }, { value: 'MONTHLY', label: 'Monthly' }],
+  },
+];
+const COMMISSION_KEYS = COMMISSION_FIELDS.map((f) => f.name);
+
 export function VendorForm({
   open, onOpenChange, vendor, onSaved,
 }: {
@@ -49,7 +74,9 @@ export function VendorForm({
 }) {
   const qc = useQueryClient();
   const { communityId } = useCommunity();
+  const { hasPermission } = useAuth();
   const editing = !!vendor;
+  const withCommission = !editing && !!communityId && hasPermission('vendor-finance:manage');
 
   return (
     <FormDrawer
@@ -57,10 +84,12 @@ export function VendorForm({
       onOpenChange={onOpenChange}
       title={editing ? 'Edit vendor' : 'Add vendor'}
       description={editing ? undefined : 'A login is created — username is the phone number, with a one-time password shown to you after saving (changed on first sign-in).'}
-      fields={fields}
+      fields={withCommission ? [...fields, ...COMMISSION_FIELDS] : fields}
       submitLabel={editing ? 'Save changes' : 'Add vendor'}
       initial={
-        editing
+        withCommission
+          ? { commissionModel: 'PERCENTAGE', commissionValue: '10', payoutFrequency: 'MONTHLY' }
+          : editing
           ? {
               name: vendor.name, companyName: vendor.companyName ?? '', category: vendor.category,
               serviceCategories: (vendor.serviceCategories ?? []).join(','),
@@ -71,7 +100,17 @@ export function VendorForm({
             }
           : {}
       }
-      onSubmit={async (values) => {
+      onSubmit={async (allValues) => {
+        // Commission is its own record, not a vendor field — split it off
+        // (the vendor API rejects unknown fields) and check it BEFORE creating
+        // anything, so a bad rate never leaves a vendor without terms.
+        const values = Object.fromEntries(Object.entries(allValues).filter(([k]) => !COMMISSION_KEYS.includes(k)));
+        const model = allValues.commissionModel as CommissionModel | undefined;
+        const amount = Number(allValues.commissionValue);
+        if (withCommission && model && model !== 'NONE') {
+          if (!(amount > 0)) throw new Error('Enter the commission % or amount (or choose “No commission”)');
+          if (model === 'PERCENTAGE' && amount > 100) throw new Error('A commission percentage cannot be above 100');
+        }
         const body = {
           ...values,
           serviceCategories: values.serviceCategories
@@ -89,6 +128,20 @@ export function VendorForm({
           ? await living.people.updateVendor(vendor.id, body)
           : await living.people.createVendor(body);
         if (!editing) announceTemporaryPassword(String(values.name ?? 'the vendor'), result);
+        if (withCommission && model) {
+          // The vendor already exists at this point: a failure here must not
+          // throw (a retry would create a second vendor) — say what to do instead.
+          try {
+            await living.vendorFinance.addCommission(communityId!, (result as Vendor).id, {
+              model,
+              payoutFrequency: (allValues.payoutFrequency as PayoutFrequency) ?? 'MONTHLY',
+              effectiveFrom: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()),
+              ...(model === 'PERCENTAGE' ? { rate: amount } : model === 'FIXED' ? { fixedAmount: amount } : {}),
+            });
+          } catch {
+            toast.error('Vendor added, but the commission terms were not saved — set them on the vendor page');
+          }
+        }
         await qc.invalidateQueries({ queryKey: ['vendors'] });
         if (editing) await qc.invalidateQueries({ queryKey: ['vendor', vendor.id] });
         onSaved?.();
