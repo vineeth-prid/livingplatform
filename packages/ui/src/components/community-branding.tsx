@@ -92,7 +92,7 @@ export function BrandMark({
         <img
           src={logoUrl}
           alt={name ? `${name} logo` : 'Community logo'}
-          className="h-16 w-auto max-w-[min(70vw,240px)] object-contain sm:h-20"
+          className="h-20 w-auto max-w-[min(75vw,280px)] object-contain sm:h-24"
           onError={() => setFailed(true)}
         />
       ) : (
