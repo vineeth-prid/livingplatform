@@ -18,13 +18,14 @@ import { ServicesOffNotice } from '../shared/services-off';
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 
 const columns: ListColumn<ServiceRequest>[] = [
-  { key: 'number', header: 'Request', sortKey: 'number', cell: (r) => <span className="font-mono text-sm font-medium text-strong">{r.requestNumber}</span> },
+  { key: 'flat', header: 'Flat', cell: (r) => <span className="font-mono text-sm font-semibold text-strong">{r.unit?.unitNumber ?? '—'}</span> },
+  { key: 'number', header: 'Request', sortKey: 'number', cell: (r) => <span className="font-mono text-sm text-body">{r.requestNumber}</span> },
   {
     key: 'title', header: 'Title',
     cell: (r) => (
       <div className="min-w-0">
         <p className="truncate font-medium text-strong">{r.title}</p>
-        <p className="text-xs text-subtle">{r.service?.name}{r.unit?.unitNumber ? ` · ${r.unit.unitNumber}` : ''}</p>
+        <p className="text-xs text-subtle">{r.service?.name}</p>
       </div>
     ),
   },

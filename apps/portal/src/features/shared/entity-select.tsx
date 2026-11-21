@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { LivingApiError } from '@living/living-sdk';
 import { Button, Input, toast } from '@living/ui';
 import { Plus, X } from 'lucide-react';
@@ -6,7 +6,7 @@ import { Plus, X } from 'lucide-react';
 export interface EntityOption { value: string; label: string }
 
 /**
- * A single-select with a searchable filter and an inline "＋ New" creator — for
+ * A single-select dropdown with an inline "＋ New …" creator — for
  * lists that grow (ticket categories, services, asset categories). The parent
  * owns fetching/creating; this only handles the picking + create UX.
  */
@@ -25,15 +25,9 @@ export function EntitySelect({
   /** Create a new option; return its id to auto-select it. */
   onCreate?: (name: string) => Promise<string>;
 }) {
-  const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
-  }, [options, search]);
 
   const create = async () => {
     if (!onCreate || !newName.trim()) return;
@@ -56,7 +50,7 @@ export function EntitySelect({
         <span>{label}{required && <span className="text-danger-fg"> *</span>}</span>
         {onCreate && (
           <button type="button" onClick={() => setCreating((c) => !c)} className="inline-flex items-center gap-1 text-xs text-brand hover:underline">
-            {creating ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {creating ? 'Cancel' : 'New'}
+            {creating ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {creating ? 'Cancel' : `New ${label.toLowerCase()}`}
           </button>
         )}
       </span>
@@ -68,16 +62,14 @@ export function EntitySelect({
           <Button size="sm" onClick={create} loading={busy} disabled={!newName.trim()}>Add</Button>
         </div>
       ) : (
-        <>
-          {options.length > 8 && (
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="mb-1" />
-          )}
-          <select value={value} onChange={(e) => onChange(e.target.value)}
-            className={`h-11 rounded-control border bg-raised px-3 text-base text-strong outline-none transition-shadow focus-visible:shadow-ring ${error ? 'border-danger-fg' : 'border-border'}`}>
-            <option value="">{loading ? 'Loading…' : placeholder ?? 'Select…'}</option>
-            {filtered.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </>
+        // One control: the dropdown (a native select already jumps to an item as
+        // you type its name). A separate search box beside it read as a second,
+        // competing way to choose.
+        <select value={value} onChange={(e) => onChange(e.target.value)}
+          className={`h-11 rounded-control border bg-raised px-3 text-base text-strong outline-none transition-shadow focus-visible:shadow-ring ${error ? 'border-danger-fg' : 'border-border'}`}>
+          <option value="">{loading ? 'Loading…' : placeholder ?? 'Select…'}</option>
+          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       )}
       {error && <span className="text-sm text-danger-fg">{error}</span>}
     </div>

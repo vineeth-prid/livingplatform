@@ -22,13 +22,15 @@ const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 const STATUSES = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'RESOLVED', 'CLOSED', 'CANCELLED'] as const;
 
 const columns: ListColumn<Ticket>[] = [
-  { key: 'number', header: 'Ticket', sortKey: 'number', cell: (t) => <span className="font-mono text-sm font-medium text-strong">{t.ticketNumber}</span> },
+  // Flat first: staff know a complaint by its flat, not its ticket number.
+  { key: 'flat', header: 'Flat', cell: (t) => <span className="font-mono text-sm font-semibold text-strong">{t.unit?.unitNumber ?? '—'}</span> },
+  { key: 'number', header: 'Ticket', sortKey: 'number', cell: (t) => <span className="font-mono text-sm text-body">{t.ticketNumber}</span> },
   {
     key: 'title', header: 'Title',
     cell: (t) => (
       <div className="min-w-0">
         <p className="truncate font-medium text-strong">{t.title}</p>
-        <p className="text-xs text-subtle">{t.category?.name}{t.unit?.unitNumber ? ` · ${t.unit.unitNumber}` : ''}</p>
+        <p className="text-xs text-subtle">{t.category?.name}</p>
       </div>
     ),
   },

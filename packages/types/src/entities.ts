@@ -343,7 +343,9 @@ export interface AmenityBooking extends AuditFields {
   headCount: number;
   status: BookingStatus; remarks?: string | null;
   amenity?: Pick<Amenity, 'id' | 'name' | 'location'>;
-  resident?: Pick<Resident, 'id' | 'firstName' | 'lastName'>;
+  resident?: Pick<Resident, 'id' | 'firstName' | 'lastName'> & {
+    unitAssignment?: { unit?: Pick<Unit, 'id' | 'unitNumber'> | null } | null;
+  };
 }
 
 export interface Announcement extends AuditFields {

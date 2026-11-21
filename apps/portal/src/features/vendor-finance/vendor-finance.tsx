@@ -42,7 +42,8 @@ function SummaryCards({ communityId, vendorId }: { communityId: string; vendorId
   const s = q.data;
   if (!s) return <LoadingState label="Loading earnings…" />;
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+    // At most 3 a row: lakh-sized amounts need the width (StatCard wraps if still too long).
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <StatCard label="Total service value" value={inr(s.totalServiceValue)} icon={Banknote} />
       <StatCard label="Commission deducted" value={inr(s.totalCommission)} icon={Percent} />
       <StatCard label="Vendor payable" value={inr(s.totalPayable)} icon={HandCoins} />

@@ -61,6 +61,7 @@ export function BookingsPage() {
 
   const columns: ListColumn<AmenityBooking>[] = [
     { key: 'amenity', header: 'Amenity', cell: (b) => <p className="font-medium text-strong">{b.amenity?.name ?? '—'}</p> },
+    { key: 'flat', header: 'Flat', cell: (b) => <span className="font-mono text-sm font-medium text-strong">{b.resident?.unitAssignment?.unit?.unitNumber ?? '—'}</span> },
     { key: 'resident', header: 'Resident', cell: (b) => <span className="text-sm text-body">{residentName(b)}</span> },
     { key: 'date', header: 'Date', sortKey: 'bookingDate', cell: (b) => <span className="text-sm text-body">{formatDate(b.bookingDate)}</span> },
     { key: 'slot', header: 'Slot', cell: (b) => <span className="text-sm text-muted">{time(b.startTime)}–{time(b.endTime)}</span> },

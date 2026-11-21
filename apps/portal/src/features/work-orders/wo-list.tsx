@@ -17,15 +17,13 @@ import { WorkOrderForm } from './wo-form';
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 
 const columns: ListColumn<WorkOrder>[] = [
-  { key: 'number', header: 'Work order', sortKey: 'number', cell: (w) => <span className="font-mono text-sm font-medium text-strong">{w.workOrderNumber}</span> },
+  { key: 'flat', header: 'Flat', cell: (w) => w.unit?.unitNumber
+    ? <span className="font-mono text-sm font-semibold text-strong">{w.unit.unitNumber}</span>
+    : <span className="text-xs text-subtle">Common area</span> },
+  { key: 'number', header: 'Work order', sortKey: 'number', cell: (w) => <span className="font-mono text-sm text-body">{w.workOrderNumber}</span> },
   {
     key: 'title', header: 'Title',
-    cell: (w) => (
-      <div className="min-w-0">
-        <p className="truncate font-medium text-strong">{w.title}</p>
-        <p className="text-xs text-subtle">{w.unit?.unitNumber ? `Unit ${w.unit.unitNumber}` : 'Common area'}</p>
-      </div>
-    ),
+    cell: (w) => <p className="truncate font-medium text-strong">{w.title}</p>,
   },
   {
     key: 'origin', header: 'Origin',

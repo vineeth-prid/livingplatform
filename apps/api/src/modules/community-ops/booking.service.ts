@@ -136,7 +136,13 @@ export class BookingService {
         where,
         include: {
           amenity: { select: { id: true, name: true, location: true } },
-          resident: { select: { id: true, firstName: true, lastName: true } },
+          // The flat, so the desk can find a booking by flat number.
+          resident: {
+            select: {
+              id: true, firstName: true, lastName: true,
+              unitAssignment: { select: { unit: { select: { id: true, unitNumber: true } } } },
+            },
+          },
         },
         orderBy: resolveSort(query, SORTABLE, 'bookingDate'),
         skip: query.skip,
