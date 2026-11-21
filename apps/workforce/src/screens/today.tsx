@@ -1,6 +1,6 @@
 import { AlertTriangle, CalendarClock, CheckCircle2, Flame, PlayCircle } from 'lucide-react';
 import { useAuth } from '@living/hooks';
-import { EmptyState, Skeleton } from '@living/ui';
+import { BrandMark, EmptyState, Skeleton } from '@living/ui';
 
 import { JobCard, ProfileNotLinked, Section } from '../components';
 import { useMyJobs } from '../jobs';
@@ -27,6 +27,7 @@ export function TodayScreen() {
   return (
     <div className="px-4">
       <div className="pb-4 pt-8">
+        <BrandMark logoUrl={community?.logoUrl} name={community?.name} className="mb-4" />
         <p className="text-2xs font-semibold uppercase tracking-wider text-subtle">{community?.name ?? 'Living · Workforce'}</p>
         <h1 className="mt-1 font-display text-h1 leading-tight tracking-tight text-strong">
           {greeting()}{session?.user.firstName ? `, ${session.user.firstName}` : ''}.

@@ -2,15 +2,16 @@ import { Suspense, useEffect, useMemo } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   Activity, BellRing, Boxes, Building2, CalendarCheck, CalendarClock, CreditCard, DoorOpen,
-  FileSignature, FileText, Hammer, HardHat, LayoutDashboard, LifeBuoy, Megaphone, MessageCircle,
+  FileSignature, FileText, Hammer, HandCoins, HardHat, LayoutDashboard, LifeBuoy, Megaphone, MessageCircle,
   Package, Receipt, ReceiptIndianRupee, Server, Settings, ShieldCheck, Sparkles, Store, Tags, TrendingUp, Truck,
   User, UserRound, Users, Wallet, Wrench,
 } from 'lucide-react';
 import { useAuth, useCommunityFeatures } from '@living/hooks';
 import {
   AppShell, DropdownMenuItem, LoadingState, ProfileMenu, ThemeSwitch, WorkspaceSwitcher,
-  useCommandPalette, type NavSection,
+  useCommandPalette, useCommunityBranding, type NavSection,
 } from '@living/ui';
+import { applyCommunityTheme } from '@living/design-system';
 
 import { useCommunity } from '../features/community/community-context';
 import { exitImpersonation, getImpersonation } from '../features/admin/impersonation';
@@ -45,6 +46,7 @@ export const sections: NavSection[] = [
       { label: 'Residents', icon: Users, href: '/residents' },
       { label: 'Staff', icon: HardHat, href: '/staff' },
       { label: 'Vendors', icon: Store, href: '/vendors' },
+      { label: 'Vendor payouts', icon: HandCoins, href: '/vendor-payouts' },
       { label: 'Settings', icon: Settings, href: '/settings' },
     ],
   },
@@ -107,8 +109,10 @@ export function applyModuleToggles(
   navSections: NavSection[],
   features: { maintenanceBilling: boolean; servicePackages: boolean; services: boolean },
   canReadExpenses: boolean,
+  canReadVendorFinance = true,
 ): NavSection[] {
   const hidden = new Set<string>();
+  if (!canReadVendorFinance) hidden.add('/vendor-payouts');
   if (!features.maintenanceBilling) {
     hidden.add('/billing');
     hidden.add('/billing/charges');
@@ -142,10 +146,16 @@ export function DashboardLayout() {
   // association that runs each community, so a Platform Admin never sees them.
   const isPlatform = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const features = useCommunityFeatures(isPlatform ? null : communityId);
+  // The admin portal wears the community's theme; the platform console stays Living.
+  useCommunityBranding(isPlatform ? null : communityId);
+  useEffect(() => {
+    if (isPlatform) applyCommunityTheme(null);
+  }, [isPlatform]);
   const canReadExpenses = hasPermission('expense:read');
+  const canReadVendorFinance = hasPermission('vendor-finance:read');
   const visibleSections = useMemo(
-    () => (isPlatform ? [adminSection] : applyModuleToggles(sections, features, canReadExpenses)),
-    [isPlatform, features, canReadExpenses],
+    () => (isPlatform ? [adminSection] : applyModuleToggles(sections, features, canReadExpenses, canReadVendorFinance)),
+    [isPlatform, features, canReadExpenses, canReadVendorFinance],
   );
 
   // A Platform Admin has no operational dashboard — land them on the executive one.

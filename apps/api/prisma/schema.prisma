@@ -530,6 +530,8 @@ model Community {
   maintenanceCharges      MaintenanceCharge[]
   expenseCategories       ExpenseCategory[]
   expenses                Expense[]
+  vendorCommissionConfigs VendorCommissionConfig[]
+  vendorPayouts           VendorPayout[]
   maintenanceInvoices     MaintenanceInvoice[]
   unitOwnerships          UnitOwnership[]
   payments                Payment[]
@@ -969,6 +971,9 @@ model CommunitySettings {
   // Branding
   primaryColor   String?
   secondaryColor String?
+  /// Community app theme (colours, font, weights) — validated CommunityThemeDto.
+  /// Null = the default Living theme.
+  theme          Json?
 
   // Communication channel toggles
   emailEnabled    Boolean @default(true)
@@ -1248,6 +1253,8 @@ model Vendor {
   metadata          Json?
 
   amcContracts AMCContract[]
+  commissionConfigs VendorCommissionConfig[]
+  payouts           VendorPayout[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1579,6 +1586,8 @@ model ServiceRequest {
   metadata      Json?
 
   feedback ServiceFeedback?
+  /// Set once this request's earnings are on a vendor payout statement.
+  vendorPayoutLine VendorPayoutLine?
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -3191,4 +3200,125 @@ model Expense {
   @@index([communityId, expenseDate])
   @@index([categoryId])
   @@map("expenses")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendor finance — commission, payout statements, payout records
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CommissionModel {
+  PERCENTAGE
+  FIXED
+  NONE
+}
+
+enum PayoutFrequency {
+  WEEKLY
+  MONTHLY
+}
+
+enum VendorPayoutStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+/// A vendor's commission terms in one community. Never edited in place: a
+/// change is a NEW row with its own effectiveFrom, so every past payout can be
+/// explained by the terms that applied when the work was done (audit trail).
+/// serviceId null = the vendor's default for every service; a row with a
+/// serviceId overrides it for that service.
+model VendorCommissionConfig {
+  id              String          @id @default(cuid())
+  communityId     String
+  community       Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  vendorId        String
+  vendor          Vendor          @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  serviceId       String?
+  model           CommissionModel
+  /// Percentage (10 = 10%) — PERCENTAGE only.
+  rate            Decimal?        @db.Decimal(7, 4)
+  /// Fixed amount per service transaction — FIXED only.
+  fixedAmount     Decimal?        @db.Decimal(14, 2)
+  payoutFrequency PayoutFrequency @default(MONTHLY)
+  /// Calendar day (stored 12:00 UTC) from which these terms apply.
+  effectiveFrom   DateTime
+  isActive        Boolean         @default(true)
+
+  createdAt   DateTime @default(now())
+  createdById String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@index([communityId, vendorId])
+  @@map("vendor_commission_configs")
+}
+
+/// One payout statement: a vendor's eligible completed work in one weekly or
+/// monthly period, with the commission retained and the net payable. Marking
+/// it PAID records the transfer (date, reference, who confirmed it); a PAID
+/// payout is immutable.
+model VendorPayout {
+  id          String          @id @default(cuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  vendorId    String
+  vendor      Vendor          @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  /// VPO-YYYYMM-000123, unique per community.
+  number      String
+  frequency   PayoutFrequency
+  periodStart DateTime
+  periodEnd   DateTime
+
+  serviceValue Decimal            @db.Decimal(14, 2)
+  commission   Decimal            @db.Decimal(14, 2)
+  payable      Decimal            @db.Decimal(14, 2)
+  status       VendorPayoutStatus @default(PENDING)
+
+  paidAmount       Decimal?  @db.Decimal(14, 2)
+  paidAt           DateTime?
+  paymentReference String?
+  paymentMethod    String?
+  paidById         String?
+  notes            String?
+  cancelledAt      DateTime?
+  cancelReason     String?
+
+  /// The vendor's own invoice for this period, when recorded.
+  vendorInvoiceNumber String?
+  vendorInvoiceKey    String?
+
+  lines VendorPayoutLine[]
+
+  createdAt   DateTime @default(now())
+  createdById String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@unique([communityId, number])
+  @@index([communityId, vendorId, status])
+  @@index([communityId, periodStart])
+  @@map("vendor_payouts")
+}
+
+/// One completed service request on a payout. serviceRequestId is UNIQUE: a
+/// transaction can sit on at most one live payout, so it can never be paid
+/// twice. Cancelling a PENDING payout deletes its lines, releasing them.
+model VendorPayoutLine {
+  id               String          @id @default(cuid())
+  payoutId         String
+  payout           VendorPayout    @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  serviceRequestId String          @unique
+  serviceRequest   ServiceRequest  @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  completedAt      DateTime
+  /// How the commissionable amount was determined: PAID (net of refunds) or PACKAGE (catalogue price).
+  basis            String
+  serviceValue     Decimal         @db.Decimal(14, 2)
+  commissionModel  CommissionModel
+  commissionRate   Decimal?        @db.Decimal(7, 4)
+  commission       Decimal         @db.Decimal(14, 2)
+  payable          Decimal         @db.Decimal(14, 2)
+
+  @@index([payoutId])
+  @@map("vendor_payout_lines")
 }

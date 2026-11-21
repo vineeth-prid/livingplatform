@@ -8,6 +8,16 @@ import type { HttpClient } from '../http';
 type Query = ListParams & Record<string, unknown>;
 type Body = Record<string, unknown>;
 
+/** A community's public branding. `theme` null = the Living theme. */
+export interface CommunityBranding {
+  communityId: string;
+  name: string;
+  logoUrl: string | null;
+  theme: Record<string, unknown> | null;
+  /** Changes whenever the logo or theme changes. */
+  version: string;
+}
+
 /** Optional modules a community can switch on or off. */
 export interface CommunityFeatures {
   maintenanceBilling: boolean;
@@ -55,6 +65,10 @@ export class CommunityResource {
   }
   remove(id: string): Promise<{ id: string; deleted: boolean }> {
     return this.http.delete(`/communities/${id}`);
+  }
+  /** Public white-label identity (works signed out — used by install links). */
+  branding(id: string): Promise<CommunityBranding> {
+    return this.http.get(`/public/branding/${id}`);
   }
 
   // ── Hierarchy: phases ──

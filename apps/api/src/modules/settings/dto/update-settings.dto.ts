@@ -13,6 +13,24 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+/** Fonts the apps bundle (self-hosted) — a theme can only pick one of these. */
+export const THEME_FONTS = ['geist', 'lexend'] as const;
+const WEIGHTS = [300, 400, 500, 600, 700, 800];
+
+/** A community's app theme. Every field optional; a missing one keeps Living's. */
+export class CommunityThemeDto {
+  @ApiPropertyOptional({ example: '#012B45' }) @IsOptional() @IsHexColor() primary?: string;
+  @ApiPropertyOptional({ example: '#2BB5E8' }) @IsOptional() @IsHexColor() secondary?: string;
+  @ApiPropertyOptional({ example: '#E3262F' }) @IsOptional() @IsHexColor() accent?: string;
+  @ApiPropertyOptional({ example: '#F7F9FB' }) @IsOptional() @IsHexColor() background?: string;
+  @ApiPropertyOptional({ example: '#FFFFFF' }) @IsOptional() @IsHexColor() surface?: string;
+  @ApiPropertyOptional({ example: '#0B1F2C' }) @IsOptional() @IsHexColor() textPrimary?: string;
+  @ApiPropertyOptional({ example: '#5A6B78' }) @IsOptional() @IsHexColor() textSecondary?: string;
+  @ApiPropertyOptional({ enum: THEME_FONTS }) @IsOptional() @IsIn(THEME_FONTS) fontFamily?: (typeof THEME_FONTS)[number];
+  @ApiPropertyOptional({ enum: WEIGHTS }) @IsOptional() @IsIn(WEIGHTS) headingWeight?: number;
+  @ApiPropertyOptional({ enum: WEIGHTS }) @IsOptional() @IsIn(WEIGHTS) bodyWeight?: number;
+}
+
 /** One slide in the resident home hero carousel. */
 export class HomeBannerDto {
   @ApiProperty({ description: 'Stable id — used as the React key and for ordering' })
@@ -68,6 +86,10 @@ export class UpdateCommunitySettingsDto {
   @ApiPropertyOptional({ example: '#B96A43' })
   @IsOptional() @IsString() @IsHexColor()
   secondaryColor?: string;
+
+  @ApiPropertyOptional({ type: CommunityThemeDto, nullable: true, description: 'App theme; null restores the Living theme' })
+  @IsOptional() @ValidateNested() @Type(() => CommunityThemeDto)
+  theme?: CommunityThemeDto | null;
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean() emailEnabled?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() smsEnabled?: boolean;

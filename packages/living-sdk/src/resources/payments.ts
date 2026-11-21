@@ -85,6 +85,27 @@ export interface Payment {
   createdAt: string;
 }
 
+/** Everything a printed receipt shows. `lines` explain `payment.amount`; they never change it. */
+export interface PaymentReceipt {
+  payment: Payment;
+  community: {
+    name: string;
+    logoUrl: string | null;
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    contactEmail?: string | null;
+    contactPhone?: string | null;
+    website?: string | null;
+  } | null;
+  invoice: { invoiceNumber: string; periodStart: string; periodEnd: string; unit?: { unitNumber: string } | null } | null;
+  resident: { firstName?: string | null; lastName?: string | null; mobile?: string | null; email?: string | null } | null;
+  serviceRequest: { displayNumber: string; title: string; unit?: { unitNumber: string } | null } | null;
+  lines: { label: string; detail?: string; amount: number }[];
+}
+
 /** FIXED bills the amounts on the rate card; PER_SQFT bills built-up area × ratePerSqft. */
 export type ChargeCalculationMethod = 'FIXED' | 'PER_SQFT';
 
@@ -225,7 +246,7 @@ export class PaymentsResource {
   get(communityId: string, id: string): Promise<Payment> {
     return this.http.get(`/communities/${communityId}/payments/${id}`);
   }
-  receipt(communityId: string, id: string): Promise<Record<string, unknown>> {
+  receipt(communityId: string, id: string): Promise<PaymentReceipt> {
     return this.http.get(`/communities/${communityId}/payments/${id}/receipt`);
   }
   /**

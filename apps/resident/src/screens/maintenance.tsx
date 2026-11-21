@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, CheckCircle2, Download, Receipt, Wallet } from 'lucide-react';
 import type { MaintenanceInvoice, Payment } from '@living/living-sdk';
 import { useCommunityFeatures } from '@living/hooks';
-import { Badge, Button, Card, Skeleton, toast } from '@living/ui';
+import { Badge, Button, Card, Skeleton, printPaymentReceipt, toast } from '@living/ui';
 
 import { useResidentCommunity } from '../community';
 import { useMyResident } from '../community-ops';
@@ -317,7 +317,7 @@ function PaymentRow({ payment, communityId }: { payment: Payment; communityId: s
       const receipt = await living.payments.receipt(communityId, payment.id);
       // No PDF service on the platform — the receipt is data, and the browser's
       // own print dialog turns it into a PDF the resident can keep.
-      printReceipt(receipt);
+      if (!printPaymentReceipt(receipt)) toast.error('Allow pop-ups to download your receipt');
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -354,42 +354,3 @@ function PaymentRow({ payment, communityId }: { payment: Payment; communityId: s
   );
 }
 
-/** Render the receipt into a print window — the browser saves it as a PDF. */
-function printReceipt(receipt: Record<string, unknown>): void {
-  const payment = receipt.payment as Payment;
-  const community = receipt.community as { name?: string; addressLine1?: string; city?: string } | null;
-  const invoice = receipt.invoice as
-    | { invoiceNumber?: string; periodStart?: string; periodEnd?: string; unit?: { unitNumber?: string } }
-    | null;
-  const resident = receipt.resident as { firstName?: string; lastName?: string; mobile?: string } | null;
-
-  const win = window.open('', '_blank', 'width=480,height=720');
-  if (!win) {
-    toast.error('Allow pop-ups to download your receipt');
-    return;
-  }
-  const row = (label: string, value: string) =>
-    `<tr><td style="padding:6px 0;color:#6b6b6b">${label}</td><td style="padding:6px 0;text-align:right;font-weight:600">${value}</td></tr>`;
-
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Receipt ${payment.receiptNumber ?? ''}</title></head>
-<body style="font-family:Georgia,serif;max-width:420px;margin:32px auto;color:#1c1c1c">
-  <h1 style="margin:0;font-size:22px">${community?.name ?? 'Living'}</h1>
-  <p style="margin:2px 0 20px;color:#6b6b6b;font-size:13px">${[community?.addressLine1, community?.city].filter(Boolean).join(', ')}</p>
-  <h2 style="font-size:16px;border-bottom:1px solid #ddd;padding-bottom:8px">Payment receipt</h2>
-  <table style="width:100%;font-size:14px;border-collapse:collapse">
-    ${row('Receipt no.', payment.receiptNumber ?? '—')}
-    ${row('Date', new Date(payment.paidAt ?? payment.createdAt).toLocaleString())}
-    ${resident ? row('Resident', `${resident.firstName ?? ''} ${resident.lastName ?? ''}`.trim()) : ''}
-    ${invoice?.unit?.unitNumber ? row('Unit', invoice.unit.unitNumber) : ''}
-    ${invoice?.invoiceNumber ? row('Invoice', invoice.invoiceNumber) : ''}
-    ${invoice?.periodStart ? row('Period', `${new Date(invoice.periodStart).toLocaleDateString()} – ${new Date(invoice.periodEnd!).toLocaleDateString()}`) : ''}
-    ${row('Method', payment.method ?? payment.gateway)}
-    ${payment.gatewayPaymentId ? row('Reference', payment.gatewayPaymentId) : ''}
-  </table>
-  <p style="margin-top:24px;font-size:22px;text-align:right"><strong>${inr(payment.amount)}</strong></p>
-  <p style="margin-top:32px;font-size:11px;color:#8a8a8a;text-align:center">Life Happens Here.</p>
-</body></html>`);
-  win.document.close();
-  win.focus();
-  win.print();
-}

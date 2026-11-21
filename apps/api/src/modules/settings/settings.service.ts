@@ -48,6 +48,7 @@ export class SettingsService {
       supportContacts: json(dto.supportContacts),
       primaryColor: dto.primaryColor,
       secondaryColor: dto.secondaryColor,
+      theme: dto.theme === null ? Prisma.DbNull : json(dto.theme),
       emailEnabled: dto.emailEnabled,
       smsEnabled: dto.smsEnabled,
       whatsappEnabled: dto.whatsappEnabled,

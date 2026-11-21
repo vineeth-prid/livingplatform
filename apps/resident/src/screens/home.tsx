@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { CalendarPlus, LayoutGrid, PackageOpen, Plus, UserRound, Wallet } from 'lucide-react';
 import { useAuth, useCommunityFeatures } from '@living/hooks';
 import { formatDate } from '@living/utils';
-import { EmptyState, Skeleton } from '@living/ui';
+import { BrandMark, EmptyState, Skeleton } from '@living/ui';
 
 import { useResidentCommunity } from '../community';
 import { useMyBookings, useMyResident } from '../community-ops';
@@ -52,18 +52,9 @@ export function HomeScreen() {
   return (
     <div className="px-4">
       <header className="pb-4 pt-8">
-        {/* The community's own logo when it has one; the name stays as text
-            either way, so it reads the same with or without branding. */}
-        {community?.logoUrl && (
-          <img
-            src={community.logoUrl}
-            alt={`${community.name} logo`}
-            className="mb-3 h-10 max-w-[160px] object-contain object-left"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        )}
+        {/* The community's logo, centred and prominent (Living's when it has
+            none); the name stays as text either way. */}
+        <BrandMark logoUrl={community?.logoUrl} name={community?.name} className="mb-4" />
         <p className="text-2xs font-semibold uppercase tracking-wider text-subtle">
           {community?.name ?? 'Living'}
         </p>

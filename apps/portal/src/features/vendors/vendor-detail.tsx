@@ -11,6 +11,7 @@ import {
   DetailHeader, DetailSection, DetailShell, Field, FieldGrid, PlaceholderSection, StatusBadge,
 } from '../master-data';
 import { ResetPasswordButton } from '../shared/reset-password-button';
+import { VendorFinancePanel } from '../vendor-finance/vendor-finance';
 import { VendorForm } from './vendor-form';
 
 const catLabel = (c: string) => c.charAt(0) + c.slice(1).toLowerCase().replace(/_/g, ' ');
@@ -104,6 +105,10 @@ export function VendorDetailPage() {
                 </DetailSection>
               )}
             </div>
+          </div>
+
+          <div className="mt-6">
+            <VendorFinancePanel vendorId={v.id} />
           </div>
 
           <VendorForm open={editing} onOpenChange={setEditing} vendor={v} onSaved={() => q.refetch()} />

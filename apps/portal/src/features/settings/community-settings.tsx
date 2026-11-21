@@ -13,6 +13,8 @@ import {
 import { living } from '../../lib/living';
 import { useCommunity } from '../community/community-context';
 import { FormGrid, FullWidth, SelectField, TextAreaField } from '../shared/form-kit';
+import { ThemeCard } from './theme-card';
+import type { CommunityTheme } from '@living/design-system';
 
 interface HomeBanner {
   id: string;
@@ -32,6 +34,8 @@ interface EmergencyContact {
 }
 
 interface SettingsDocument {
+  /** Community app theme; null = Living. */
+  theme?: CommunityTheme | null;
   maintenanceBillingEnabled: boolean;
   servicePackagesEnabled: boolean;
   /** Master switch for the Services section (optional: older documents predate it). */
@@ -88,6 +92,8 @@ export function CommunitySettingsPage() {
       />
 
       <BrandingCard canEdit={hasPermission('community:update')} />
+
+      <ThemeCard communityId={communityId!} theme={settings.data.theme ?? null} canEdit={canEdit} />
 
       <ModuleToggles
         settings={settings.data}

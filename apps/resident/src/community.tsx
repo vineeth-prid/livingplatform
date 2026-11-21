@@ -4,6 +4,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@living/hooks';
 import type { Community } from '@living/types';
+import { installCommunityId, useCommunityBranding } from '@living/ui';
 
 import { living } from './lib/living';
 
@@ -64,6 +65,10 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
     setSelectedId(id);
     window.localStorage.setItem(STORAGE_KEY, id);
   };
+
+  // Theme, manifest and home-screen icon follow the community being viewed;
+  // before sign-in, the one from the install link.
+  useCommunityBranding(community?.id ?? installCommunityId(), { app: 'resident' });
 
   const value = useMemo<CommunityValue>(
     () => ({

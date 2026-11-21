@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@living/utils';
 
-import { drawer, reduce, scrim } from '../motion';
+import { dialogContent, drawer, reduce, scrim } from '../motion';
 
 const MotionOverlay = motion.create(DialogPrimitive.Overlay);
 const MotionContent = motion.create(DialogPrimitive.Content);
@@ -15,9 +15,7 @@ export const SheetClose = DialogPrimitive.Close;
 
 type Side = 'left' | 'right' | 'bottom';
 
-const sidePos: Record<Side, string> = {
-  left: 'inset-y-0 left-0 h-full w-[min(90vw,420px)] border-r rounded-r-xl',
-  right: 'inset-y-0 right-0 h-full w-[min(90vw,420px)] border-l rounded-l-xl',
+const sidePos: Record<'bottom', string> = {
   // `dvh`, not `vh`: on mobile browsers `vh` counts the area behind the URL bar,
   // so 85vh is taller than what the user can actually see and the sheet's
   // buttons end up off-screen.
@@ -28,7 +26,15 @@ const sidePos: Record<Side, string> = {
   bottom: 'inset-x-0 bottom-0 mx-auto w-full max-w-md max-h-[85dvh] border-t rounded-t-2xl',
 };
 
-/** Slide-in panel (drawer). Reuses Radix Dialog for focus trap + a11y. */
+/**
+ * Form panel. Reuses Radix Dialog for focus trap, Escape and a11y.
+ *
+ * `side="bottom"` is the phone apps' bottom sheet. Left/right used to be a
+ * 420px edge drawer — too narrow for the admin forms (fields cramped, inline
+ * popovers cut off at its edge) — and are now a centred modal: ~80vw up to
+ * 1160px, 85dvh tall, with the form's submit row pinned to the bottom
+ * (`.living-modal` in the design system's base.css).
+ */
 export function SheetContent({
   children,
   open,
@@ -45,28 +51,23 @@ export function SheetContent({
   description?: ReactNode;
 }) {
   const reduced = useReducedMotion() ?? false;
-  return (
-    <AnimatePresence>
-      {open && (
-        <DialogPrimitive.Portal forceMount>
-          <MotionOverlay
-            variants={reduce(scrim, reduced)}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="fixed inset-0 z-50 bg-[var(--surface-scrim)] backdrop-blur-sm"
-          />
-          <MotionContent
-            variants={reduce(drawer(side), reduced)}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className={cn(
-              'fixed z-50 flex flex-col border-border-subtle bg-card shadow-floating focus:outline-none',
-              sidePos[side],
-              className,
-            )}
-          >
+  const modal = side !== 'bottom';
+  const panel = (
+    <MotionContent
+      variants={reduce(modal ? dialogContent : drawer(side), reduced)}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className={cn(
+        'flex flex-col border-border-subtle bg-card shadow-floating focus:outline-none',
+        modal
+          ? // Centred by the flex wrapper below, never by translate (see overlay-centring.test).
+            'living-modal pointer-events-auto relative w-full max-h-[85dvh] rounded-xl border md:w-[80vw] md:max-w-[1160px]'
+          : cn('fixed z-50', sidePos.bottom),
+        // Old callers sized the edge drawer with a width; the modal sizes itself.
+        modal ? className?.replace(/(^|\s)w-\[[^\]]*\]/g, '') : className,
+      )}
+    >
             <div className="flex items-start justify-between gap-4 p-6 pb-4">
               <div>
                 {title && (
@@ -101,7 +102,27 @@ export function SheetContent({
             >
               {children}
             </div>
-          </MotionContent>
+    </MotionContent>
+  );
+  return (
+    <AnimatePresence>
+      {open && (
+        <DialogPrimitive.Portal forceMount>
+          <MotionOverlay
+            variants={reduce(scrim, reduced)}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 z-50 bg-[var(--surface-scrim)] backdrop-blur-sm"
+          />
+          {modal ? (
+            // pointer-events-none lets outside clicks reach the overlay, so Radix still closes.
+            <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+              {panel}
+            </div>
+          ) : (
+            panel
+          )}
         </DialogPrimitive.Portal>
       )}
     </AnimatePresence>

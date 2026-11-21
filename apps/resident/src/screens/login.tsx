@@ -2,13 +2,16 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
-import { Button, ForgotPasswordDialog, Input, toast } from '@living/ui';
+import {
+  BrandMark, Button, ForgotPasswordDialog, Input, installCommunityId, toast, useCommunityBranding,
+} from '@living/ui';
 
 
 /** Consumer sign-in — warm, minimal, big touch targets. Residents sign in with
  *  their mobile number; the field still accepts an email for staff/admins. */
 export function LoginScreen() {
   const { login, status } = useAuth();
+  const brand = useCommunityBranding(installCommunityId());
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +44,12 @@ export function LoginScreen() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-between bg-page px-6 py-10">
       <div className="pt-10">
-        <span className="font-display text-3xl text-strong">Living<span className="text-accent">.</span></span>
+        {/* Branded when opened from a community's install link; Living otherwise. */}
+        {brand?.logoUrl ? (
+          <BrandMark logoUrl={brand.logoUrl} name={brand.name} />
+        ) : (
+          <span className="font-display text-3xl text-strong">Living<span className="text-accent">.</span></span>
+        )}
         <h1 className="mt-8 font-display text-display-lg leading-tight tracking-tight text-strong">
           Welcome home.
         </h1>

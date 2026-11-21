@@ -9,7 +9,7 @@ export {
   type StoredTokens,
 } from './token-store';
 export { AuthResource } from './resources/auth';
-export { CommunityResource, type CommunityFeatures } from './resources/community';
+export { CommunityResource, type CommunityBranding, type CommunityFeatures } from './resources/community';
 export {
   PeopleResource,
   type OwnedUnit,
@@ -48,7 +48,7 @@ export {
   type PaymentPurpose, type PaymentGatewayMode, type PaymentStatus,
   type BillingCycle, type InvoiceStatus,
   type PaymentConfigStatus, type PaymentConfigInput, type CheckoutSession,
-  type Payment, type MaintenanceCharge, type MaintenanceInvoice,
+  type Payment, type PaymentReceipt, type MaintenanceCharge, type MaintenanceInvoice,
   type CollectionSummary, type ResidentDues, type GenerationResult,
   type ChargeCalculationMethod, type PerSqftPreview, ALL_UNIT_TYPES,
 } from './resources/payments';
@@ -80,3 +80,9 @@ export {
   type Expense, type ExpenseCategory, type ExpenseFilters, type ExpenseInput,
   type ExpensePeriod, type ExpenseSource, type ExpenseStatus, type ExpenseSummary,
 } from './resources/expenses';
+export {
+  VendorFinanceResource,
+  type CommissionConfig, type CommissionConfigInput, type CommissionModel, type EarningPayoutStatus,
+  type EarningsQuery, type PayoutFrequency, type VendorEarning, type VendorFinanceSummary,
+  type VendorPayout, type VendorPayoutDetail, type VendorPayoutStatus,
+} from './resources/vendor-finance';

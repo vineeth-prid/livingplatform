@@ -21,6 +21,7 @@ import { PlatformResource } from './resources/platform';
 import { ProfileResource } from './resources/profile';
 import { PushResource } from './resources/push';
 import { ExpensesResource } from './resources/expenses';
+import { VendorFinanceResource } from './resources/vendor-finance';
 import { ServiceRequestResource } from './resources/service-requests';
 import { TicketResource } from './resources/tickets';
 import { WorkOrderResource } from './resources/work-orders';
@@ -80,6 +81,7 @@ export class LivingClient {
   readonly gate: GateResource;
   readonly push: PushResource;
   readonly expenses: ExpensesResource;
+  readonly vendorFinance: VendorFinanceResource;
   readonly profile: ProfileResource;
 
   constructor(config: LivingClientConfig) {
@@ -116,6 +118,7 @@ export class LivingClient {
     this.gate = new GateResource(this.http);
     this.push = new PushResource(this.http);
     this.expenses = new ExpensesResource(this.http);
+    this.vendorFinance = new VendorFinanceResource(this.http);
     this.profile = new ProfileResource(this.http);
   }
 

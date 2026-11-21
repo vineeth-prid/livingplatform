@@ -9,8 +9,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Living" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <!-- iOS ignores the manifest icons; it uses this PNG for the home screen. -->
+    <!-- Browser tab: always the Living "L" (community logos never replace it). ?v busts old caches. -->
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any" />
+    <link rel="icon" href="/icon.svg?v=2" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32x32.png?v=2" type="image/png" sizes="32x32" />
+    <!-- iOS ignores the manifest icons; it uses this PNG for the home screen
+         (swapped to the community's icon once its branding loads). -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Living</title>
   </head>

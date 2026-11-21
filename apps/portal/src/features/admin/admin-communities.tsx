@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@living/hooks';
 import { LivingApiError, type ProvisionCommunityResult } from '@living/living-sdk';
 import type { Community } from '@living/types';
 import {
   Badge, Button, Card, EmptyState, LoadingState, PageContainer, PageHeader,
-  PageTransition, SearchInput, toast,
+  PageTransition, Pagination, SearchInput, toast, useConfirm,
 } from '@living/ui';
-import { Building2, Copy, KeyRound, LogIn, Pencil, Plus, Power } from 'lucide-react';
+import { Building2, Copy, KeyRound, LogIn, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 
 import { living } from '../../lib/living';
 import { beginImpersonation, cancelImpersonation } from './impersonation';
@@ -39,11 +39,32 @@ export function AdminCommunitiesPage() {
   const [viewingCreds, setViewingCreds] = useState<Community | null>(null);
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const confirm = useConfirm();
 
+  // Every community, filtered and paged here (10 a page) so tabs and search
+  // cover the whole list, not just the page on screen.
   const { data, isLoading } = useQuery({
-    queryKey: qk.communities({ limit: 100 }),
-    queryFn: () => living.community.list({ limit: 100, sortBy: 'name', sortDir: 'asc' }),
+    queryKey: qk.communities({ limit: 500 }),
+    queryFn: () => living.community.list({ limit: 500, sortBy: 'name', sortDir: 'asc' }),
   });
+
+  const remove = useMutation({
+    mutationFn: (c: Community) => living.community.remove(c.id),
+    onSuccess: (_r, c) => { void qc.invalidateQueries({ queryKey: ['communities'] }); toast.success(`${c.name} deleted`); },
+    onError: (e) => toast.error(e instanceof LivingApiError ? e.message : 'Could not delete the community'),
+  });
+  async function onDelete(c: Community) {
+    const ok = await confirm({
+      title: `Delete ${c.name}?`,
+      description:
+        'The community disappears from the platform and nobody in it — admin, residents, staff or vendors — can open it any more. ' +
+        'Its records are kept (not erased) for audit, but there is no undo button here.',
+      confirmLabel: `Delete ${c.code}`,
+      tone: 'danger',
+    });
+    if (ok) remove.mutate(c);
+  }
 
   const toggleStatus = useMutation({
     mutationFn: (c: Community) =>
@@ -60,6 +81,12 @@ export function AdminCommunitiesPage() {
       q === ''
         ? true
         : [c.name, c.code, c.city, c.state].some((f) => f?.toLowerCase().includes(q)));
+  const PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(communities.length / PER_PAGE));
+  // A new filter, or a deletion that empties the last page, starts again in range.
+  useEffect(() => setPage(1), [tab, q]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const pageRows = communities.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const copy = (text: string) => {
     void navigator.clipboard.writeText(text).then(() => toast.success('Copied'));
@@ -139,7 +166,7 @@ export function AdminCommunitiesPage() {
         ) : (
           <Card variant="elevated" padded={false} className="overflow-hidden">
             <ul className="flex flex-col divide-y divide-border-subtle">
-              {communities.map((c) => (
+              {pageRows.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
                   <button type="button" onClick={() => setEditing(c)}
                     className="flex items-center gap-3 text-left transition-colors hover:text-brand">
@@ -181,10 +208,27 @@ export function AdminCommunitiesPage() {
                     >
                       <LogIn className="h-4 w-4" /> Log in as admin
                     </Button>
+                    <Button
+                      variant="ghost" size="sm"
+                      loading={remove.isPending && remove.variables?.id === c.id}
+                      onClick={() => void onDelete(c)}
+                      aria-label={`Delete ${c.name}`}
+                      title="Delete community"
+                    >
+                      <Trash2 className="h-4 w-4 text-danger-fg" />
+                    </Button>
                   </span>
                 </li>
               ))}
             </ul>
+            {communities.length > PER_PAGE && (
+              <div className="border-t border-border-subtle px-5 pb-3">
+                <Pagination
+                  meta={{ page, limit: PER_PAGE, total: communities.length, totalPages }}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
           </Card>
         )}
 

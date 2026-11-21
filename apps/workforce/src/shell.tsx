@@ -1,13 +1,14 @@
 import { Suspense, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Activity, CalendarCheck, CloudOff, ListChecks, ShieldCheck, User } from 'lucide-react';
+import { Activity, CalendarCheck, CloudOff, ListChecks, ShieldCheck, User, Wallet } from 'lucide-react';
 import { useAuth } from '@living/hooks';
 import { LoadingState, PasswordChangeGate } from '@living/ui';
 import { cn } from '@living/utils';
 
 import { CommunitySwitcher } from './community-switcher';
 import { useOnlineStatus } from './offline';
+import { useWorker } from './worker';
 
 /**
  * `permission` gates the tab. Gate duty belongs to the SECURITY role, so an
@@ -26,6 +27,8 @@ const TABS = [
     permission: 'gate:entry:view',
   },
   { to: '/activity', label: 'Activity', icon: Activity, match: (p: string) => p.startsWith('/activity') },
+  // Vendors only — staff are salaried, so there is nothing for them here.
+  { to: '/earnings', label: 'Earnings', icon: Wallet, match: (p: string) => p.startsWith('/earnings'), vendorOnly: true },
   { to: '/profile', label: 'Profile', icon: User, match: (p: string) => p.startsWith('/profile') },
 ] as const satisfies ReadonlyArray<{
   to: string;
@@ -33,6 +36,7 @@ const TABS = [
   icon: typeof Activity;
   match: (p: string) => boolean;
   permission?: string;
+  vendorOnly?: boolean;
 }>;
 
 /** The mobile field shell: a scrollable page over a fixed bottom tab bar,
@@ -94,7 +98,10 @@ function PageFade({ children }: { children: ReactNode }) {
 
 function BottomNav({ pathname }: { pathname: string }) {
   const { hasPermission } = useAuth();
-  const tabs = TABS.filter((t) => !('permission' in t) || hasPermission(t.permission));
+  const { vendor } = useWorker();
+  const tabs = TABS.filter(
+    (t) => (!('permission' in t) || hasPermission(t.permission)) && (!('vendorOnly' in t) || !!vendor),
+  );
 
   return (
     <nav

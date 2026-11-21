@@ -19,7 +19,6 @@ export interface PushControls {
   state: PushState;
   /** Ask permission and register this device. Resolves to whether it worked. */
   subscribe: () => Promise<boolean>;
-  unsubscribe: () => Promise<void>;
   busy: boolean;
 }
 
@@ -105,24 +104,9 @@ export function usePush(): PushControls {
     }
   }, [refresh]);
 
-  const unsubscribe = useCallback(async () => {
-    setBusy(true);
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (subscription) {
-        // Tell the server first: if the browser unsubscribe succeeds but the
-        // API call fails, we would keep pushing to a dead endpoint.
-        await living.push.unsubscribe(subscription.endpoint).catch(() => undefined);
-        await subscription.unsubscribe();
-      }
-      setState('available');
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  return { state, subscribe, unsubscribe, busy };
+  // No unsubscribe: alerts have no in-app "off" (the browser's own block is
+  // the only way to stop them, and Living respects it — see the 'denied' state).
+  return { state, subscribe, busy };
 }
 
 function supported(): boolean {

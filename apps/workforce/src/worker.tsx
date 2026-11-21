@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@living/hooks';
 import type { Community, Staff, Vendor } from '@living/types';
+import { installCommunityId, useCommunityBranding } from '@living/ui';
 
 import { living } from './lib/living';
 
@@ -124,6 +125,10 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
       isLoading: communityQ.isLoading || staffQ.isLoading || vendorQ.isLoading,
     };
   }, [communityQ.data, communityQ.isLoading, staffQ.data, staffQ.isLoading, vendorQ.data, vendorQ.isLoading, selectedId, uid]);
+
+  // Theme, manifest and home-screen icon follow the community being worked;
+  // before sign-in, the one from the install link.
+  useCommunityBranding(value.communityId ?? installCommunityId(), { app: 'workforce' });
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

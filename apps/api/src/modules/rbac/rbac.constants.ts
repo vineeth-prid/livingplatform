@@ -189,6 +189,9 @@ export const PERMISSIONS = {
   // Community expense ledger (categories, expenses, work-order costs).
   EXPENSE_READ: 'expense:read',
   EXPENSE_MANAGE: 'expense:manage',
+  // Vendor commission terms, payout statements and payout records.
+  VENDOR_FINANCE_READ: 'vendor-finance:read',
+  VENDOR_FINANCE_MANAGE: 'vendor-finance:manage',
 
   // Payments (transaction history + initiating a checkout).
   PAYMENT_READ: 'payment:read',
@@ -427,6 +430,8 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.PAYMENT_REFUND,
       P.EXPENSE_READ,
       P.EXPENSE_MANAGE,
+      P.VENDOR_FINANCE_READ,
+      P.VENDOR_FINANCE_MANAGE,
       // Notification routing & message templates for its communities.
       P.NOTIFICATION_PREFERENCE_READ,
       P.NOTIFICATION_PREFERENCE_UPDATE,
@@ -543,6 +548,8 @@ export const SYSTEM_ROLES: ReadonlyArray<{
       P.BILLING_DASHBOARD_READ,
       // Sees community spending; recording it stays with the Association Admin.
       P.EXPENSE_READ,
+      // Sees vendor earnings and payouts; settling them stays with the Association Admin.
+      P.VENDOR_FINANCE_READ,
       P.PAYMENT_READ,
       P.NOTIFICATION_PREFERENCE_READ,
       P.NOTIFICATION_TEMPLATE_READ,

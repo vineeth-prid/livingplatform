@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   Bell, BellOff, ChevronRight, DoorOpen, LogOut, Moon, Package, Trash2, UserPlus, Users, Wallet,
@@ -146,7 +146,18 @@ export function ProfileScreen() {
  * they would want it says no — which cannot be undone from inside the app.
  */
 function PushToggle() {
-  const { state, subscribe, unsubscribe, busy } = usePush();
+  const { state, subscribe, busy } = usePush();
+
+  // Alerts are always on in Living — there is no in-app "off". A device whose
+  // browser already allows notifications but has no subscription (e.g. it was
+  // turned off before this policy) is re-subscribed silently: no prompt,
+  // because permission was already granted. A browser-level "Block" is
+  // respected (the 'denied' state below); the app never works around it.
+  useEffect(() => {
+    if (state === 'available' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      void subscribe();
+    }
+  }, [state, subscribe]);
 
   if (state === 'loading') return <Skeleton className="h-16 rounded-card" />;
 
@@ -191,14 +202,14 @@ function PushToggle() {
             : 'Get alerted the moment a delivery reaches your gate.'}
         </span>
       </span>
-      <Button
-        size="sm"
-        variant={subscribed ? 'secondary' : 'primary'}
-        loading={busy}
-        onClick={() => void (subscribed ? unsubscribe() : subscribe())}
-      >
-        {subscribed ? 'Turn off' : 'Turn on'}
-      </Button>
+      {subscribed ? (
+        <span className="shrink-0 rounded-full bg-success-bg px-2.5 py-1 text-xs font-medium text-success-fg">On</span>
+      ) : (
+        // The browser's permission prompt needs a tap — this is that tap.
+        <Button size="sm" loading={busy} onClick={() => void subscribe()}>
+          Allow
+        </Button>
+      )}
     </Card>
   );
 }

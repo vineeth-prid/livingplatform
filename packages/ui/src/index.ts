@@ -7,6 +7,7 @@ export {
 export { Badge, badgeVariants, type BadgeProps } from './components/badge';
 export { Avatar, type AvatarProps } from './components/avatar';
 export { CommunityLogo } from './components/community-logo';
+export { BrandMark, installCommunityId, useCommunityBranding } from './components/community-branding';
 export { Skeleton } from './components/skeleton';
 export { Spinner } from './components/spinner';
 
@@ -34,6 +35,11 @@ export { ChartWrapper } from './components/chart-wrapper';
 // ── Search / filters ──
 export { SearchInput, type SearchInputProps } from './components/search-input';
 export { FilterBar, FilterSelect } from './components/filter-bar';
+
+// ── Documents (receipts, statements) ──
+export { money, printDocument, renderDocumentHtml, type PrintableDocument } from './documents/print-document';
+export { paymentReceiptDocument, printPaymentReceipt } from './documents/payment-receipt';
+export { printVendorDocument, vendorDocument, type VendorDocumentKind } from './documents/vendor-documents';
 
 // ── States ──
 export { EmptyState } from './components/empty-state';

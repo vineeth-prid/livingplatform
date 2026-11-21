@@ -98,10 +98,14 @@ export class OpenWaClient {
     url: string,
     events: string[],
     session = this.config.session,
+    secret?: string,
   ): Promise<void> {
+    // With a secret the gateway signs each call (x-webhook-signature), which is
+    // what the platform's webhook endpoint verifies; without it calls are refused.
     await this.request('POST', `/api/sessions/${encodeURIComponent(session)}/webhooks`, {
       url,
       events,
+      ...(secret ? { secret } : {}),
     });
   }
 

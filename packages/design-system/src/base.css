@@ -30,6 +30,17 @@
     color: var(--text-strong);
   }
 
+  /* Form modals (Sheet): the form's last row of actions stays pinned at the
+     bottom while long forms scroll, so Save/Cancel are never off-screen. */
+  .living-modal form > :last-child:has(button[type="submit"]) {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-block: 1rem;
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-subtle, transparent);
+  }
+
   /* Data/money uses tabular mono figures. */
   .font-mono,
   [data-numeric] {

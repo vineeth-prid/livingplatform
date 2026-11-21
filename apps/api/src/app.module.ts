@@ -28,6 +28,8 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { ExpenseModule } from './modules/expense/expense.module';
+import { BrandingModule } from './modules/branding/branding.module';
+import { VendorFinanceModule } from './modules/vendor-finance/vendor-finance.module';
 import { GateModule } from './modules/gate/gate.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -156,6 +158,8 @@ import { WorkOrderModule } from './modules/work-order/work-order.module';
     // Maintenance Billing + Payments (Sprint 11)
     BillingModule,
     ExpenseModule,
+    BrandingModule,
+    VendorFinanceModule,
     PaymentsModule,
 
     // Service Packages (Sprint 12) — merchandising over the Service catalog

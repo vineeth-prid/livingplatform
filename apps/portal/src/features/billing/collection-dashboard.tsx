@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Banknote, FileText, Play, TrendingUp, Wallet } from 'lucide-react';
+import { Banknote, Download, FileText, Play, TrendingUp, Wallet } from 'lucide-react';
 import type { BillingCycle, MaintenanceInvoice } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import {
   Badge, Button, Card, DataTable, Dialog, DialogContent, EmptyState, Input, LoadingState,
-  PageContainer, PageHeader, Pagination, StatCard, toast, type Column,
+  PageContainer, PageHeader, Pagination, StatCard, printPaymentReceipt, toast, type Column,
 } from '@living/ui';
 
 import { living } from '../../lib/living';
@@ -354,6 +354,33 @@ function ResidentsTable() {
   );
 }
 
+/** Re-print the branded receipt for a settled payment. */
+function ReceiptButton({ communityId, paymentId }: { communityId: string; paymentId: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      loading={busy}
+      aria-label="Download receipt"
+      onClick={async () => {
+        setBusy(true);
+        try {
+          if (!printPaymentReceipt(await living.payments.receipt(communityId, paymentId))) {
+            toast.error('Allow pop-ups to download the receipt');
+          }
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Download className="h-4 w-4" /> Receipt
+    </Button>
+  );
+}
+
 function TransactionsTable() {
   const { communityId } = useCommunity();
   const payments = usePaymentsHistory(communityId, { limit: 50, sortBy: 'createdAt', sortDir: 'desc' });
@@ -396,6 +423,11 @@ function TransactionsTable() {
                 {p.status.toLowerCase()}
               </Badge>
             ),
+          },
+          {
+            key: 'download',
+            header: '',
+            cell: (p) => (p.status === 'PAID' ? <ReceiptButton communityId={communityId!} paymentId={p.id} /> : null),
           },
         ]}
       />

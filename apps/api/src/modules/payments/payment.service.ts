@@ -35,7 +35,9 @@ import type {
   RefundPaymentDto,
   VerifyPaymentDto,
 } from './dto/payment.dto';
+import { StorageService } from '../storage/storage.service';
 import { PaymentConfigService } from './payment-config.service';
+import { receiptLines } from './receipt-lines';
 import { RazorpayClient } from './razorpay.client';
 
 const SORTABLE = ['createdAt', 'paidAt', 'amount', 'status'] as const;
@@ -87,6 +89,7 @@ export class PaymentService {
     private readonly modules: CommunityModulesService,
     private readonly config: ConfigService<AppConfig, true>,
     private readonly ownership: OwnershipService,
+    private readonly storage: StorageService,
   ) {}
 
   // ── Checkout ───────────────────────────────────────────────────────────────
@@ -461,10 +464,13 @@ export class PaymentService {
     if (payment.status !== PaymentStatus.PAID) {
       throw new BadRequestException('A receipt is only available for a settled payment');
     }
-    const [community, invoice, resident] = await Promise.all([
+    const [community, invoice, resident, request, purchase] = await Promise.all([
       this.prisma.community.findUnique({
         where: { id: communityId },
-        select: { name: true, addressLine1: true, city: true, contactEmail: true, contactPhone: true },
+        select: {
+          name: true, addressLine1: true, addressLine2: true, city: true, state: true, pincode: true,
+          contactEmail: true, contactPhone: true, website: true, logoKey: true,
+        },
       }),
       payment.invoiceId
         ? this.prisma.maintenanceInvoice.findUnique({
@@ -474,6 +480,12 @@ export class PaymentService {
               periodStart: true,
               periodEnd: true,
               cycle: true,
+              baseAmount: true,
+              billedAreaSqft: true,
+              ratePerSqft: true,
+              lateFee: true,
+              adjustment: true,
+              totalAmount: true,
               unit: { select: { unitNumber: true } },
             },
           })
@@ -484,8 +496,31 @@ export class PaymentService {
             select: { firstName: true, lastName: true, mobile: true, email: true },
           })
         : null,
+      payment.serviceRequestId
+        ? this.prisma.serviceRequest.findUnique({
+            where: { id: payment.serviceRequestId },
+            select: {
+              number: true, title: true, quantity: true, unitPrice: true, totalPrice: true,
+              variant: { select: { name: true } },
+              unit: { select: { unitNumber: true } },
+            },
+          })
+        : null,
+      this.prisma.servicePackagePurchase.findFirst({
+        where: { paymentId: payment.id, communityId },
+        select: { snapshot: true, amount: true },
+      }),
     ]);
-    return { payment, community, invoice, resident };
+    const { logoKey, ...communityView } = community ?? { logoKey: null };
+    return {
+      payment,
+      community: community ? { ...communityView, logoUrl: await this.storage.signedUrl(logoKey) } : null,
+      invoice,
+      resident,
+      serviceRequest: request ? { ...request, displayNumber: `SRQ-${String(request.number).padStart(6, '0')}` } : null,
+      packagePurchase: purchase,
+      lines: receiptLines(invoice, request, purchase, payment.amount),
+    };
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────

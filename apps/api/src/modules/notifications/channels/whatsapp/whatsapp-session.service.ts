@@ -303,12 +303,12 @@ export class WhatsAppSessionService implements OnModuleInit {
    * API on an internal address that no public URL can be guessed from.
    */
   private async registerWebhook(name: string): Promise<void> {
-    const url = this.config.get('whatsapp', { infer: true }).openwa.webhookUrl;
+    const { webhookUrl: url, webhookSecret } = this.config.get('whatsapp', { infer: true }).openwa;
     if (!url) {
       this.logger.log('OPENWA_WEBHOOK_URL is not set — skipping webhook registration');
       return;
     }
-    await this.client().registerWebhook(url, ['message.received', 'session.status'], name);
+    await this.client().registerWebhook(url, ['message.received', 'session.status'], name, webhookSecret || undefined);
   }
 
   /** The live client from the active channel provider (never a second socket). */

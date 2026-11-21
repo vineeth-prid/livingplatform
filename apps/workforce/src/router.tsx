@@ -14,6 +14,7 @@ const JobDetailScreen = named('JobDetailScreen', () => import('./screens/job-det
 const ActivityScreen = named('ActivityScreen', () => import('./screens/activity'));
 const ProfileScreen = named('ProfileScreen', () => import('./screens/profile'));
 const GateScreen = named('GateScreen', () => import('./screens/gate'));
+const EarningsScreen = named('EarningsScreen', () => import('./screens/earnings'));
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -31,6 +32,7 @@ const routeTree = rootRoute.addChildren([
     tab('/jobs/$kind/$id', JobDetailScreen),
     tab('/gate', GateScreen),
     tab('/activity', ActivityScreen),
+    tab('/earnings', EarningsScreen),
     tab('/profile', ProfileScreen),
   ]),
 ]);

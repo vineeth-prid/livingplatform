@@ -4,3 +4,6 @@
    Variable fonts → every weight from one file. */
 @import "@fontsource-variable/geist/index.css";
 @import "@fontsource-variable/geist-mono/index.css";
+/* Lexend: an optional community theme font. @font-face is lazy — the file is
+   only downloaded when a theme actually uses it. */
+@import "@fontsource-variable/lexend/index.css";
