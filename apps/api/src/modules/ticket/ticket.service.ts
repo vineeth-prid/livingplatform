@@ -8,6 +8,7 @@ import {
 import { Prisma, TicketEventType, TicketStatus } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
+import { refNumber } from '../../common/utils/ref-number';
 import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
@@ -554,14 +555,14 @@ export class TicketService {
 
   private searchWhere(search: string): Prisma.TicketWhereInput {
     const contains = { contains: search, mode: 'insensitive' as const };
-    const digits = search.replace(/\D/g, '');
     const or: Prisma.TicketWhereInput[] = [
       { title: contains },
       { unit: { unitNumber: contains } },
       { resident: { OR: [{ firstName: contains }, { lastName: contains }] } },
       { category: { name: contains } },
     ];
-    if (digits) or.push({ number: Number(digits) });
+    const ref = refNumber(search, 'TKT');
+    if (ref !== null) or.push({ number: ref });
     return { OR: or };
   }
 

@@ -9,6 +9,7 @@ import {
 import { Prisma, WorkOrderEventType, WorkOrderStatus } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
+import { refNumber } from '../../common/utils/ref-number';
 import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DomainEventName } from '../events/domain-events';
@@ -815,12 +816,12 @@ export class WorkOrderService {
 
   private searchWhere(search: string): Prisma.WorkOrderWhereInput {
     const contains = { contains: search, mode: 'insensitive' as const };
-    const digits = search.replace(/\D/g, '');
     const or: Prisma.WorkOrderWhereInput[] = [
       { title: contains },
       { unit: { unitNumber: contains } },
     ];
-    if (digits) or.push({ number: Number(digits) });
+    const ref = refNumber(search, 'WO');
+    if (ref !== null) or.push({ number: ref });
     return { OR: or };
   }
 

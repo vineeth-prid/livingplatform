@@ -10,6 +10,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Prisma, ServiceRequestStatus } from '@prisma/client';
 
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
+import { refNumber } from '../../common/utils/ref-number';
 import { resolveSort } from '../../common/dto/list-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { myOccupancies } from '../community-ops/resident-access';
@@ -604,14 +605,14 @@ export class ServiceRequestService {
 
   private searchWhere(search: string): Prisma.ServiceRequestWhereInput {
     const contains = { contains: search, mode: 'insensitive' as const };
-    const digits = search.replace(/\D/g, '');
     const or: Prisma.ServiceRequestWhereInput[] = [
       { title: contains },
       { unit: { unitNumber: contains } },
       { resident: { OR: [{ firstName: contains }, { lastName: contains }] } },
       { service: { name: contains } },
     ];
-    if (digits) or.push({ number: Number(digits) });
+    const ref = refNumber(search, 'SRQ');
+    if (ref !== null) or.push({ number: ref });
     return { OR: or };
   }
 
