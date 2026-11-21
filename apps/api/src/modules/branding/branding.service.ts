@@ -71,7 +71,8 @@ export class BrandingService {
       // phone that installed Living earlier sees the same app with a new icon
       // and name — browsers only update an installed app whose id is unchanged.
       id: '/',
-      name: `${b.name} — ${APP_NAMES[app]}`,
+      // The install prompt and home screen show the community's own name.
+      name: app === 'resident' ? b.name : `${b.name} ${APP_NAMES[app]}`,
       short_name: b.name.slice(0, 12),
       start_url: '/',
       scope: '/',

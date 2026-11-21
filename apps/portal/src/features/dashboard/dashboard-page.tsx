@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, PageContainer } from '@living/ui';
 
 import { useCommunity } from '../community/community-context';
 import {
-  buildActivity, buildAttention, buildMyWork, computeHealth, computeKpis, groupActivity,
+  buildActivity, buildAttention, buildMyWork, computeHealth, computeKpis,
 } from './derive';
 import { useDashboardData } from './queries';
 import { Hero } from './sections/hero';
@@ -39,9 +39,7 @@ export function DashboardPage() {
   const derived = useMemo(() => {
     const kpis = computeKpis({ summary: data.summary, serviceRequests: data.serviceRequests, workOrders: data.workOrders });
     const attention = buildAttention({ tickets: data.tickets, serviceRequests: data.serviceRequests, workOrders: data.workOrders });
-    const activity = groupActivity(
-      buildActivity({ tickets: data.tickets, serviceRequests: data.serviceRequests, workOrders: data.workOrders, residents: data.residents }),
-    );
+    const activity = buildActivity({ tickets: data.tickets, serviceRequests: data.serviceRequests, workOrders: data.workOrders, residents: data.residents });
     const health = computeHealth({
       summary: data.summary, serviceRequests: data.serviceRequests, workOrders: data.workOrders,
       totalUnits: data.community?.statistics?.units, occupiedUnits: data.occupiedUnits,
@@ -86,7 +84,7 @@ export function DashboardPage() {
           <AttentionRequired groups={derived.attention} loading={loading} />
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <RecentActivity buckets={derived.activity} loading={loading} />
+            <RecentActivity events={derived.activity} loading={loading} />
             <div>
               <CommunityHealth health={derived.health} loading={loading} />
               <MyWork work={derived.myWork} loading={loading} />

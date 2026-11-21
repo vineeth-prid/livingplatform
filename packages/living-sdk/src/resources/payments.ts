@@ -69,6 +69,8 @@ export interface Payment {
   invoiceNumber: string | null;
   serviceRequestId: string | null;
   unitId: string | null;
+  /** Flat number — present on list responses. */
+  unitNumber?: string | null;
   residentId: string | null;
   amount: number;
   currency: string;

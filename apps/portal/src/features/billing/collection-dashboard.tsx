@@ -407,6 +407,7 @@ function TransactionsTable() {
               </div>
             ),
           },
+          { key: 'flat', header: 'Flat', cell: (p) => <span className="font-mono text-sm font-semibold text-strong">{p.unitNumber ?? '—'}</span> },
           { key: 'purpose', header: 'Rail', cell: (p) => <Badge tone="neutral" size="sm">{p.purpose.toLowerCase()}</Badge> },
           { key: 'invoice', header: 'Invoice', cell: (p) => <span className="text-sm text-body">{p.invoiceNumber ?? '—'}</span> },
           { key: 'amount', header: 'Amount', cell: (p) => <span className="text-sm font-medium text-strong">{inr(p.amount)}</span> },

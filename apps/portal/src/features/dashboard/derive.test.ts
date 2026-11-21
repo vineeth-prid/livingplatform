@@ -98,6 +98,18 @@ describe('buildActivity / groupActivity', () => {
   });
 });
 
+describe('buildActivity — flat numbers and the full list', () => {
+  it('leads each entry with its flat, and keeps every event for "View all"', () => {
+    const tickets = Array.from({ length: 30 }, (_, i) =>
+      tk({ id: `t${i}`, ticketNumber: `TKT-${i}`, createdAt: iso(-i * 1000), unit: { id: 'u', unitNumber: 'A-101', blockId: null, floorId: null } } as never));
+    const events = buildActivity({ tickets, serviceRequests: [], workOrders: [], residents: [] });
+    expect(events).toHaveLength(30); // not cut to 12 any more — the section shows 15
+    expect(events[0]?.title).toBe('A-101 · TKT-0 raised');
+    expect(events[0]?.unit).toBe('A-101');
+    expect(buildActivity({ tickets, serviceRequests: [], workOrders: [], residents: [], limit: 15 })).toHaveLength(15);
+  });
+});
+
 describe('computeHealth', () => {
   it('computes closure/completion/occupancy rates', () => {
     const h = computeHealth({

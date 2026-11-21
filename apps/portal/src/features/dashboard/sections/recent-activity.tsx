@@ -1,12 +1,16 @@
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   CheckCircle2, ClipboardCheck, LifeBuoy, UserPlus, Wrench,
 } from 'lucide-react';
 import { timeAgo } from '@living/utils';
-import { Card, EmptyState, Skeleton, Timeline, type TimelineItem } from '@living/ui';
+import { Button, Card, EmptyState, Skeleton, Timeline, type TimelineItem } from '@living/ui';
 
 import { Section } from '../components/section';
-import type { ActivityBuckets, ActivityEvent, ActivityKind } from '../derive';
+import { ViewAllDialog } from '../components/view-all-dialog';
+import { groupActivity, type ActivityEvent, type ActivityKind } from '../derive';
+
+const SHOWN = 15;
 
 const iconFor: Record<ActivityKind, ReactNode> = {
   'ticket-created': <LifeBuoy className="h-3 w-3" />,
@@ -29,10 +33,12 @@ function toItems(events: ActivityEvent[]): TimelineItem[] {
   }));
 }
 
-/** Section 4 — recent activity, newest first, grouped Today / Yesterday.
- *  Reuses the shared Timeline component; no timeline API call (derived from
- *  the items already fetched). */
-export function RecentActivity({ buckets, loading }: { buckets: ActivityBuckets; loading: boolean }) {
+/** Section 4 — recent activity, newest first, grouped Today / Yesterday. The
+ *  latest 15 here; "View all" opens every event, searchable by flat number.
+ *  Derived from the items already fetched — no timeline API call. */
+export function RecentActivity({ events, loading }: { events: ActivityEvent[]; loading: boolean }) {
+  const [all, setAll] = useState(false);
+
   if (loading) {
     return (
       <Section title="Recent activity">
@@ -48,9 +54,7 @@ export function RecentActivity({ buckets, loading }: { buckets: ActivityBuckets;
     );
   }
 
-  const isEmpty =
-    buckets.today.length + buckets.yesterday.length + buckets.earlier.length === 0;
-  if (isEmpty) {
+  if (events.length === 0) {
     return (
       <Section title="Recent activity">
         <EmptyState title="No activity yet" description="Operational events will appear here as they happen." />
@@ -58,13 +62,35 @@ export function RecentActivity({ buckets, loading }: { buckets: ActivityBuckets;
     );
   }
 
+  const buckets = groupActivity(events.slice(0, SHOWN));
   return (
-    <Section title="Recent activity">
+    <Section
+      title="Recent activity"
+      action={events.length > SHOWN ? <Button size="sm" variant="ghost" onClick={() => setAll(true)}>View all ({events.length})</Button> : undefined}
+    >
       <Card variant="elevated" className="flex flex-col gap-5">
         {buckets.today.length > 0 && <Group label="Today" events={buckets.today} />}
         {buckets.yesterday.length > 0 && <Group label="Yesterday" events={buckets.yesterday} />}
         {buckets.earlier.length > 0 && <Group label="Earlier" events={buckets.earlier} />}
       </Card>
+      <ViewAllDialog
+        open={all}
+        onOpenChange={setAll}
+        title="All recent activity"
+        items={events}
+        rowKey={(e) => e.id}
+        searchText={(e) => `${e.unit ?? ''} ${e.title} ${e.meta ?? ''}`}
+        renderItem={(e) => (
+          <Link to={e.href} className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-sunken">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-tint text-brand">{iconFor[e.kind]}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-strong">{e.title}</span>
+              {e.meta && <span className="block truncate text-xs text-muted">{e.meta}</span>}
+            </span>
+            <span className="shrink-0 text-xs text-subtle">{timeAgo(e.at)}</span>
+          </Link>
+        )}
+      />
     </Section>
   );
 }

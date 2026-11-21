@@ -115,33 +115,89 @@ ${present(doc.footer ?? null) ? `<footer class="foot">${esc(doc.footer)}</footer
 }
 
 /**
- * Open the document in a new window and bring up the print dialog (→ "Save as
- * PDF"). Waits for the logo to load so it is not missing from the PDF.
- * Returns false when the browser blocked the pop-up.
+ * Show the document INSIDE the app — a full-screen viewer with Close and
+ * "Print / Save PDF" — rather than a new window. An installed app (PWA) has no
+ * browser chrome, so a receipt opened in a new window left people with no way
+ * back but to kill the app. Close, Escape and the phone's Back button all
+ * return to where they were. Printing prints only the document (it lives in
+ * its own iframe), and the browser's print dialog saves it as a PDF.
+ *
+ * Returns true (kept for callers that handled a blocked pop-up).
  */
 export function printDocument(doc: PrintableDocument): boolean {
-  const win = window.open('', '_blank', 'width=820,height=900');
-  if (!win) return false;
-  win.document.write(renderDocumentHtml(doc, `${window.location.origin}/icon.svg`));
-  win.document.close();
-  const images = Array.from(win.document.images);
-  let printed = false;
-  const go = () => {
-    if (printed) return;
-    printed = true;
-    win.focus();
-    win.print();
+  const overlay = document.createElement('div');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', doc.title);
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;background:#f4f4f2;' +
+    'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+
+  const bar = document.createElement('div');
+  bar.style.cssText =
+    'display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid #e3e1dc;' +
+    'font:600 15px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#1c1c1c';
+  const button = (label: string, primary: boolean) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.style.cssText =
+      `min-height:40px;padding:0 14px;border-radius:10px;font:600 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;cursor:pointer;` +
+      (primary ? 'background:#1c1c1c;color:#fff;border:0' : 'background:#fff;color:#1c1c1c;border:1px solid #d6d3cc');
+    return b;
   };
-  const pending = images.filter((img) => !img.complete);
-  if (pending.length === 0) go();
-  else {
-    let left = pending.length;
-    pending.forEach((img) => {
-      const done = () => (--left <= 0 ? go() : undefined);
-      img.addEventListener('load', done);
-      img.addEventListener('error', done);
-    });
-    setTimeout(go, 4000); // never hang on a slow logo
-  }
+  const close = button('← Close', false);
+  close.setAttribute('aria-label', 'Close and go back');
+  const title = document.createElement('span');
+  title.textContent = [doc.title, doc.number].filter(Boolean).join(' · ');
+  title.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center';
+  const print = button('Print / Save PDF', true);
+  bar.append(close, title, print);
+
+  const frame = document.createElement('iframe');
+  frame.title = doc.title;
+  frame.style.cssText = 'flex:1;width:100%;border:0;background:#f4f4f2';
+  frame.srcdoc = renderDocumentHtml(doc, `${window.location.origin}/icon.svg`);
+  overlay.append(bar, frame);
+
+  // The phone's Back button closes the viewer instead of leaving the screen.
+  history.pushState({ livingDocument: true }, '');
+  let closed = false;
+  const teardown = () => {
+    if (closed) return;
+    closed = true;
+    window.removeEventListener('popstate', onPop);
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+    document.body.style.overflow = prevOverflow;
+  };
+  const onPop = () => teardown();
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') history.back(); };
+  window.addEventListener('popstate', onPop);
+  document.addEventListener('keydown', onKey);
+  close.addEventListener('click', () => history.back());
+  print.addEventListener('click', () => {
+    const win = frame.contentWindow;
+    if (!win) return;
+    // Wait for the logo so the PDF is not missing it (never hang on a slow one).
+    const pending = Array.from(win.document.images).filter((img) => !img.complete);
+    let done = false;
+    const go = () => { if (!done) { done = true; win.focus(); win.print(); } };
+    if (pending.length === 0) go();
+    else {
+      let left = pending.length;
+      pending.forEach((img) => {
+        const one = () => (--left <= 0 ? go() : undefined);
+        img.addEventListener('load', one);
+        img.addEventListener('error', one);
+      });
+      setTimeout(go, 4000);
+    }
+  });
+
+  const prevOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  document.body.append(overlay);
+  close.focus();
   return true;
 }

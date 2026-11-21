@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import { bootCommunityTheme } from '@living/design-system';
-import { recoverFromStaleBuild } from '@living/ui';
+import { installCommunityId, recoverFromStaleBuild } from '@living/ui';
 
 import { AppProviders } from './providers';
 import { router } from './router';
@@ -12,6 +12,8 @@ import './styles.css';
 bootCommunityTheme();
 // An installed app still on the previous deploy reloads instead of failing to open screens.
 recoverFromStaleBuild();
+// Before the install prompt is built: the community's name and icon, not Living's.
+installCommunityId();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element #root not found');

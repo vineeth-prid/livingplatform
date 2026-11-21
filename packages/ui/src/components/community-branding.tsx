@@ -57,12 +57,37 @@ const INSTALL_KEY = 'living.install-community';
  */
 export function installCommunityId(): string | null {
   if (typeof window === 'undefined') return null;
+  const valid = (v: string | null | undefined): v is string => !!v && /^[a-z0-9]{20,40}$/i.test(v);
   const fromUrl = new URLSearchParams(window.location.search).get('c');
+  // The community this device last showed (set whenever branding loads) — so
+  // the sign-in screen stays branded after sign-out, not only via the link.
+  const fromCookie = /(?:^|;\s*)living_c=([^;]+)/.exec(document.cookie)?.[1];
+  let id: string | null = null;
   try {
-    if (fromUrl && /^[a-z0-9]{20,40}$/i.test(fromUrl)) localStorage.setItem(INSTALL_KEY, fromUrl);
-    return localStorage.getItem(INSTALL_KEY);
+    if (valid(fromUrl)) localStorage.setItem(INSTALL_KEY, fromUrl);
+    id = localStorage.getItem(INSTALL_KEY);
   } catch {
-    return fromUrl;
+    id = valid(fromUrl) ? fromUrl : null;
+  }
+  id = valid(fromUrl) ? fromUrl : valid(id) ? id : valid(fromCookie) ? fromCookie : null;
+  if (id) rememberCommunity(id);
+  return id;
+}
+
+/**
+ * Tell the server which community this device belongs to (living_c cookie —
+ * nginx serves that community's manifest at /manifest.webmanifest) and make the
+ * browser re-read the manifest now. Done at startup, before the install
+ * prompt is built, so "Add to Home screen" offers the community's name and icon.
+ */
+function rememberCommunity(id: string) {
+  if (!/(?:^|;\s*)living_c=/.test(document.cookie) || !document.cookie.includes(`living_c=${id}`)) {
+    document.cookie = `living_c=${id}; path=/; max-age=31536000; SameSite=Lax; Secure`;
+  }
+  const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if (link && !link.getAttribute('href')?.includes('?')) {
+    link.setAttribute('crossorigin', 'use-credentials');
+    link.setAttribute('href', `/manifest.webmanifest?c=${id}`);
   }
 }
 

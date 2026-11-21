@@ -145,6 +145,8 @@ export interface ActivityEvent {
   meta?: string;
   at: string; // ISO
   href: string;
+  /** Flat number — how staff actually recognise an item (and search for it). */
+  unit?: string | null;
 }
 
 /** Pick the single most-significant recent event per item (using the timestamps
@@ -158,35 +160,42 @@ export function buildActivity(input: {
 }): ActivityEvent[] {
   const events: ActivityEvent[] = [];
 
+  // "A-101 · TKT-000009 raised": the flat leads, because that is what people know.
+  const label = (unit: string | null | undefined, text: string) => (unit ? `${unit} · ${text}` : text);
   for (const t of input.tickets) {
+    const unit = t.unit?.unitNumber ?? null;
     if (t.resolvedDate) {
-      events.push({ id: `t-r-${t.id}`, kind: 'ticket-resolved', title: `${t.ticketNumber} resolved`, meta: t.title, at: t.resolvedDate, href: '/tickets' });
+      events.push({ id: `t-r-${t.id}`, kind: 'ticket-resolved', title: label(unit, `${t.ticketNumber} resolved`), meta: t.title, at: t.resolvedDate, href: '/tickets', unit });
     } else {
-      events.push({ id: `t-c-${t.id}`, kind: 'ticket-created', title: `${t.ticketNumber} raised`, meta: t.title, at: t.createdAt, href: '/tickets' });
+      events.push({ id: `t-c-${t.id}`, kind: 'ticket-created', title: label(unit, `${t.ticketNumber} raised`), meta: t.title, at: t.createdAt, href: '/tickets', unit });
     }
   }
   for (const r of input.serviceRequests) {
+    const unit = r.unit?.unitNumber ?? null;
     if (r.completedDate) {
-      events.push({ id: `s-x-${r.id}`, kind: 'service-completed', title: `${r.requestNumber} completed`, meta: r.title, at: r.completedDate, href: '/service-requests' });
+      events.push({ id: `s-x-${r.id}`, kind: 'service-completed', title: label(unit, `${r.requestNumber} completed`), meta: r.title, at: r.completedDate, href: '/service-requests', unit });
     } else if (r.assignedStaffId || r.assignedVendorId) {
-      events.push({ id: `s-a-${r.id}`, kind: 'service-assigned', title: `${r.requestNumber} assigned`, meta: r.title, at: r.updatedAt, href: '/service-requests' });
+      events.push({ id: `s-a-${r.id}`, kind: 'service-assigned', title: label(unit, `${r.requestNumber} assigned`), meta: r.title, at: r.updatedAt, href: '/service-requests', unit });
     } else {
-      events.push({ id: `s-c-${r.id}`, kind: 'service-created', title: `${r.requestNumber} requested`, meta: r.title, at: r.createdAt, href: '/service-requests' });
+      events.push({ id: `s-c-${r.id}`, kind: 'service-created', title: label(unit, `${r.requestNumber} requested`), meta: r.title, at: r.createdAt, href: '/service-requests', unit });
     }
   }
   for (const w of input.workOrders) {
+    const unit = w.unit?.unitNumber ?? null;
     if (w.verifiedDate) {
-      events.push({ id: `w-v-${w.id}`, kind: 'work-verified', title: `${w.workOrderNumber} verified`, meta: w.title, at: w.verifiedDate, href: '/work-orders' });
+      events.push({ id: `w-v-${w.id}`, kind: 'work-verified', title: label(unit, `${w.workOrderNumber} verified`), meta: w.title, at: w.verifiedDate, href: '/work-orders', unit });
     } else if (w.completedDate) {
-      events.push({ id: `w-x-${w.id}`, kind: 'work-completed', title: `${w.workOrderNumber} completed`, meta: w.title, at: w.completedDate, href: '/work-orders' });
+      events.push({ id: `w-x-${w.id}`, kind: 'work-completed', title: label(unit, `${w.workOrderNumber} completed`), meta: w.title, at: w.completedDate, href: '/work-orders', unit });
     }
   }
   for (const person of input.residents) {
-    events.push({ id: `r-${person.id}`, kind: 'resident-registered', title: `${person.firstName} ${person.lastName} registered`, meta: person.residentCode, at: person.createdAt, href: '/residents' });
+    const unit = person.unitAssignment?.unit?.unitNumber ?? null;
+    events.push({ id: `r-${person.id}`, kind: 'resident-registered', title: label(unit, `${person.firstName} ${person.lastName} registered`), meta: person.residentCode, at: person.createdAt, href: '/residents', unit });
   }
 
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  return events.slice(0, input.limit ?? 12);
+  // The dashboard shows the first 15; "View all" pages through the rest.
+  return input.limit ? events.slice(0, input.limit) : events;
 }
 
 export interface ActivityBuckets {
@@ -267,14 +276,13 @@ export function buildMyWork(input: {
   workOrders: WorkOrder[];
 }): MyWork {
   return {
+    // Everything; the section shows 15 and "View all" pages through the rest.
     raisedTickets: input.tickets
-      .filter((t) => t.reportedById === input.userId && TICKET_ACTIVE.has(t.status))
-      .slice(0, 5),
+      .filter((t) => t.reportedById === input.userId && TICKET_ACTIVE.has(t.status)),
     requestedServices: input.serviceRequests
-      .filter((r) => r.requestedById === input.userId && !SR_TERMINAL.has(r.status))
-      .slice(0, 5),
+      .filter((r) => r.requestedById === input.userId && !SR_TERMINAL.has(r.status)),
     awaitingMyVerification: input.canVerify
-      ? input.workOrders.filter((w) => w.status === 'COMPLETED').slice(0, 5)
+      ? input.workOrders.filter((w) => w.status === 'COMPLETED')
       : [],
   };
 }

@@ -50,6 +50,8 @@ export interface PaymentView {
   invoiceNumber: string | null;
   serviceRequestId: string | null;
   unitId: string | null;
+  /** Flat number (list responses). */
+  unitNumber?: string | null;
   residentId: string | null;
   amount: number;
   currency: string;
@@ -419,6 +421,8 @@ export class PaymentService {
               { receiptNumber: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
               { gatewayPaymentId: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
               { invoice: { invoiceNumber: { contains: query.search, mode: Prisma.QueryMode.insensitive } } },
+              // By flat number — payments hold only a unitId, so resolve the flats first.
+              { unitId: { in: await this.unitIdsMatching(communityId, query.search) } },
             ],
           }
         : {}),
@@ -435,11 +439,29 @@ export class PaymentService {
       }),
       this.prisma.payment.count({ where }),
     ]);
+    const flats = await this.unitNumbers(rows.map((r) => r.unitId));
     return paginate(
-      rows.map((r) => toView(r, r.invoice?.invoiceNumber ?? null)),
+      rows.map((r) => ({ ...toView(r, r.invoice?.invoiceNumber ?? null), unitNumber: r.unitId ? flats.get(r.unitId) ?? null : null })),
       total,
       query,
     );
+  }
+
+  /** unitId → flat number, in one query for a page of payments. */
+  private async unitNumbers(ids: (string | null)[]): Promise<Map<string, string>> {
+    const wanted = [...new Set(ids.filter((id): id is string => !!id))];
+    if (wanted.length === 0) return new Map();
+    const units = await this.prisma.unit.findMany({ where: { id: { in: wanted } }, select: { id: true, unitNumber: true } });
+    return new Map(units.map((u) => [u.id, u.unitNumber]));
+  }
+
+  private async unitIdsMatching(communityId: string, search: string): Promise<string[]> {
+    const units = await this.prisma.unit.findMany({
+      where: { communityId, deletedAt: null, unitNumber: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      select: { id: true },
+      take: 200,
+    });
+    return units.map((u) => u.id);
   }
 
   async findOne(communityId: string, id: string, actor: AuthenticatedUser): Promise<PaymentView> {
