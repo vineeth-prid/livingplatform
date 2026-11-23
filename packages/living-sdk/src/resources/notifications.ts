@@ -190,6 +190,23 @@ export interface CommunityNotificationTemplate {
   enabled: boolean;
 }
 
+/** Per event: the variables its wording may use and the platform default wording. */
+export interface NotificationTemplateDefaults {
+  event: NotificationEventKey;
+  variables: Array<{ name: string; label: string; required: boolean }>;
+  email: { subject: string; body: string };
+  whatsapp: { subject: string; body: string };
+}
+
+/** A rendered preview — or the reason the wording cannot be sent. */
+export interface NotificationTemplatePreview {
+  ok: boolean;
+  subject: string;
+  text: string;
+  html: string | null;
+  error: string | null;
+}
+
 /** Community Admin: routing and message wording. Configuration only — no sends. */
 export class NotificationPreferencesResource {
   constructor(private readonly http: HttpClient) {}
@@ -223,6 +240,16 @@ export class NotificationPreferencesResource {
   }
   deleteTemplate(communityId: string, id: string): Promise<{ id: string; deleted: boolean }> {
     return this.http.delete(`/communities/${communityId}/notification-templates/${id}`);
+  }
+  templateDefaults(communityId: string): Promise<NotificationTemplateDefaults[]> {
+    return this.http.get(`/communities/${communityId}/notification-templates/defaults`);
+  }
+  /** Rendered by the same engine that sends, with this community's branding. */
+  previewTemplate(
+    communityId: string,
+    input: { event: NotificationEventKey; channel: 'email' | 'whatsapp'; body?: string; subject?: string },
+  ): Promise<NotificationTemplatePreview> {
+    return this.http.post(`/communities/${communityId}/notification-templates/preview`, input);
   }
 }
 

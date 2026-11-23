@@ -390,7 +390,7 @@ export class TicketService {
     this.events.publish({
       name: DomainEventName.TicketStatusChanged,
       ...base,
-      data: { ticketNumber: num, status: to, fromStatus: from },
+      data: { ticketNumber: num, status: to, fromStatus: from, note: dto.note },
     });
     if (to === TicketStatus.RESOLVED) {
       this.events.publish({

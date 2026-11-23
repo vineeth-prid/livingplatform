@@ -63,6 +63,8 @@ export function assertSafeTemplate(source: string): void {
           if (m.path.type !== 'PathExpression') fail('Only variables and {{t}} are allowed');
           const path = m.path as hbs.AST.PathExpression;
           checkPath(path);
+          // {{{raw}}} would put resident-typed text into an email unescaped.
+          if (!m.escaped) fail(`"{{{${path.original}}}}" is not allowed — use {{${path.original}}}`);
           if (m.params.length || m.hash?.pairs.length) {
             if (!SAFE_HELPERS.has(path.original)) fail(`Helper "${path.original}" is not allowed`);
             m.params.forEach(checkParam);
@@ -87,6 +89,36 @@ export function assertSafeTemplate(source: string): void {
   walk(ast);
 }
 
+/**
+ * Variable names a template reads (helpers and block keywords excluded), so the
+ * editor can refuse a placeholder no event supplies. Call after assertSafeTemplate.
+ */
+export function templateVariables(source: string): string[] {
+  const found = new Set<string>();
+  const add = (e: hbs.AST.Expression) => {
+    if (e.type !== 'PathExpression') return;
+    const p = e as hbs.AST.PathExpression;
+    if (p.original !== 'this' && !p.original.startsWith('@')) found.add(p.parts[0] ?? p.original);
+  };
+  const walk = (program: hbs.AST.Program | undefined): void => {
+    for (const node of program?.body ?? []) {
+      if (node.type === 'MustacheStatement') {
+        const m = node as hbs.AST.MustacheStatement;
+        const name = (m.path as hbs.AST.PathExpression).original;
+        if (SAFE_HELPERS.has(name) && (m.params.length || name === 'year')) m.params.forEach(add);
+        else add(m.path as hbs.AST.Expression);
+      } else if (node.type === 'BlockStatement') {
+        const b = node as hbs.AST.BlockStatement;
+        b.params.forEach(add);
+        walk(b.program);
+        walk(b.inverse);
+      }
+    }
+  };
+  walk(Handlebars.parse(source));
+  return [...found];
+}
+
 interface Compiled {
   subject: Handlebars.TemplateDelegate;
   body: Handlebars.TemplateDelegate;
@@ -109,6 +141,7 @@ export class EmailTemplateEngine {
   private readonly hbs: typeof Handlebars;
   private readonly root = __dirname;
   private readonly cache = new Map<string, Compiled>();
+  private readonly textCache = new Map<string, Handlebars.TemplateDelegate>();
   private layout!: Handlebars.TemplateDelegate;
   private locales = new Map<string, Record<string, string>>();
 
@@ -146,20 +179,57 @@ export class EmailTemplateEngine {
   renderRaw(
     body: string,
     variables: Record<string, unknown> = {},
-    opts: { subject?: string; locale?: string; layout?: boolean } = {},
+    opts: { subject?: string; locale?: string; layout?: boolean; text?: boolean } = {},
   ): RenderedTemplate {
     // Community-authored: validate before compiling, and compile so that only
     // our own helpers are callable (no helperMissing fallback).
     assertSafeTemplate(body);
     if (opts.subject) assertSafeTemplate(opts.subject);
-    const options = { knownHelpers: { t: true, year: true, upper: true }, knownHelpersOnly: true };
+    // Text channels get the body verbatim: no HTML escaping, no layout.
+    const options = {
+      knownHelpers: { t: true, year: true, upper: true },
+      knownHelpersOnly: true,
+      noEscape: !!opts.text,
+      ignoreStandalone: !!opts.text,
+    };
     const ctx = { ...variables, __locale: opts.locale ?? 'en' };
     const inner = this.hbs.compile(body, options)(ctx);
+    if (opts.text) {
+      const subject = opts.subject ? this.hbs.compile(opts.subject, options)(ctx).trim() : '';
+      const text = tidyText(inner);
+      return { subject, html: text, text };
+    }
     const subject = opts.subject ? this.hbs.compile(opts.subject, options)(ctx).trim() : '';
     const html = opts.layout === false
       ? inner
       : this.layout({ ...ctx, body: new Handlebars.SafeString(inner) });
     return { subject, html, text: htmlToText(inner) };
+  }
+
+  /**
+   * Render a TRUSTED built-in plain-text template (WhatsApp wording). No HTML
+   * escaping — the channel is plain text, and escaping is what turned quotes
+   * into "&#x27;" in WhatsApp.
+   */
+  renderText(source: string, variables: Record<string, unknown> = {}, locale = 'en'): string {
+    let compiled = this.textCache.get(source);
+    if (!compiled) {
+      // ignoreStandalone: a block tag on its own line keeps its line break, so
+      // the blank lines written in the wording are the blank lines sent.
+      compiled = this.hbs.compile(source, { noEscape: true, ignoreStandalone: true });
+      this.textCache.set(source, compiled);
+    }
+    return tidyText(compiled({ ...variables, __locale: locale }));
+  }
+
+  /**
+   * An email from already-rendered plain text: laid out by textToEmailHtml and
+   * wrapped in the branded layout. `variables` feed the layout (brand, colours).
+   */
+  emailFromText(subject: string, text: string, variables: Record<string, unknown> = {}, locale = 'en'): RenderedTemplate {
+    const inner = textToEmailHtml(text);
+    const html = this.layout({ ...variables, subject, __locale: locale, body: new Handlebars.SafeString(inner) });
+    return { subject, html, text };
   }
 
   private compile(name: string): Compiled {
@@ -220,12 +290,56 @@ export class EmailTemplateEngine {
   }
 }
 
+/**
+ * Lay plain notification text out as email HTML. Every value is escaped; the
+ * only markup comes from the shape of the text:
+ *   - a first paragraph that is one *bold* line → the heading
+ *   - a paragraph that is one "Label: https://…" line → a button
+ *   - a paragraph of 2+ "Label: value" lines → a details table
+ *   - anything else → a paragraph (line breaks kept, *bold* honoured)
+ */
+export function textToEmailHtml(text: string): string {
+  const esc = (v: string) => Handlebars.escapeExpression(v);
+  const inline = (v: string) => esc(v).replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+  return text
+    .trim()
+    .split(/\n{2,}/)
+    .map((block, i) => {
+      const lines = block.split('\n');
+      if (i === 0 && lines.length === 1 && /^\*[^*\n]+\*$/.test(lines[0]!)) {
+        return `<h1>${esc(lines[0]!.slice(1, -1))}</h1>`;
+      }
+      const link = lines.length === 1 ? /^([^:\n]{1,60}):\s*(https?:\/\/\S+)$/.exec(lines[0]!) : null;
+      if (link) {
+        return `<p style="margin: 22px 0;"><a class="btn" href="${esc(link[2]!)}">${esc(link[1]!)}</a></p>`;
+      }
+      const rows = lines.map((l) => /^([^:\n]{1,40}):\s+(.+)$/.exec(l));
+      if (lines.length > 1 && rows.every(Boolean)) {
+        const tr = rows.map((r) => `<tr><td class="k">${esc(r![1]!)}</td><td>${inline(r![2]!)}</td></tr>`).join('');
+        return `<table class="details" role="presentation">${tr}</table>`;
+      }
+      return `<p>${lines.map(inline).join('<br />')}</p>`;
+    })
+    .join('\n');
+}
+
+/** Collapse the blank lines left behind by skipped optional sections. */
+function tidyText(text: string): string {
+  return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /** Minimal HTML → plain-text fallback for the text/plain MIME part. */
 function htmlToText(html: string): string {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x3D;/g, '=')
+    .replace(/&#x60;/g, '`')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .replace(/\s+\n/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')

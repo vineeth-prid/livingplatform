@@ -3,7 +3,8 @@ import type { TokenStore } from './token-store';
 export type RealtimeEventTypeName =
   | 'gate.entry.arrived'
   | 'gate.entry.decided'
-  | 'gate.entry.updated';
+  | 'gate.entry.updated'
+  | 'announcement.published';
 
 export interface RealtimeEvent<T = unknown> {
   type: RealtimeEventTypeName;

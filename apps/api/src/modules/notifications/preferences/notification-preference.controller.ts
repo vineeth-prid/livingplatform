@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificationEvent } from '@prisma/client';
 
@@ -7,6 +7,7 @@ import { RequirePermissions } from '../../../common/decorators/permissions.decor
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PERMISSIONS } from '../../rbac/rbac.constants';
 import {
+  PreviewNotificationTemplateDto,
   UpdateNotificationPreferenceDto,
   UpsertNotificationTemplateDto,
 } from './dto/notification-preference.dto';
@@ -54,6 +55,21 @@ export class NotificationTemplateController {
   @ApiOperation({ summary: 'Message templates this community has overridden' })
   list(@Param('communityId') communityId: string) {
     return this.preferences.listTemplates(communityId);
+  }
+
+  @Get('defaults')
+  @RequirePermissions(PERMISSIONS.NOTIFICATION_TEMPLATE_READ)
+  @ApiOperation({ summary: 'Per event: allowed variables and the platform default wording' })
+  defaults(@Param('communityId') communityId: string) {
+    return this.preferences.templateDefaults(communityId);
+  }
+
+  @Post('preview')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.NOTIFICATION_TEMPLATE_READ)
+  @ApiOperation({ summary: 'Render wording with sample data and this community’s branding' })
+  preview(@Param('communityId') communityId: string, @Body() dto: PreviewNotificationTemplateDto) {
+    return this.preferences.preview(communityId, dto);
   }
 
   @Post()

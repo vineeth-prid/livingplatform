@@ -10,9 +10,13 @@
     .card { background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #e6e8e6; }
     .content { padding: 28px 28px 8px; font-size: 15px; line-height: 1.6; }
     .content h1 { font-size: 20px; margin: 0 0 12px; }
-    .btn { display: inline-block; background: #2f5d50; color: #ffffff !important; text-decoration: none; padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; }
+    .btn { display: inline-block; background: {{#if brand_color}}{{brand_color}}{{else}}#234b39{{/if}}; color: #ffffff !important; text-decoration: none; padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; }
     .muted { color: #6a6d6a; font-size: 13px; }
-    a { color: #2f5d50; }
+    a { color: {{#if brand_color}}{{brand_color}}{{else}}#234b39{{/if}}; }
+    .details { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+    .details td { padding: 8px 0; border-bottom: 1px solid #eef0ee; vertical-align: top; }
+    .details td.k { color: #6a6d6a; width: 44%; padding-right: 12px; }
+    .code { font-size: 26px; letter-spacing: 5px; font-weight: 700; margin: 8px 0 4px; }
   </style>
 </head>
 <body>

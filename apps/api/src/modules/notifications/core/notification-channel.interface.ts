@@ -45,6 +45,8 @@ export interface NotificationMessage {
   priority?: NotificationPriority;
   headers?: Record<string, string>;
   from?: string;
+  /** Display name for the configured sending address (the address itself never changes). */
+  fromName?: string;
   /** Channel-specific payload (e.g. WhatsApp template name/components, interactive). */
   channelData?: Record<string, unknown>;
 }

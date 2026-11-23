@@ -27,6 +27,9 @@ import { NotificationHistory } from './core/notification-history.service';
 import { NotificationMetrics } from './core/notification-metrics.service';
 import { NotificationProcessor } from './core/notification.processor';
 import { RecipientResolver } from './core/recipient-resolver';
+import { NotificationBrandingResolver } from './core/notification-branding';
+import { NotificationRenderer } from './core/notification-renderer';
+import { BrandingModule } from '../branding/branding.module';
 import { SenderResolver } from './core/sender-resolver';
 import { EmailTemplateEngine } from './core/templates/template.engine';
 import { NOTIFICATION_CHANNEL_LIST } from './factories/notification-channel.factory';
@@ -65,6 +68,8 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
     // Maintenance reminders are addressed to whoever OWES the money, which is a
     // question about unit ownership rather than about who lives there.
     OwnershipModule,
+    // Community name/logo/theme for the notification identity.
+    BrandingModule,
   ],
   controllers: [
     NotificationController,
@@ -103,6 +108,8 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
     NotificationHistory,
     RecipientResolver,
     SenderResolver,
+    NotificationBrandingResolver,
+    NotificationRenderer,
     NotificationDispatcher,
     NotificationProcessor,
     // Community routing/templates + the domain-event → notification seam
@@ -113,6 +120,7 @@ function bullConnection(config: ConfigService<AppConfig, true>) {
   ],
   exports: [
     NotificationDispatcher,
+    NotificationRenderer,
     EmailTemplateEngine,
     RecipientResolver,
     ChannelRouter,

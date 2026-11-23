@@ -20,12 +20,15 @@ export const NOTIFICATION_TEMPLATES = {
   TICKET_CLOSED: 'ticket-closed',
   SERVICE_REQUESTED: 'service-requested',
   WORK_ORDER_CREATED: 'work-order-created',
-  WORK_ORDER_COMPLETED: 'work-order-completed',
   OTP_REQUESTED: 'otp-requested',
   // Sprint 11 — billing, payments and the community-life event set.
   TICKET_CREATED: 'ticket-created',
   SERVICE_ASSIGNED: 'service-assigned',
   WORK_ORDER_ASSIGNED: 'work-order-assigned',
+  /** Status changes on a work order (approval lane and completion). */
+  WORK_ORDER_UPDATED: 'work-order-updated',
+  /** Status changes on a service request the resident is waiting on. */
+  SERVICE_UPDATED: 'service-updated',
   MAINTENANCE_DUE: 'maintenance-due',
   PAYMENT_SUCCESS: 'payment-success',
   VISITOR_PASS: 'visitor-pass',

@@ -1,3 +1,5 @@
+import { LIVING_BRAND, type NotificationBrandingResolver } from './core/notification-branding';
+import { NotificationRenderer } from './core/notification-renderer';
 import { NotificationEvent } from '@prisma/client';
 
 import { DomainEventName, type DomainEvent } from '../events/domain-events';
@@ -107,14 +109,16 @@ describe('Notification pipeline · end to end', () => {
       templateFor: jest.fn().mockResolvedValue(null),
     } as unknown as NotificationPreferenceService;
 
+    const branding = { for: jest.fn().mockResolvedValue(LIVING_BRAND) } as unknown as NotificationBrandingResolver;
     const service = new NotificationRouterService(
       prisma,
       dispatcher,
       preferences,
       new RecipientResolver(prisma),
-      new EmailTemplateEngine(),
+      new NotificationRenderer(new EmailTemplateEngine(), branding),
+      branding,
       { notifiableResidentsFor: () => Promise.resolve(['res-1']) } as never,
-      { get: () => 'https://app.living.test' } as never,
+      { get: (k: string) => (k === 'payments' ? { currency: 'INR' } : 'https://app.living.test') } as never,
     );
     return { service, sent, prisma };
   }

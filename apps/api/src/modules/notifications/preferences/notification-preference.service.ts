@@ -5,8 +5,11 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunityAccessService } from '../../tenancy/community-access.service';
 import type { NotificationChannelName } from '../core/notification-channel.interface';
-import { assertSafeTemplate, UnsafeTemplateError } from '../core/templates/template.engine';
+import { allowedVariables, EVENT_TEMPLATE, sampleVariables, TEMPLATE_SPECS, VARIABLES } from '../core/notification-catalog';
+import { MissingVariablesError, NotificationRenderer } from '../core/notification-renderer';
+import { assertSafeTemplate, templateVariables, UnsafeTemplateError } from '../core/templates/template.engine';
 import type {
+  PreviewNotificationTemplateDto,
   UpdateNotificationPreferenceDto,
   UpsertNotificationTemplateDto,
 } from './dto/notification-preference.dto';
@@ -18,6 +21,15 @@ import type {
  * opt-in — the inverse of every other event, which is why they are special-cased
  * here instead of bending the generic defaults.
  */
+/**
+ * Payment receipts go out on WhatsApp unless a community switches it off —
+ * people expect proof of payment where they read messages.
+ */
+const WHATSAPP_BY_DEFAULT = new Set<NotificationEvent>([
+  NotificationEvent.PAYMENT_SUCCESS,
+  NotificationEvent.PAYMENT_CONFIRMATION,
+]);
+
 const GATE_EVENTS = new Set<NotificationEvent>([
   NotificationEvent.GATE_ENTRY_ARRIVED,
   NotificationEvent.GATE_ENTRY_DECIDED,
@@ -51,6 +63,7 @@ export class NotificationPreferenceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CommunityAccessService,
+    private readonly renderer: NotificationRenderer,
   ) {}
 
   // ── Preferences ────────────────────────────────────────────────────────────
@@ -72,7 +85,7 @@ export class NotificationPreferenceService {
         event,
         enabled: row?.enabled ?? true,
         emailEnabled: row?.emailEnabled ?? settings?.emailEnabled ?? true,
-        whatsappEnabled: row?.whatsappEnabled ?? settings?.whatsappEnabled ?? false,
+        whatsappEnabled: row?.whatsappEnabled ?? (WHATSAPP_BY_DEFAULT.has(event) || (settings?.whatsappEnabled ?? false)),
         configured: Boolean(row),
       };
     });
@@ -103,6 +116,15 @@ export class NotificationPreferenceService {
       whatsappEnabled: row.whatsappEnabled,
       configured: true,
     };
+  }
+
+  /** Only the event's on/off switch — for events whose channels are fixed (announcements). */
+  async isEnabled(communityId: string, event: NotificationEvent): Promise<boolean> {
+    const row = await this.prisma.communityNotificationPreference.findUnique({
+      where: { communityId_event: { communityId, event } },
+      select: { enabled: true },
+    });
+    return row?.enabled ?? true;
   }
 
   /**
@@ -136,7 +158,7 @@ export class NotificationPreferenceService {
     }
 
     const email = row?.emailEnabled ?? settings?.emailEnabled ?? true;
-    const whatsapp = row?.whatsappEnabled ?? settings?.whatsappEnabled ?? false;
+    const whatsapp = row?.whatsappEnabled ?? (WHATSAPP_BY_DEFAULT.has(event) || (settings?.whatsappEnabled ?? false));
     const channels: NotificationChannelName[] = [];
     if (email) channels.push('email');
     if (whatsapp) channels.push('whatsapp');
@@ -191,13 +213,7 @@ export class NotificationPreferenceService {
     await this.access.assert(communityId);
     // Refuse anything beyond variables / {{t}} / simple blocks at save time, so
     // the admin sees why instead of the message silently falling back later.
-    try {
-      assertSafeTemplate(dto.body);
-      if (dto.subject) assertSafeTemplate(dto.subject);
-    } catch (err) {
-      if (err instanceof UnsafeTemplateError) throw new BadRequestException(err.message);
-      throw err;
-    }
+    this.assertTemplate(dto.event, dto.body, dto.subject);
     const key = {
       communityId,
       event: dto.event,
@@ -209,6 +225,84 @@ export class NotificationPreferenceService {
       create: { ...key, subject: dto.subject, body: dto.body, enabled: dto.enabled ?? true, createdById: actor.id },
       update: { subject: dto.subject, body: dto.body, enabled: dto.enabled, updatedById: actor.id },
     });
+  }
+
+  /**
+   * Refuse wording that is unsafe or names a placeholder this event never
+   * supplies — saved, it would reach residents as a gap ("Hello ,").
+   */
+  private assertTemplate(event: NotificationEvent, body: string, subject?: string | null): void {
+    try {
+      assertSafeTemplate(body);
+      if (subject) assertSafeTemplate(subject);
+    } catch (err) {
+      if (err instanceof UnsafeTemplateError) throw new BadRequestException(err.message);
+      throw err;
+    }
+    const allowed = new Set<string>(allowedVariables(EVENT_TEMPLATE[event]));
+    const unknown = [...templateVariables(body), ...(subject ? templateVariables(subject) : [])]
+      .filter((v) => !allowed.has(v));
+    if (unknown.length) {
+      throw new BadRequestException(
+        `Unknown variable${unknown.length > 1 ? 's' : ''}: ${[...new Set(unknown)].map((v) => `{{${v}}}`).join(', ')}`,
+      );
+    }
+  }
+
+  /**
+   * What the editor needs per event: the variables it may use (with which are
+   * required) and the platform's default wording for each channel — the text
+   * "Reset to default" restores.
+   */
+  async templateDefaults(communityId: string) {
+    await this.access.assert(communityId);
+    return Object.values(NotificationEvent)
+      .filter((event) => EVENT_TEMPLATE[event])
+      .map((event) => {
+        const template = EVENT_TEMPLATE[event];
+        const spec = TEMPLATE_SPECS[template];
+        const required = new Set<string>(spec?.required ?? []);
+        return {
+          event,
+          variables: allowedVariables(template).map((name) => ({
+            name,
+            label: VARIABLES[name].label,
+            required: required.has(name),
+          })),
+          // Same plain text on both channels; email adds a subject and lays it out.
+          email: { subject: spec?.subject ?? '', body: spec?.text ?? '' },
+          whatsapp: { subject: '', body: spec?.text ?? '' },
+        };
+      });
+  }
+
+  /**
+   * Render wording with sample values and THIS community's real branding,
+   * through the same renderer live sends use. Errors come back as a message
+   * for the editor, not an exception, so the preview can show them inline.
+   */
+  async preview(communityId: string, dto: PreviewNotificationTemplateDto) {
+    await this.access.assert(communityId);
+    const template = EVENT_TEMPLATE[dto.event];
+    const body = dto.body?.trim();
+    try {
+      if (body) this.assertTemplate(dto.event, body, dto.subject);
+      // Branding samples are replaced by the community's real identity in render().
+      const out = await this.renderer.render({
+        template,
+        channel: dto.channel,
+        variables: sampleVariables(template),
+        communityId,
+        override: body ? { subject: dto.subject ?? null, body } : null,
+      });
+      return { ok: true, subject: out.subject, text: out.text, html: dto.channel === 'email' ? out.html : null, error: null };
+    } catch (err) {
+      if (err instanceof BadRequestException || err instanceof MissingVariablesError || err instanceof UnsafeTemplateError) {
+        return { ok: false, subject: '', text: '', html: null, error: (err as Error).message };
+      }
+      // A Handlebars parse error ("Parse error on line 2…") is the admin's typo.
+      return { ok: false, subject: '', text: '', html: null, error: (err as Error).message.split('\n')[0] };
+    }
   }
 
   async removeTemplate(communityId: string, id: string): Promise<{ id: string; deleted: boolean }> {

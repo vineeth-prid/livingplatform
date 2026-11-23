@@ -9,6 +9,7 @@ import { cn } from '@living/utils';
 import { useResidentCommunity } from './community';
 import { CommunitySwitcher } from './community-switcher';
 
+import { AnnouncementBanner } from './announcement-banner';
 import { GateAlerts } from './gate/gate-alerts';
 import { InstallBanner } from './pwa/install';
 
@@ -49,6 +50,7 @@ export function MobileShell() {
       {/* Mounted once, outside the routed area: a delivery at the gate must
           interrupt the resident wherever they are in the app. */}
       <GateAlerts />
+      <AnnouncementBanner />
       <BottomNav pathname={pathname} />
     </div>
   );

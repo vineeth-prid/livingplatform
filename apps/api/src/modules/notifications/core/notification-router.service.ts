@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as Handlebars from 'handlebars';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationEvent } from '@prisma/client';
@@ -16,24 +15,20 @@ import { NOTIFICATION_TEMPLATES } from '../notification.constants';
 import type { NotificationChannelName } from './notification-channel.interface';
 import { OwnershipService } from '../../ownership/ownership.service';
 import { NotificationDispatcher } from './notification.dispatcher';
+import { NotificationBrandingResolver } from './notification-branding';
+import { appLinks, statusLabel, ticketUpdateDescription } from './notification-catalog';
+import { MissingVariablesError, NotificationRenderer } from './notification-renderer';
 import { RecipientResolver, type RecipientRef } from './recipient-resolver';
-import { EmailTemplateEngine, UnsafeTemplateError, type RenderedTemplate } from './templates/template.engine';
-
-/**
- * Escape user-typed text (titles come from residents and staff) before it is
- * placed inside a raw-HTML email variable — otherwise a title could inject
- * links or markup into mail sent to approvers.
- */
-const esc = (v: unknown): string => Handlebars.escapeExpression(String(v ?? ''));
+import { UnsafeTemplateError } from './templates/template.engine';
 
 /**
  * The seam that turns a DOMAIN event into NOTIFICATIONS.
  *
  * Business modules keep publishing plain domain events and know nothing about
  * channels; this router decides — per community preference — which channels an
- * event goes out on, resolves the recipient, and hands the message to the ONE
- * dispatcher. Adding a channel changes nothing here; adding an event is one row
- * in EVENT_MAP plus a template.
+ * event goes out on, resolves the recipient, loads the message's values from
+ * the authoritative records, and hands it to the ONE renderer and the ONE
+ * dispatcher. Variable names and required values live in notification-catalog.
  *
  * Every failure is swallowed and logged: a notification must never break the
  * business transaction that triggered it.
@@ -55,13 +50,19 @@ interface RoutedMessage {
 }
 
 const EVENT_MAP: Partial<Record<string, EventBinding>> = {
-  [DomainEventName.InvoiceGenerated]: {
-    event: NotificationEvent.MAINTENANCE_DUE,
-    template: NOTIFICATION_TEMPLATES.MAINTENANCE_DUE,
-  },
   [DomainEventName.PaymentSucceeded]: {
     event: NotificationEvent.PAYMENT_SUCCESS,
     template: NOTIFICATION_TEMPLATES.PAYMENT_SUCCESS,
+  },
+  // Recorded by an admin (cash, cheque, NEFT) — the online path is PaymentSucceeded.
+  [DomainEventName.PaymentRecorded]: {
+    event: NotificationEvent.PAYMENT_CONFIRMATION,
+    template: NOTIFICATION_TEMPLATES.PAYMENT_SUCCESS,
+  },
+  // In-app banner + push only — never email/WhatsApp to the whole community.
+  [DomainEventName.AnnouncementPublished]: {
+    event: NotificationEvent.ANNOUNCEMENT,
+    template: NOTIFICATION_TEMPLATES.ANNOUNCEMENT,
   },
   [DomainEventName.VisitorCreated]: {
     event: NotificationEvent.VISITOR_PASS,
@@ -74,10 +75,6 @@ const EVENT_MAP: Partial<Record<string, EventBinding>> = {
   [DomainEventName.BookingCreated]: {
     event: NotificationEvent.BOOKING_CONFIRMED,
     template: NOTIFICATION_TEMPLATES.BOOKING_CONFIRMED,
-  },
-  [DomainEventName.AnnouncementPublished]: {
-    event: NotificationEvent.ANNOUNCEMENT,
-    template: NOTIFICATION_TEMPLATES.ANNOUNCEMENT,
   },
   [DomainEventName.TicketCreated]: {
     event: NotificationEvent.TICKET_CREATED,
@@ -97,7 +94,7 @@ const EVENT_MAP: Partial<Record<string, EventBinding>> = {
   },
   [DomainEventName.ServiceCompleted]: {
     event: NotificationEvent.SERVICE_UPDATE,
-    template: NOTIFICATION_TEMPLATES.GENERIC,
+    template: NOTIFICATION_TEMPLATES.SERVICE_UPDATED,
   },
   [DomainEventName.WorkOrderAssigned]: {
     event: NotificationEvent.WORK_ORDER_ASSIGNED,
@@ -107,19 +104,19 @@ const EVENT_MAP: Partial<Record<string, EventBinding>> = {
   // outcomes change what the resident should expect — so all three notify.
   [DomainEventName.WorkOrderRecommended]: {
     event: NotificationEvent.WORK_ORDER_UPDATE,
-    template: NOTIFICATION_TEMPLATES.GENERIC,
+    template: NOTIFICATION_TEMPLATES.WORK_ORDER_UPDATED,
   },
   [DomainEventName.WorkOrderApproved]: {
     event: NotificationEvent.WORK_ORDER_UPDATE,
-    template: NOTIFICATION_TEMPLATES.GENERIC,
+    template: NOTIFICATION_TEMPLATES.WORK_ORDER_UPDATED,
   },
   [DomainEventName.WorkOrderRejected]: {
     event: NotificationEvent.WORK_ORDER_UPDATE,
-    template: NOTIFICATION_TEMPLATES.GENERIC,
+    template: NOTIFICATION_TEMPLATES.WORK_ORDER_UPDATED,
   },
   [DomainEventName.WorkCompleted]: {
     event: NotificationEvent.WORK_ORDER_UPDATE,
-    template: NOTIFICATION_TEMPLATES.WORK_ORDER_COMPLETED,
+    template: NOTIFICATION_TEMPLATES.WORK_ORDER_UPDATED,
   },
   [DomainEventName.ResidentCreated]: {
     event: NotificationEvent.WELCOME,
@@ -127,10 +124,19 @@ const EVENT_MAP: Partial<Record<string, EventBinding>> = {
   },
 };
 
+/** Dates in the community's own timezone, the way residents read them. */
+function formatDate(d: Date | null | undefined, tz: string, part: 'date' | 'time' | 'both' = 'both'): string {
+  if (!d) return '';
+  const opts: Intl.DateTimeFormatOptions = { timeZone: tz };
+  if (part !== 'time') Object.assign(opts, { day: 'numeric', month: 'short', year: 'numeric' });
+  if (part !== 'date') Object.assign(opts, { hour: 'numeric', minute: '2-digit' });
+  return new Intl.DateTimeFormat('en-IN', opts).format(d);
+}
+
 @Injectable()
 export class NotificationRouterService {
   private readonly logger = new Logger(NotificationRouterService.name);
-  private readonly webAppUrl: string;
+  private readonly links: ReturnType<typeof appLinks>;
   private readonly currency: string;
 
   constructor(
@@ -138,11 +144,12 @@ export class NotificationRouterService {
     private readonly dispatcher: NotificationDispatcher,
     private readonly preferences: NotificationPreferenceService,
     private readonly recipients: RecipientResolver,
-    private readonly templates: EmailTemplateEngine,
+    private readonly renderer: NotificationRenderer,
+    private readonly branding: NotificationBrandingResolver,
     private readonly ownership: OwnershipService,
     config: ConfigService<AppConfig, true>,
   ) {
-    this.webAppUrl = config.get('webAppUrl', { infer: true });
+    this.links = appLinks(config.get('webAppUrl', { infer: true }));
     this.currency = config.get('payments', { infer: true }).currency;
   }
 
@@ -161,119 +168,146 @@ export class NotificationRouterService {
   }
 
   private async route(event: DomainEvent, binding: EventBinding): Promise<void> {
+    if (binding.event === NotificationEvent.ANNOUNCEMENT) return this.announce(event);
     const routing = await this.preferences.resolve(event.communityId, binding.event);
     if (!routing.enabled) return;
 
     const messages = await this.contextFor(event);
     if (!messages?.length) return;
 
+    const occurred = new Date(event.occurredAt ?? Date.now()).toISOString();
     for (const message of messages) {
       for (const channel of routing.channels) {
-        const address = await this.recipients.resolve(channel, message.recipient);
-        if (!address) continue;
-        await this.send(channel, binding, address, message.variables, event, message.template);
+        const contact = await this.recipients.contact(channel, message.recipient);
+        if (!contact.address) continue;
+        await this.send(channel, binding, contact.address, {
+          ...message.variables,
+          recipient_name: message.variables.recipient_name || contact.name,
+        }, {
+          communityId: event.communityId,
+          tenantId: event.tenantId,
+          template: message.template,
+          metadata: { domainEvent: event.name, entityId: event.entityId },
+          dedupeKey: `${event.name}:${event.entityId}:${occurred}`,
+        });
       }
     }
   }
 
   /**
-   * Send on one channel, preferring the community's own template body over the
-   * platform default. Text-only channels (WhatsApp) get the plain-text render
-   * of the same template, so one event → one message, any channel.
+   * Render through the shared renderer and dispatch on one channel. A
+   * community's own wording replaces the event's DEFAULT message only — it was
+   * never written for a secondary audience (an approver, the gate desk).
    *
-   * `template` overrides the binding's default — used when one event addresses
-   * two audiences that need to read different things (a visitor pass for the
-   * resident, an approval request for the gate desk).
+   * A message missing a required value is recorded as FAILED with the missing
+   * names and NOT sent: a broken message is worse than none.
    */
   private async send(
     channel: NotificationChannelName,
     binding: EventBinding,
     to: string,
     variables: Record<string, unknown>,
-    event: DomainEvent,
-    template?: string,
+    opts: {
+      communityId: string | null;
+      tenantId?: string | null;
+      template?: string;
+      metadata: Record<string, unknown>;
+      dedupeKey: string;
+    },
   ): Promise<void> {
+    const template = opts.template ?? binding.template;
     const ctx = {
-      tenantId: event.tenantId,
-      communityId: event.communityId,
-      metadata: { domainEvent: event.name, entityId: event.entityId },
+      tenantId: opts.tenantId,
+      communityId: opts.communityId,
+      metadata: opts.metadata,
+      dedupeKey: `${opts.dedupeKey}:${template}:${channel}:${to}`,
     };
-
-    // A community's custom body replaces the event's DEFAULT message only — it
-    // was never written for the secondary audience.
-    const override = template
+    const override = opts.template
       ? null
-      : await this.preferences.templateFor(event.communityId, binding.event, channel);
-    // An override that fails the template safety check (one stored before the
-    // check existed) falls back to the default message rather than dropping it.
-    let rendered: RenderedTemplate | null = null;
-    if (override) {
-      try {
-        rendered = this.templates.renderRaw(override.body, variables, {
-          subject: override.subject ?? undefined,
-          layout: channel === 'email',
-        });
-      } catch (err) {
-        if (!(err instanceof UnsafeTemplateError)) throw err;
+      : await this.preferences.templateFor(opts.communityId, binding.event, channel);
+
+    let rendered;
+    try {
+      rendered = await this.renderer.render({
+        template, channel, variables, communityId: opts.communityId, override,
+      });
+    } catch (err) {
+      // A custom body stored before the safety check existed falls back to the
+      // default wording rather than dropping the message.
+      if (override && err instanceof UnsafeTemplateError) {
         this.logger.warn(`Ignoring unsafe custom template for ${binding.event}/${channel}: ${err.message}`);
+        rendered = await this.renderer
+          .render({ template, channel, variables, communityId: opts.communityId })
+          .catch((e: unknown) => e as Error);
+      } else {
+        rendered = err as Error;
       }
     }
-    if (rendered) {
-      await this.dispatcher.dispatch(
-        {
-          channel,
-          to,
-          subject: rendered.subject || 'Living',
-          html: channel === 'email' ? rendered.html : undefined,
-          text: rendered.text,
-        },
-        { ...ctx, template: `${binding.event}:custom` },
-      );
+    if (rendered instanceof Error) {
+      const reason = rendered instanceof MissingVariablesError
+        ? `Not sent: missing ${rendered.missing.join(', ')}`
+        : `Not sent: ${rendered.message}`;
+      this.logger.warn(`${binding.event}/${channel} (${template}) ${reason}`);
+      await this.dispatcher.recordRefused(channel, to, reason, { ...ctx, template });
       return;
     }
 
-    await this.dispatcher.dispatchTemplate(
-      channel,
-      template ?? binding.template,
-      to,
-      variables,
-      { ctx },
+    await this.dispatcher.dispatch(
+      {
+        channel,
+        to,
+        subject: rendered.subject,
+        html: channel === 'email' ? rendered.html : undefined,
+        text: rendered.text,
+        fromName: rendered.brand.branded ? rendered.brand.sender_name : undefined,
+      },
+      { ...ctx, template: override ? `${binding.event}:custom` : template },
     );
   }
 
   /**
-   * Load whatever the message needs. Kept in one place so a template's
-   * variables are obvious and a missing row silently skips the notification
-   * rather than throwing inside an event handler.
+   * Load whatever the message needs from the records themselves — the event
+   * payload only says what changed. Kept in one place so a template's values
+   * are obvious; a missing row skips the notification rather than throwing.
    */
   private async contextFor(event: DomainEvent): Promise<RoutedMessage[] | null> {
     const communityId = event.communityId ?? undefined;
+    const tz = (await this.branding.for(communityId)).timezone;
+    const residentLink = (path: string) =>
+      `${this.links.resident}${path}${communityId ? `?c=${communityId}` : ''}`;
+    const workforceLink = (path: string) => `${this.links.workforce}${path}`;
 
     switch (event.name) {
-      case DomainEventName.InvoiceGenerated: {
-        // A generation run notifies each invoice's resident individually; the
-        // run-level event only carries a count, so fan out from the rows.
-        return null;
-      }
-
-      case DomainEventName.PaymentSucceeded: {
+      case DomainEventName.PaymentSucceeded:
+      case DomainEventName.PaymentRecorded: {
+        // Both are written only once the money is in: the gateway-verified
+        // success path, or an admin recording cash/cheque/NEFT they collected.
         const payment = await this.prisma.payment.findUnique({
           where: { id: event.entityId },
           include: { invoice: { select: { invoiceNumber: true } } },
         });
-        if (!payment?.residentId) return null;
-        return [{
-          recipient: { residentId: payment.residentId, communityId },
+        if (!payment) return null;
+        // An online payment thanks whoever paid; a recorded one tells the unit's
+        // owners — the people billed — that their dues were received.
+        const residentIds = event.name === DomainEventName.PaymentRecorded
+          ? (payment.unitId ? await this.ownership.notifiableResidentsFor(payment.unitId) : [])
+          : payment.residentId ? [payment.residentId] : [];
+        if (residentIds.length === 0) return null;
+        const purpose = payment.purpose === 'MAINTENANCE'
+          ? `Maintenance${payment.invoice?.invoiceNumber ? ` — ${payment.invoice.invoiceNumber}` : ''}`
+          : 'Service payment';
+        return residentIds.map((residentId) => ({
+          recipient: { residentId, communityId },
           variables: {
-            amount: Number(payment.amount).toFixed(2),
-            currency: payment.currency || this.currency,
-            invoiceNumber: payment.invoice?.invoiceNumber ?? null,
-            receiptNumber: payment.receiptNumber,
-            paidAt: payment.paidAt?.toDateString() ?? '',
-            residentName: '',
-            actionUrl: `${this.webAppUrl}/payments/${payment.id}`,
+            amount: this.money(payment.amount, payment.currency),
+            payment_purpose: purpose,
+            payment_date: formatDate(payment.paidAt, tz),
+            payment_method: payment.method ? statusLabel(payment.method) : '',
+            transaction_reference: payment.gatewayPaymentId ?? payment.receiptNumber,
+            receipt_number: payment.receiptNumber,
+            receipt_link: residentLink('/maintenance'),
           },
-        }];
+        }));
       }
 
       case DomainEventName.VisitorCreated:
@@ -292,11 +326,11 @@ export class NotificationRouterService {
         });
         if (!visitor?.residentId) return null;
         const variables = {
-          visitorName: visitor.visitorName,
-          passCode: visitor.passCode,
-          expectedAt: visitor.expectedArrival.toLocaleString(),
-          communityName: await this.communityName(communityId),
-          residentName: '',
+          visitor_name: visitor.visitorName,
+          pass_code: visitor.passCode,
+          visit_date: formatDate(visitor.expectedArrival, tz, 'date'),
+          arrival_time: formatDate(visitor.expectedArrival, tz, 'time'),
+          visitor_pass_link: residentLink('/visitors'),
         };
         const messages: RoutedMessage[] = [
           { recipient: { residentId: visitor.residentId, communityId }, variables },
@@ -308,18 +342,17 @@ export class NotificationRouterService {
         if (event.name === DomainEventName.VisitorCreated && communityId) {
           const host = visitor.resident
             ? `${visitor.resident.firstName} ${visitor.resident.lastName}`.trim()
-            : 'a resident';
-          const unitNumber = visitor.resident?.unitAssignment?.unit?.unitNumber ?? null;
+            : 'A resident';
+          const unitNumber = visitor.resident?.unitAssignment?.unit?.unitNumber ?? '';
           for (const approver of await this.approversFor(communityId)) {
             messages.push({
               recipient: { userId: approver.id, email: approver.email, name: approver.firstName },
               variables: {
                 ...variables,
-                residentName: approver.firstName,
-                hostName: host,
-                unitNumber,
-                visitorMobile: visitor.mobileNumber,
-                actionUrl: `${this.webAppUrl}/visitors/${visitor.id}`,
+                recipient_name: approver.firstName,
+                host_name: host,
+                unit_number: unitNumber,
+                approval_link: `${this.links.portal}/visitors/${visitor.id}`,
               },
               template: NOTIFICATION_TEMPLATES.VISITOR_PENDING,
             });
@@ -337,9 +370,11 @@ export class NotificationRouterService {
         return [{
           recipient: { residentId: booking.residentId, communityId },
           variables: {
-            amenityName: booking.amenity?.name ?? 'Amenity',
-            slotLabel: `${booking.startTime.toLocaleString()} – ${booking.endTime.toLocaleTimeString()}`,
-            residentName: '',
+            facility_name: booking.amenity?.name ?? '',
+            booking_date: formatDate(booking.startTime, tz, 'date'),
+            time_slot: `${formatDate(booking.startTime, tz, 'time')} – ${formatDate(booking.endTime, tz, 'time')}`,
+            booking_status: statusLabel(booking.status),
+            booking_link: residentLink('/bookings'),
           },
         }];
       }
@@ -347,16 +382,15 @@ export class NotificationRouterService {
       case DomainEventName.ResidentCreated: {
         const resident = await this.prisma.resident.findUnique({
           where: { id: event.entityId },
-          select: { id: true, firstName: true, mobile: true, email: true },
+          select: { id: true, firstName: true, mobile: true },
         });
         if (!resident) return null;
         return [{
           recipient: { residentId: resident.id, communityId },
           variables: {
-            residentName: resident.firstName,
+            recipient_name: resident.firstName,
             username: resident.mobile,
-            communityName: await this.communityName(communityId),
-            actionUrl: this.webAppUrl,
+            app_link: residentLink('/'),
           },
         }];
       }
@@ -367,20 +401,17 @@ export class NotificationRouterService {
         const ticket = await this.prisma.ticket.findUnique({
           where: { id: event.entityId },
           select: {
-            number: true, title: true, status: true, residentId: true,
-            assignedStaffId: true, assignedVendorId: true,
+            number: true, title: true, description: true, status: true, residentId: true,
+            createdAt: true, assignedAt: true, assignedStaffId: true, assignedVendorId: true,
+            unit: { select: { unitNumber: true } },
           },
         });
         if (!ticket) return null;
 
-        const ticketNumber = formatTicketNumber(ticket.number);
         const base = {
-          ticketNumber,
-          ticketTitle: ticket.title,
-          title: ticket.title,
-          communityName: await this.communityName(communityId),
-          actionUrl: `${this.webAppUrl}/tickets/${event.entityId}`,
-          ticketUrl: `${this.webAppUrl}/tickets/${event.entityId}`,
+          ticket_number: formatTicketNumber(ticket.number),
+          ticket_title: ticket.title,
+          ticket_description: ticket.description,
         };
 
         // On assignment the assignee is the audience; otherwise it is the
@@ -388,16 +419,44 @@ export class NotificationRouterService {
         if (event.name === DomainEventName.TicketAssigned) {
           const assignee = this.assigneeRef(ticket, communityId);
           if (!assignee) return null;
-          return [{ recipient: assignee, variables: { ...base, assigneeName: '', recipientName: '' } }];
+          return [{
+            recipient: assignee,
+            variables: {
+              ...base,
+              unit_number: ticket.unit?.unitNumber ?? '',
+              assigned_at: formatDate(ticket.assignedAt ?? event.occurredAt, tz),
+              ticket_link: workforceLink(`/jobs/ticket/${event.entityId}`),
+            },
+          }];
         }
 
         if (!ticket.residentId) return null;
+        const ticketLink = residentLink(`/requests/ticket/${event.entityId}`);
+        if (event.name === DomainEventName.TicketCreated) {
+          return [{
+            recipient: { residentId: ticket.residentId, communityId },
+            variables: {
+              ...base,
+              created_at: formatDate(ticket.createdAt, tz),
+              status: statusLabel(ticket.status),
+              ticket_link: ticketLink,
+            },
+          }];
+        }
+
+        // The event says what changed; the row may already have moved on, so
+        // the transition is read from the event, not the current status.
+        const data = event.data as { status?: string; fromStatus?: string; note?: string };
+        const to = data.status ?? ticket.status;
         return [{
           recipient: { residentId: ticket.residentId, communityId },
           variables: {
             ...base,
-            recipientName: '',
-            note: `Status: ${ticket.status.toLowerCase().replace(/_/g, ' ')}`,
+            previous_status: statusLabel(data.fromStatus),
+            status: statusLabel(to),
+            update_description: ticketUpdateDescription(data.fromStatus, to, data.note),
+            updated_at: formatDate(event.occurredAt, tz),
+            ticket_link: ticketLink,
           },
         }];
       }
@@ -407,23 +466,31 @@ export class NotificationRouterService {
         const request = await this.prisma.serviceRequest.findUnique({
           where: { id: event.entityId },
           select: {
-            number: true, title: true, residentId: true,
+            number: true, title: true, residentId: true, preferredDate: true, preferredTimeSlot: true,
             assignedStaffId: true, assignedVendorId: true,
+            unit: { select: { unitNumber: true } },
           },
         });
         if (!request) return null;
 
         const base = {
-          requestNumber: formatServiceRequestNumber(request.number),
-          title: request.title,
-          communityName: await this.communityName(communityId),
-          actionUrl: `${this.webAppUrl}/service-requests/${event.entityId}`,
+          request_number: formatServiceRequestNumber(request.number),
+          service_title: request.title,
         };
 
         if (event.name === DomainEventName.ServiceAssigned) {
           const assignee = this.assigneeRef(request, communityId);
           if (!assignee) return null;
-          return [{ recipient: assignee, variables: { ...base, assigneeName: '' } }];
+          const date = formatDate(request.preferredDate, tz, 'date');
+          return [{
+            recipient: assignee,
+            variables: {
+              ...base,
+              unit_number: request.unit?.unitNumber ?? '',
+              scheduled_date: [date, request.preferredTimeSlot].filter(Boolean).join(', '),
+              request_link: workforceLink(`/jobs/service-request/${event.entityId}`),
+            },
+          }];
         }
 
         if (!request.residentId) return null;
@@ -431,9 +498,9 @@ export class NotificationRouterService {
           recipient: { residentId: request.residentId, communityId },
           variables: {
             ...base,
-            recipientName: '',
-            heading: 'Your request is complete',
-            bodyHtml: `<p>${esc(base.title)} (${esc(base.requestNumber)}) has been completed.</p>`,
+            status: 'Completed',
+            update_description: 'Your service request has been completed. Please let us know if anything still needs attention.',
+            request_link: residentLink(`/requests/service/${event.entityId}`),
           },
         }];
       }
@@ -448,34 +515,33 @@ export class NotificationRouterService {
         const workOrder = await this.prisma.workOrder.findUnique({
           where: { id: event.entityId },
           select: {
-            number: true, title: true, originType: true, originId: true,
-            estimatedTotalCost: true, rejectionReason: true,
+            number: true, title: true, originType: true, originId: true, dueDate: true,
+            estimatedTotalCost: true,
           },
         });
         if (!workOrder) return null;
 
-        const number = formatWorkOrderNumber(workOrder.number);
-        const heading =
-          event.name === DomainEventName.WorkOrderRecommended
-            ? 'Additional work needs approval'
-            : event.name === DomainEventName.WorkOrderApproved
-              ? 'Approved — work is resuming'
-              : 'Approved to continue without the extra work';
-        const body =
-          event.name === DomainEventName.WorkOrderRecommended
-            ? `<p>${esc(workOrder.title)} (${number}) needs approval before work can continue. We will update you as soon as it is decided.</p>`
-            : event.name === DomainEventName.WorkOrderApproved
-              ? `<p>${esc(workOrder.title)} (${number}) has been approved and work is resuming.</p>`
-              : `<p>The additional work for ${esc(workOrder.title)} (${number}) was not approved. Our team is continuing with the original request.</p>`;
+        const lane = {
+          [DomainEventName.WorkOrderRecommended]: {
+            status: 'Awaiting Approval',
+            text: 'Additional work is needed on your request and is awaiting approval. We will update you as soon as it is decided.',
+          },
+          [DomainEventName.WorkOrderApproved]: {
+            status: 'Approved',
+            text: 'The additional work has been approved and work on your request is resuming.',
+          },
+          [DomainEventName.WorkOrderRejected]: {
+            status: 'Not Approved',
+            text: 'The additional work was not approved. Our team is continuing with your original request.',
+          },
+        }[event.name];
 
         const variables = {
-          subject: `${heading} — ${number}`,
-          heading,
-          bodyHtml: body,
-          workOrderNumber: number,
-          title: workOrder.title,
-          recipientName: '',
-          actionUrl: `${this.webAppUrl}/work-orders/${event.entityId}`,
+          work_order_number: formatWorkOrderNumber(workOrder.number),
+          work_title: workOrder.title,
+          status: lane.status,
+          update_description: lane.text,
+          expected_completion: formatDate(workOrder.dueDate, tz, 'date'),
         };
 
         const messages: RoutedMessage[] = [];
@@ -489,22 +555,27 @@ export class NotificationRouterService {
           if (ticket?.residentId) {
             messages.push({
               recipient: { residentId: ticket.residentId, communityId },
-              variables,
+              variables: {
+                ...variables,
+                work_order_link: residentLink(`/requests/ticket/${workOrder.originId}`),
+              },
             });
           }
         }
 
         // Only a pending decision needs an approver; the outcomes do not.
         if (event.name === DomainEventName.WorkOrderRecommended && communityId) {
+          const cost = workOrder.estimatedTotalCost
+            ? ` The estimated cost is ${this.money(workOrder.estimatedTotalCost)}.`
+            : '';
           for (const approver of await this.approversFor(communityId, PERMISSIONS.WORKORDER_APPROVE)) {
             messages.push({
               recipient: { userId: approver.id, email: approver.email, name: approver.firstName },
               variables: {
                 ...variables,
-                recipientName: approver.firstName,
-                bodyHtml:
-                  `<p>${esc(workOrder.title)} (${number}) is waiting on your approval` +
-                  `${workOrder.estimatedTotalCost ? ` — estimated ${this.currency} ${Number(workOrder.estimatedTotalCost).toFixed(2)}` : ''}.</p>`,
+                recipient_name: approver.firstName,
+                update_description: `This work order is waiting on your approval.${cost}`,
+                work_order_link: `${this.links.portal}/work-orders/${event.entityId}`,
               },
             });
           }
@@ -517,7 +588,7 @@ export class NotificationRouterService {
         const workOrder = await this.prisma.workOrder.findUnique({
           where: { id: event.entityId },
           select: {
-            number: true, title: true, completedDate: true,
+            number: true, title: true, assignedAt: true, dueDate: true, completedDate: true,
             assignedStaffId: true, assignedVendorId: true,
           },
         });
@@ -528,18 +599,28 @@ export class NotificationRouterService {
         const assignee = this.assigneeRef(workOrder, communityId);
         if (!assignee) return null;
 
-        const workOrderNumber = formatWorkOrderNumber(workOrder.number);
+        const base = {
+          work_order_number: formatWorkOrderNumber(workOrder.number),
+          work_title: workOrder.title,
+          work_order_link: workforceLink(`/jobs/work-order/${event.entityId}`),
+        };
+        if (event.name === DomainEventName.WorkOrderAssigned) {
+          return [{
+            recipient: assignee,
+            variables: {
+              ...base,
+              assigned_at: formatDate(workOrder.assignedAt ?? event.occurredAt, tz),
+              scheduled_date: formatDate(workOrder.dueDate, tz, 'date'),
+            },
+          }];
+        }
+        // WorkCompleted is only published once the work order IS completed.
         return [{
           recipient: assignee,
           variables: {
-            workOrderNumber,
-            title: workOrder.title,
-            communityName: await this.communityName(communityId),
-            assigneeName: '',
-            recipientName: '',
-            completedAt: workOrder.completedDate?.toDateString() ?? new Date().toDateString(),
-            actionUrl: `${this.webAppUrl}/work-orders/${event.entityId}`,
-            workOrderUrl: `${this.webAppUrl}/work-orders/${event.entityId}`,
+            ...base,
+            status: 'Completed',
+            update_description: `This work order was marked as completed on ${formatDate(workOrder.completedDate ?? event.occurredAt, tz)}.`,
           },
         }];
       }
@@ -547,6 +628,66 @@ export class NotificationRouterService {
       default:
         return null;
     }
+  }
+
+  /**
+   * A published announcement reaches every resident with an app login as an
+   * in-app banner (if the app is open) and a push notification — never email
+   * or WhatsApp, which would be a message to the whole community at once.
+   * The event's on/off switch in Notification preferences still applies.
+   */
+  private async announce(event: DomainEvent): Promise<void> {
+    if (!event.communityId) return;
+    if (!(await this.preferences.isEnabled(event.communityId, NotificationEvent.ANNOUNCEMENT))) return;
+    const announcement = await this.prisma.announcement.findFirst({
+      where: { id: event.entityId, communityId: event.communityId, deletedAt: null },
+      select: { id: true, title: true, content: true },
+    });
+    if (!announcement) return;
+    const residents = await this.prisma.resident.findMany({
+      where: { communityId: event.communityId, status: 'ACTIVE', deletedAt: null, userId: { not: null } },
+      select: { userId: true },
+    });
+    const userIds = [...new Set(residents.map((r) => r.userId!))];
+    if (userIds.length === 0) return;
+
+    const flat = announcement.content.replace(/\s+/g, ' ').trim();
+    const summary = flat.length > 140 ? `${flat.slice(0, 137).trimEnd()}…` : flat;
+    const occurred = new Date(event.occurredAt ?? Date.now()).toISOString();
+    const BATCH = 500;
+    for (let i = 0; i < userIds.length; i += BATCH) {
+      const to = userIds.slice(i, i + BATCH);
+      for (const channel of ['inapp', 'push'] as const) {
+        await this.dispatcher
+          .dispatch(
+            {
+              channel,
+              to,
+              subject: announcement.title,
+              text: summary,
+              channelData: {
+                realtimeType: 'announcement.published',
+                announcementId: announcement.id,
+                url: '/announcements',
+                tag: `announcement-${announcement.id}`,
+              },
+            },
+            {
+              tenantId: event.tenantId,
+              communityId: event.communityId,
+              template: NOTIFICATION_TEMPLATES.ANNOUNCEMENT,
+              metadata: { domainEvent: event.name, entityId: event.entityId },
+              dedupeKey: `${event.name}:${announcement.id}:${occurred}:${channel}:${i / BATCH}`,
+            },
+          )
+          .catch((err: Error) => this.logger.warn(`Announcement ${channel} failed: ${err.message}`));
+      }
+    }
+  }
+
+  private money(amount: unknown, currency?: string | null): string {
+    const n = Number(amount);
+    return `${currency || this.currency} ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   /**
@@ -584,15 +725,6 @@ export class NotificationRouterService {
     return [...new Map(grants.map((g) => [g.user.id, g.user])).values()];
   }
 
-  private async communityName(communityId: string | undefined): Promise<string> {
-    if (!communityId) return 'your community';
-    const c = await this.prisma.community.findUnique({
-      where: { id: communityId },
-      select: { name: true },
-    });
-    return c?.name ?? 'your community';
-  }
-
   /**
    * Send the maintenance-due reminder for a set of invoices. Called by the
    * billing scheduler (which knows *which* bills are due) rather than inferred
@@ -611,6 +743,12 @@ export class NotificationRouterService {
     }>,
   ): Promise<number> {
     let sent = 0;
+    const binding = {
+      event: NotificationEvent.MAINTENANCE_DUE,
+      template: NOTIFICATION_TEMPLATES.MAINTENANCE_DUE,
+    };
+    // The sweep runs daily: one reminder per invoice per day, however often it runs.
+    const today = new Date().toISOString().slice(0, 10);
     for (const invoice of invoices) {
       /*
         Addressed to the people who OWE the money, resolved from the unit.
@@ -623,35 +761,36 @@ export class NotificationRouterService {
       */
       const residentIds = await this.ownership.notifiableResidentsFor(invoice.unitId);
       if (residentIds.length === 0) continue;
-      const routing = await this.preferences.resolve(
-        invoice.communityId,
-        NotificationEvent.MAINTENANCE_DUE,
-      );
+      const routing = await this.preferences.resolve(invoice.communityId, binding.event);
       if (!routing.enabled) continue;
 
+      const unit = await this.prisma.unit.findUnique({
+        where: { id: invoice.unitId },
+        select: { unitNumber: true },
+      });
+      const tz = (await this.branding.for(invoice.communityId)).timezone;
       const balance = Number(invoice.totalAmount) - Number(invoice.paidAmount);
       const variables = {
-        invoiceNumber: invoice.invoiceNumber,
-        amount: balance.toFixed(2),
-        currency: this.currency,
-        dueDate: invoice.dueDate.toDateString(),
-        periodLabel: invoice.dueDate.toLocaleString('en', { month: 'long', year: 'numeric' }),
-        residentName: '',
-        unitNumber: '',
-        actionUrl: `${this.webAppUrl}/invoices/${invoice.id}`,
+        invoice_number: invoice.invoiceNumber,
+        amount: this.money(balance),
+        due_date: formatDate(invoice.dueDate, tz, 'date'),
+        billing_period: invoice.dueDate.toLocaleString('en', { month: 'long', year: 'numeric', timeZone: tz }),
+        unit_number: unit?.unitNumber ?? '',
+        payment_link: `${this.links.resident}/maintenance?c=${invoice.communityId}`,
       };
 
       for (const residentId of residentIds) {
         for (const channel of routing.channels) {
-          const address = await this.recipients.resolve(channel, {
+          const contact = await this.recipients.contact(channel, {
             residentId,
             communityId: invoice.communityId,
           });
-          if (!address) continue;
-          await this.dispatcher
-            .dispatchTemplate(channel, NOTIFICATION_TEMPLATES.MAINTENANCE_DUE, address, variables, {
-              ctx: { communityId: invoice.communityId, metadata: { invoiceId: invoice.id } },
-            })
+          if (!contact.address) continue;
+          await this.send(channel, binding, contact.address, { ...variables, recipient_name: contact.name }, {
+            communityId: invoice.communityId,
+            metadata: { invoiceId: invoice.id },
+            dedupeKey: `maintenance-due:${invoice.id}:${today}`,
+          })
             .then(() => {
               sent += 1;
             })

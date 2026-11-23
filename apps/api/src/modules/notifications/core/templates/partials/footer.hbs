@@ -1,7 +1,7 @@
-<div style="padding: 18px 28px 24px;">
-  <p class="muted" style="margin: 12px 0 0;">
-    {{t "footer_tagline"}}<br />
-    {{#if supportEmail}}{{t "footer_help"}} <a href="mailto:{{supportEmail}}">{{supportEmail}}</a><br />{{/if}}
-    <span>&copy; {{year}} {{#if brandName}}{{brandName}}{{else}}Living{{/if}}</span>
+<div style="padding: 18px 28px 24px; border-top: 1px solid #eef0ee;">
+  <p class="muted" style="margin: 0;">
+    {{#unless branded}}{{t "footer_tagline"}}<br />{{/unless}}
+    {{#if support_email}}{{t "footer_help"}} <a href="mailto:{{support_email}}">{{support_email}}</a>{{#if support_phone}} · {{support_phone}}{{/if}}<br />{{else}}{{#if support_phone}}{{t "footer_help"}} {{support_phone}}<br />{{/if}}{{/if}}
+    <span>&copy; {{year}} {{#if brand_name}}{{brand_name}}{{else}}Living{{/if}}</span>
   </p>
 </div>

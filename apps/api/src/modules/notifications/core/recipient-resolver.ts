@@ -64,6 +64,12 @@ export class RecipientResolver {
     return this.addressFor(channel, hydrated);
   }
 
+  /** Address plus the person's first name — the name greets them in the message. */
+  async contact(channel: NotificationChannelName, ref: RecipientRef): Promise<{ address: string | null; name: string }> {
+    const hydrated = await this.hydrate(ref);
+    return { address: this.addressFor(channel, hydrated), name: hydrated.name?.trim() ?? '' };
+  }
+
   private async hydrate(ref: RecipientRef): Promise<RecipientRef> {
     // An explicitly-addressed ref is used verbatim — unchanged behaviour, and
     // it keeps a caller-supplied address from being overwritten by a lookup.

@@ -27,10 +27,17 @@ function makeDispatcher() {
     markProcessing: jest.fn().mockResolvedValue(null),
     markSent: jest.fn().mockResolvedValue(null),
     markAttemptFailed: jest.fn().mockResolvedValue(null),
+    markFailed: jest.fn().mockResolvedValue(null),
+    createQueuedOnce: jest.fn().mockResolvedValue('del-1'),
   } as unknown as DeliveryTracker;
   const templates = { render: jest.fn().mockReturnValue({ subject: 'S', html: '<p>B</p>', text: 'B' }) } as unknown as EmailTemplateEngine;
   const senders = { emailFor: jest.fn().mockResolvedValue({}) } as unknown as SenderResolver;
-  const config = { get: () => ({ queue: { attempts: 5 }, defaultLocale: 'en' }) };
+  const config = {
+    get: (k: string) =>
+      k === 'mail'
+        ? { from: 'Living <no-reply@living.test>' }
+        : { provider: 'smtp', smtp: { fromEmail: '' }, queue: { attempts: 5 }, defaultLocale: 'en' },
+  };
 
   const dispatcher = new NotificationDispatcher(router, queue as never, tracking, templates, senders, config as never);
   return { dispatcher, router, channel, queue, tracking, templates };
@@ -139,5 +146,53 @@ describe('NotificationDispatcher — a hung provider cannot hold a worker slot',
 
     expect(result.messageId).toBe('m');
     expect(tracking.markSent).toHaveBeenCalled();
+  });
+});
+
+describe('NotificationDispatcher — idempotency, refusals and sender identity', () => {
+  it('skips a dispatch whose dedupe key the database already holds', async () => {
+    const { dispatcher, queue, tracking } = makeDispatcher();
+    (tracking.createQueuedOnce as jest.Mock).mockResolvedValue(null); // unique index refused it
+
+    const res = await dispatcher.dispatch(
+      { channel: 'email', to: 'a@b.com', subject: 'Hi', html: '<p>x</p>' },
+      { dedupeKey: 'ticket.status_changed:t-1:2026' },
+    );
+
+    expect(res.deliveryId).toBe('');
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('writes the dedupe key with the row on a first dispatch', async () => {
+    const { dispatcher, queue, tracking } = makeDispatcher();
+    await dispatcher.dispatch(
+      { channel: 'email', to: 'a@b.com', subject: 'Hi', html: '<p>x</p>' },
+      { dedupeKey: 'k-1' },
+    );
+    expect((tracking.createQueuedOnce as jest.Mock).mock.calls[0][1].dedupeKey).toBe('k-1');
+    expect(queue.add).toHaveBeenCalled();
+  });
+
+  it('records a refused message as FAILED with its reason, without queueing it', async () => {
+    const { dispatcher, queue, tracking } = makeDispatcher();
+    await dispatcher.recordRefused('whatsapp', '+919820000001', 'Not sent: missing ticket_number', { communityId: 'c-1' });
+    expect(tracking.markFailed).toHaveBeenCalledWith('del-1', 'Not sent: missing ticket_number');
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('puts a branded community name on the configured address — never a new address', async () => {
+    const { dispatcher, queue } = makeDispatcher();
+    await dispatcher.dispatch(
+      { channel: 'email', to: 'a@b.com', subject: 'Hi', html: '<p>x</p>', fromName: 'ABC "Residency"' },
+      { communityId: 'c-1' },
+    );
+    const message = (queue.add as jest.Mock).mock.calls[0][1].message;
+    expect(message.from).toBe('"ABC Residency" <no-reply@living.test>');
+  });
+
+  it('keeps the provider default sender when the community is not branded', async () => {
+    const { dispatcher, queue } = makeDispatcher();
+    await dispatcher.dispatch({ channel: 'email', to: 'a@b.com', subject: 'Hi', html: '<p>x</p>' }, { communityId: 'c-1' });
+    expect((queue.add as jest.Mock).mock.calls[0][1].message.from).toBeUndefined();
   });
 });

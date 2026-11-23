@@ -98,6 +98,8 @@ export const DomainEventName = {
   PaymentInitiated: 'payment.initiated',
   PaymentSucceeded: 'payment.succeeded',
   PaymentFailed: 'payment.failed',
+  /** An admin recorded a payment collected outside the gateway (cash, cheque, NEFT). */
+  PaymentRecorded: 'payment.recorded',
   PaymentRefunded: 'payment.refunded',
   // Sprint 11 — WhatsApp gateway sessions
   WhatsAppSessionConnected: 'whatsapp.session_connected',
@@ -198,6 +200,8 @@ export type TicketEvent = DomainEventEnvelope<
     ticketNumber: string;
     status?: string;
     fromStatus?: string;
+    /** The note left with a status change — shown to the resident. */
+    note?: string;
     assigneeType?: 'staff' | 'vendor';
     assigneeId?: string;
     commentId?: string;
@@ -328,6 +332,7 @@ export type PaymentEvent = DomainEventEnvelope<
   | typeof DomainEventName.PaymentInitiated
   | typeof DomainEventName.PaymentSucceeded
   | typeof DomainEventName.PaymentFailed
+  | typeof DomainEventName.PaymentRecorded
   | typeof DomainEventName.PaymentRefunded,
   {
     purpose: string;

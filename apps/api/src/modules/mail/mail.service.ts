@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration';
 import { NOTIFICATION_TEMPLATES } from '../notifications/notification.constants';
 import { NotificationDispatcher } from '../notifications/core/notification.dispatcher';
+import { NotificationRenderer } from '../notifications/core/notification-renderer';
 
 /**
  * Transactional auth email (verification / password reset). A thin adapter over
@@ -18,6 +19,7 @@ export class MailService {
 
   constructor(
     private readonly notifications: NotificationDispatcher,
+    private readonly renderer: NotificationRenderer,
     private readonly config: ConfigService<AppConfig, true>,
   ) {
     this.webAppUrl = this.config.get('webAppUrl', { infer: true });
@@ -30,7 +32,21 @@ export class MailService {
 
   async sendPasswordReset(to: string, token: string): Promise<void> {
     const resetUrl = `${this.webAppUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
-    await this.enqueue(NOTIFICATION_TEMPLATES.PASSWORD_RESET, to, { resetUrl });
+    // Same wording and renderer as the Password reset event in the editor.
+    try {
+      const mail = await this.renderer.render({
+        template: NOTIFICATION_TEMPLATES.PASSWORD_RESET,
+        channel: 'email',
+        variables: { reset_link: resetUrl, expires_in: '1 hour' },
+      });
+      await this.notifications.dispatch(
+        { channel: 'email', to, subject: mail.subject, html: mail.html, text: mail.text },
+        { template: NOTIFICATION_TEMPLATES.PASSWORD_RESET },
+      );
+    } catch (err) {
+      // Never let a mail failure break auth; log and move on.
+      this.logger.error(`Failed to queue "${NOTIFICATION_TEMPLATES.PASSWORD_RESET}" to ${to}`, err as Error);
+    }
   }
 
   /**

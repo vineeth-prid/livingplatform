@@ -21,6 +21,8 @@ export interface DispatchContext {
   tenantId?: string | null;
   communityId?: string | null;
   metadata?: Record<string, unknown>;
+  /** Same key twice → the second dispatch is skipped (stored in metadata). */
+  dedupeKey?: string;
 }
 
 /** Serialized job payload (Redis-safe — buffers become base64). */
@@ -42,6 +44,8 @@ export class NotificationDispatcher {
   private readonly logger = new Logger(NotificationDispatcher.name);
   private readonly attempts: number;
   private readonly defaultLocale: string;
+  /** The authorised sending address — branded mail only changes its display name. */
+  private readonly defaultFromAddress: string;
   /** Hard ceiling on one send attempt. See `deliver`. */
   private readonly sendTimeoutMs = Number(process.env.NOTIFICATION_SEND_TIMEOUT_MS ?? 30_000);
 
@@ -56,6 +60,11 @@ export class NotificationDispatcher {
     const email = this.config.get('email', { infer: true });
     this.attempts = email.queue.attempts;
     this.defaultLocale = email.defaultLocale;
+    const fallback = this.config.get('mail', { infer: true })?.from ?? '';
+    this.defaultFromAddress =
+      (email.provider === 'ses' ? email.ses?.fromEmail : email.smtp?.fromEmail) ||
+      /<([^>]+)>/.exec(fallback)?.[1] ||
+      (fallback.includes('@') ? fallback.trim() : '');
   }
 
   /** Enqueue a message for asynchronous delivery on its channel. */
@@ -64,7 +73,7 @@ export class NotificationDispatcher {
     await this.applyCommunitySender(message, ctx);
     const channel = this.router.get(message.channel);
     const serialized = serializeMessage(message);
-    const deliveryId = await this.tracking.createQueued(message, {
+    const track = {
       channel: message.channel,
       provider: channel.provider,
       maxAttempts: this.attempts,
@@ -74,7 +83,16 @@ export class NotificationDispatcher {
       tenantId: ctx.tenantId,
       communityId: ctx.communityId,
       metadata: ctx.metadata,
-    });
+    };
+    // An event handled twice (a retried handler, a re-published event) must not
+    // reach anyone twice: the database refuses the second row.
+    const deliveryId = ctx.dedupeKey
+      ? await this.tracking.createQueuedOnce(message, { ...track, dedupeKey: ctx.dedupeKey })
+      : await this.tracking.createQueued(message, track);
+    if (!deliveryId) {
+      this.log('duplicate-skipped', { channel: message.channel, dedupeKey: ctx.dedupeKey });
+      return { deliveryId: '', jobId: '' };
+    }
     const job = await this.queue.add(
       NOTIFICATION_JOB,
       { deliveryId, channel: message.channel, message: serialized },
@@ -83,6 +101,27 @@ export class NotificationDispatcher {
     await this.tracking.attachJob(deliveryId, job.id ?? '');
     this.log('queued', { deliveryId, jobId: job.id, channel: message.channel, subject: message.subject });
     return { deliveryId, jobId: job.id ?? '' };
+  }
+
+  /**
+   * Record a message that was refused before sending (a required value was
+   * missing), so it shows in delivery history as FAILED with the reason instead
+   * of vanishing.
+   */
+  async recordRefused(channel: NotificationChannelName, to: string, reason: string, ctx: DispatchContext = {}): Promise<void> {
+    const id = await this.tracking.createQueued(
+      { channel, to },
+      {
+        channel,
+        provider: this.router.get(channel).provider,
+        maxAttempts: 0,
+        template: ctx.template,
+        tenantId: ctx.tenantId,
+        communityId: ctx.communityId,
+        metadata: { ...ctx.metadata, refused: true },
+      },
+    );
+    await this.tracking.markFailed(id, reason);
   }
 
   /** Send immediately, bypassing the queue (still tracked). Supports streams. */
@@ -192,6 +231,10 @@ export class NotificationDispatcher {
     if (message.channel !== 'email' || message.from || !ctx.communityId) return;
     const sender = await this.senders.emailFor(ctx.communityId);
     if (sender.from) message.from = sender.from;
+    // A branded community's name on the configured address — never a new address.
+    else if (message.fromName && this.defaultFromAddress) {
+      message.from = `"${message.fromName.replace(/["\\\r\n]/g, '')}" <${this.defaultFromAddress}>`;
+    }
     if (sender.replyTo && !message.replyTo) message.replyTo = sender.replyTo;
   }
 

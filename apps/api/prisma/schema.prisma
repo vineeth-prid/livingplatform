@@ -2323,6 +2323,9 @@ model NotificationDelivery {
   failedAt     DateTime?
 
   metadata Json?
+  /// One delivery per (event, template, channel, recipient) — a re-handled event
+  /// cannot send twice. Null for sends that are not event-driven.
+  dedupeKey String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

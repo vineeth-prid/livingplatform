@@ -457,8 +457,9 @@ export class InvoiceService {
     const paidAmount = round2(Number(invoice.paidAmount) + dto.amount);
 
     const sequence = await this.prisma.payment.count({ where: { communityId } });
+    let paymentId = '';
     const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.payment.create({
+      const payment = await tx.payment.create({
         data: {
           communityId,
           purpose: PaymentPurpose.MAINTENANCE,
@@ -476,7 +477,9 @@ export class InvoiceService {
           paidAt,
           createdById: actor.id,
         },
+        select: { id: true },
       });
+      paymentId = payment.id;
       return tx.maintenanceInvoice.update({
         where: { id },
         data: {
@@ -487,6 +490,13 @@ export class InvoiceService {
         },
         include: { unit: { select: { unitNumber: true, type: true } } },
       });
+    });
+    // The owners are told the money reached the association (Payment confirmation).
+    this.events.publish({
+      name: DomainEventName.PaymentRecorded,
+      ...this.events.from(actor, communityId),
+      entityId: paymentId,
+      data: { purpose: PaymentPurpose.MAINTENANCE, amount: dto.amount, invoiceId: invoice.id },
     });
     return toView(updated, updated.unit, null);
   }

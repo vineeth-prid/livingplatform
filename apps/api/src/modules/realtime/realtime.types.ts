@@ -12,6 +12,8 @@ export const RealtimeEventType = {
   GateEntryDecided: 'gate.entry.decided',
   /** Any other status move (completed/cancelled) — refresh, no popup. */
   GateEntryUpdated: 'gate.entry.updated',
+  /** A community announcement went live — the resident app shows a banner. */
+  AnnouncementPublished: 'announcement.published',
 } as const;
 
 export type RealtimeEventTypeName =

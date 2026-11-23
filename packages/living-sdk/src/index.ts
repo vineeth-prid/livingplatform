@@ -42,6 +42,8 @@ export {
   type WhatsAppSession, type WhatsAppSessionStatus, type WhatsAppSettings,
   type NotificationEventKey, type NotificationPreference,
   type CommunityNotificationTemplate,
+  type NotificationTemplateDefaults,
+  type NotificationTemplatePreview,
 } from './resources/notifications';
 export {
   PaymentConfigResource, PaymentsResource, BillingResource,

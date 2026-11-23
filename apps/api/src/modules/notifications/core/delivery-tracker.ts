@@ -16,6 +16,8 @@ export interface TrackContext {
   tenantId?: string | null;
   communityId?: string | null;
   metadata?: Record<string, unknown>;
+  /** Unique per event/template/channel/recipient — see NotificationDelivery.dedupeKey. */
+  dedupeKey?: string;
 }
 
 /**
@@ -46,10 +48,25 @@ export class DeliveryTracker {
         tenantId: ctx.tenantId ?? null,
         communityId: ctx.communityId ?? null,
         metadata: ctx.metadata as Prisma.InputJsonValue | undefined,
+        dedupeKey: ctx.dedupeKey,
       },
       select: { id: true },
     });
     return row.id;
+  }
+
+  /**
+   * Create the row, or return null when its dedupe key already exists — the
+   * unique index makes "already sent" an atomic answer, even when two copies of
+   * the same event are handled at the same moment.
+   */
+  async createQueuedOnce(message: NotificationMessage, ctx: TrackContext & { dedupeKey: string }): Promise<string | null> {
+    try {
+      return await this.createQueued(message, ctx);
+    } catch (err) {
+      if ((err as { code?: string }).code === 'P2002') return null;
+      throw err;
+    }
   }
 
   attachJob(id: string, queueJobId: string): Promise<unknown> {

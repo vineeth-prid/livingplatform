@@ -54,3 +54,25 @@ export class UpsertNotificationTemplateDto {
   @IsBoolean()
   enabled?: boolean;
 }
+
+export class PreviewNotificationTemplateDto {
+  @ApiProperty({ enum: NotificationEvent })
+  @IsEnum(NotificationEvent)
+  event!: NotificationEvent;
+
+  @ApiProperty({ enum: ['email', 'whatsapp'] })
+  @IsIn(['email', 'whatsapp'])
+  channel!: 'email' | 'whatsapp';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  subject?: string;
+
+  @ApiPropertyOptional({ description: 'Wording to preview; omit to preview the platform default.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  body?: string;
+}
