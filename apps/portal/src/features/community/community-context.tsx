@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { qk, useLiving } from '@living/hooks';
+import { qk, useAuth, useLiving } from '@living/hooks';
 import type { Community } from '@living/types';
 
 import { living } from '../../lib/living';
@@ -30,13 +30,18 @@ const STORAGE_KEY = 'living.activeCommunity';
  */
 export function CommunityProvider({ children }: { children: ReactNode }) {
   useLiving();
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(
     () => (typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null),
   );
 
   const { data, isLoading } = useQuery({
-    queryKey: qk.communities({ limit: 50 }),
+    // Per signed-in user, and only once signed in: fetched on the sign-in page
+    // it failed (401) and stayed failed after sign-in — an empty workspace.
+    queryKey: qk.communities({ limit: 50, userId }),
     queryFn: () => living.community.list({ limit: 50, sortDir: 'asc', sortBy: 'name' }),
+    enabled: !!userId,
   });
 
   const communities = useMemo(() => data?.items ?? [], [data]);

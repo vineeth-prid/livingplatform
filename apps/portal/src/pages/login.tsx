@@ -7,6 +7,7 @@ import {
 } from '@living/ui';
 
 import { clearImpersonation } from '../features/admin/impersonation';
+import { useCommunity } from '../features/community/community-context';
 
 
 /**
@@ -19,6 +20,7 @@ export function LoginPage() {
   // The community from a `/login?c=<id>` link, or the one last signed in on this device.
   const brand = useCommunityBranding(installCommunityId());
   const navigate = useNavigate();
+  const { setCommunityId } = useCommunity();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [forgot, setForgot] = useState(false);
@@ -30,7 +32,8 @@ export function LoginPage() {
   // A community's own link (`?c=`) must never open the platform console: a
   // platform admin still signed in on this browser is signed out first, so the
   // community's admin gets the sign-in form instead.
-  const communityLink = !!new URLSearchParams(window.location.search).get('c');
+  const linkCommunityId = new URLSearchParams(window.location.search).get('c');
+  const communityLink = !!linkCommunityId;
   const platformSession = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const signOutFirst = status === 'authenticated' && communityLink && platformSession;
   useEffect(() => {
@@ -46,6 +49,8 @@ export function LoginPage() {
       await login({ email, password, rememberMe: true, ...(needsCode ? { mfaCode } : {}) });
       // A direct sign-in is never an impersonation — no way back to a platform session.
       clearImpersonation();
+      // Open the community the link was for (ignored if this admin has no access to it).
+      if (linkCommunityId) setCommunityId(linkCommunityId);
       toast.success('Welcome back');
       navigate({ to: '/' });
     } catch (err) {
