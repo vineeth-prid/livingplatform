@@ -31,11 +31,13 @@ export class ProvisionCommunityDto {
   @IsEmail()
   adminEmail!: string;
 
-  @ApiProperty({ example: 'Asha' })
-  @IsString() @MinLength(1) @MaxLength(80)
-  adminFirstName!: string;
+  // The admin account is the community's own login, so it defaults to the
+  // community's name ("Skyline Admin") rather than a person's.
+  @ApiPropertyOptional({ example: 'Skyline' })
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(80)
+  adminFirstName?: string;
 
-  @ApiProperty({ example: 'Rao' })
-  @IsString() @MinLength(1) @MaxLength(80)
-  adminLastName!: string;
+  @ApiPropertyOptional({ example: 'Admin' })
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(80)
+  adminLastName?: string;
 }

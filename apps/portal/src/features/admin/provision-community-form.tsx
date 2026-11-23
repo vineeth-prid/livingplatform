@@ -17,8 +17,6 @@ const fields: FieldDef[] = [
   { name: 'type', label: 'Type', type: 'select', required: true, half: true, options: TYPE_OPTIONS },
   { name: 'city', label: 'City', half: true },
   { name: 'state', label: 'State', half: true },
-  { name: 'adminFirstName', label: 'Admin first name', required: true, half: true },
-  { name: 'adminLastName', label: 'Admin last name', required: true, half: true },
   { name: 'adminEmail', label: 'Association admin email', type: 'email', required: true, placeholder: 'admin@thearbour.com' },
 ];
 
@@ -52,8 +50,6 @@ export function ProvisionCommunityForm({
           city: values.city,
           state: values.state,
           adminEmail: values.adminEmail ?? '',
-          adminFirstName: values.adminFirstName ?? '',
-          adminLastName: values.adminLastName ?? '',
         });
         await qc.invalidateQueries({ queryKey: ['communities'] });
         onProvisioned(result);

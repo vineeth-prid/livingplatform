@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BellRing, GripVertical, Image, Mail, MessageCircle, PhoneCall, Plus, Receipt, ShieldCheck,
+  BellRing, Copy, GripVertical, Image, Mail, MessageCircle, PhoneCall, Plus, Receipt, ShieldCheck,
   Sparkles, Trash2, Truck, Volume2, Wrench,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
@@ -90,6 +90,8 @@ export function CommunitySettingsPage() {
         title="Community settings"
         description={`Modules and resident app content for ${community?.name ?? 'this community'}.`}
       />
+
+      <SignInLinksCard />
 
       <BrandingCard canEdit={hasPermission('community:update')} />
 
@@ -558,6 +560,46 @@ function BrandingCard({ canEdit }: { canEdit: boolean }) {
             )}
           </div>
         )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The links that open each app already branded for this community — the
+ * `?c=<id>` the sign-in screens read. The resident and workforce apps live on
+ * sibling subdomains of this portal (resident.<host>, workforce.<host>).
+ */
+function SignInLinksCard() {
+  const { communityId } = useCommunity();
+  if (!communityId) return null;
+  const { protocol, host } = window.location;
+  const links = [
+    { label: 'Admin portal', value: `${protocol}//${host}/login?c=${communityId}` },
+    { label: 'Resident app', value: `${protocol}//resident.${host}/?c=${communityId}` },
+    { label: 'Staff & vendor app', value: `${protocol}//workforce.${host}/?c=${communityId}` },
+    { label: 'Community ID', value: communityId },
+  ];
+  const copy = (text: string) => void navigator.clipboard.writeText(text).then(() => toast.success('Copied'));
+
+  return (
+    <Card variant="elevated" className="mb-6">
+      <h2 className="mb-1 font-display text-h4 tracking-tight text-strong">Sign-in links</h2>
+      <p className="mb-4 text-sm text-muted">
+        Share these so each app opens with your community&apos;s logo and colours. A device remembers the community
+        after the first visit.
+      </p>
+      <div className="space-y-3">
+        {links.map((l) => (
+          <div key={l.label} className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Input label={l.label} value={l.value} readOnly className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => copy(l.value)} aria-label={`Copy ${l.label}`}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
       </div>
     </Card>
   );

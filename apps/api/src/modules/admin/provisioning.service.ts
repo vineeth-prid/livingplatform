@@ -106,8 +106,8 @@ export class ProvisioningService {
         data: {
           email,
           passwordHash,
-          firstName: dto.adminFirstName,
-          lastName: dto.adminLastName,
+          firstName: dto.adminFirstName ?? dto.name,
+          lastName: dto.adminLastName ?? 'Admin',
           tenantId: tenant.id,
           status: 'ACTIVE',
           emailVerifiedAt: new Date(),

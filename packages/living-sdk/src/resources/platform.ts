@@ -9,8 +9,9 @@ export interface ProvisionCommunityInput {
   city?: string;
   state?: string;
   adminEmail: string;
-  adminFirstName: string;
-  adminLastName: string;
+  /** Defaults to the community name + "Admin". */
+  adminFirstName?: string;
+  adminLastName?: string;
 }
 
 export interface ProvisionCommunityResult<C = unknown> {
