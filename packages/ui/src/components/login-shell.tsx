@@ -45,7 +45,7 @@ export function LoginShell({
       <style>{KEYFRAMES}</style>
       <div className={cn('relative min-h-dvh overflow-hidden bg-page', split && 'lg:grid lg:grid-cols-[1.1fr_1fr]')}>
         {split && (
-          <aside className="relative hidden overflow-hidden bg-brand text-brand-fg lg:flex lg:flex-col lg:justify-between lg:p-12 lg:pb-32">
+          <aside style={{ background: PANEL, color: ON_PANEL }} className="relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-12 lg:pb-32">
             <Backdrop onBrand />
             <motion.div {...rise(0)} className="relative">
               <Logo brand={brand} large />
@@ -132,7 +132,7 @@ function Logo({ brand, large }: { brand?: LoginBrand | null; large?: boolean }) 
  * the community; `onBrand` draws in the text colour that reads on the primary.
  */
 function Backdrop({ onBrand }: { onBrand?: boolean }) {
-  const ink = onBrand ? 'var(--brand-on-primary)' : 'var(--brand-primary)';
+  const ink = onBrand ? ON_PANEL : 'var(--brand-primary)';
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {!onBrand && (
@@ -159,7 +159,7 @@ function Backdrop({ onBrand }: { onBrand?: boolean }) {
             height={4}
             rx={0.8}
             className="ls-window"
-            style={{ fill: i % 4 ? (onBrand ? 'var(--brand-on-primary)' : 'var(--brand-primary)') : 'var(--brand-accent)', animationDelay: `${(i * 0.73) % 6}s` }}
+            style={{ fill: i % 4 ? ink : 'var(--brand-accent)', animationDelay: `${(i * 0.73) % 6}s` }}
           />
         ))}
       </svg>
@@ -174,6 +174,10 @@ function Cloud({ className, color }: { className: string; color: string }) {
     </svg>
   );
 }
+
+// The community's true primary (Living green without a theme), in light and dark mode alike.
+const PANEL = 'var(--brand-panel, var(--pine-800))';
+const ON_PANEL = 'var(--brand-on-panel, var(--stone-50))';
 
 // [x, width, height] of the skyline blocks, and the windows that light up on them.
 const BUILDINGS: [number, number, number][] = [

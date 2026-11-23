@@ -17,6 +17,7 @@ describe('community theme → CSS tokens', () => {
     const css = themeCss(skyline);
     expect(css).toContain('--brand-primary:#002A44');
     expect(css).toContain('--brand-on-primary:#ffffff');
+    expect(css).toContain('--brand-panel:#002A44');
     expect(css).toContain('--surface-page:#F4F7F9');
     expect(css).toContain('--font-sans:"Lexend Variable"');
     expect(css).toContain('.font-display,h1,h2,h3{font-weight:600}');

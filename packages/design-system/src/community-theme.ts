@@ -97,6 +97,8 @@ export function themeCss(t: CommunityTheme | null | undefined): string {
   const shared: string[] = [];
   if (t.fontFamily && FONTS[t.fontFamily]) shared.push(`--font-sans:${FONTS[t.fontFamily]}`);
   if (t.bodyWeight) shared.push(`--fw-regular:${t.bodyWeight}`);
+  // Brand panels (sign-in) wear the true primary in both modes, not the dark-mode tint.
+  if (ok(t.primary)) shared.push(`--brand-panel:${t.primary}`, `--brand-on-panel:${readableOn(t.primary)}`);
 
   // html-qualified selectors outrank the token sheet's bare :root / [data-theme].
   let css = '';
