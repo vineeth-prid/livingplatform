@@ -2,8 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
+import { applyCommunityTheme } from '@living/design-system';
 import {
-  Button, ForgotPasswordDialog, Input, LoginShell, installCommunityId, toast, useCommunityBranding,
+  Button, ForgotPasswordDialog, Input, LoginShell, toast, useCommunityBranding,
 } from '@living/ui';
 
 import { clearImpersonation } from '../features/admin/impersonation';
@@ -17,8 +18,14 @@ import { useCommunity } from '../features/community/community-context';
  */
 export function LoginPage() {
   const { login, logout, session, status } = useAuth();
-  // The community from a `/login?c=<id>` link, or the one last signed in on this device.
-  const brand = useCommunityBranding(installCommunityId());
+  // Only a community's own link (`/login?c=<id>`) brands this page. The bare
+  // platform URL is Living's — never the last community used on this device —
+  // so drop any community theme still applied from the previous session.
+  const linkCommunityId = new URLSearchParams(window.location.search).get('c');
+  const brand = useCommunityBranding(linkCommunityId);
+  useEffect(() => {
+    if (!linkCommunityId) applyCommunityTheme(null);
+  }, [linkCommunityId]);
   const navigate = useNavigate();
   const { setCommunityId } = useCommunity();
   const [email, setEmail] = useState('');
@@ -32,7 +39,6 @@ export function LoginPage() {
   // A community's own link (`?c=`) must never open the platform console: a
   // platform admin still signed in on this browser is signed out first, so the
   // community's admin gets the sign-in form instead.
-  const linkCommunityId = new URLSearchParams(window.location.search).get('c');
   const communityLink = !!linkCommunityId;
   const platformSession = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
   const signOutFirst = status === 'authenticated' && communityLink && platformSession;

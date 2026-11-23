@@ -93,9 +93,8 @@ export function CommunitySettingsPage() {
 
       <SignInLinksCard />
 
-      <BrandingCard canEdit={hasPermission('community:update')} />
-
-      <ThemeCard communityId={communityId!} theme={settings.data.theme ?? null} canEdit={canEdit} />
+      <ThemeCard communityId={communityId!} theme={settings.data.theme ?? null} canEdit={canEdit}
+        logo={<LogoField canEdit={hasPermission('community:update')} />} />
 
       <ModuleToggles
         settings={settings.data}
@@ -465,7 +464,7 @@ function ModuleToggles({
  * The file goes to storage through a signed upload; the API checks it is really
  * a PNG/JPG/WebP under 2 MB before using it, and removes the replaced file.
  */
-function BrandingCard({ canEdit }: { canEdit: boolean }) {
+function LogoField({ canEdit }: { canEdit: boolean }) {
   const { communityId, community } = useCommunity();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -517,14 +516,8 @@ function BrandingCard({ canEdit }: { canEdit: boolean }) {
   }
 
   return (
-    <Card variant="elevated" className="mb-6">
-      <h2 className="mb-1 font-display text-h4 tracking-tight text-strong">Branding</h2>
-      <p className="mb-4 text-sm text-muted">
-        Your community&apos;s logo, shown in the portal and the resident app. PNG, JPG or WebP, up to 2 MB. A
-        transparent background works best.
-      </p>
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex h-20 w-40 items-center justify-center rounded-control border border-border-subtle bg-sunken p-2">
+        <div className="flex h-20 w-40 items-center justify-center rounded-card border border-dashed border-border bg-white p-2">
           {logoUrl ? (
             <img src={logoUrl} alt={`${community?.name ?? 'Community'} logo`} className="max-h-full max-w-full object-contain" />
           ) : (
@@ -561,7 +554,6 @@ function BrandingCard({ canEdit }: { canEdit: boolean }) {
           </div>
         )}
       </div>
-    </Card>
   );
 }
 
