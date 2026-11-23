@@ -29,6 +29,12 @@ export function useCommunityBranding(
   useEffect(() => {
     if (!data) return;
     applyCommunityTheme(data.theme as CommunityTheme | null);
+    // The sign-in screen (installCommunityId) shows this community after sign-out.
+    try {
+      localStorage.setItem(INSTALL_KEY, data.communityId);
+    } catch {
+      /* private mode — the link or cookie still brands it */
+    }
     if (!app) return;
     const v = encodeURIComponent(data.version);
     // The server serves /manifest.webmanifest for the community in this cookie,

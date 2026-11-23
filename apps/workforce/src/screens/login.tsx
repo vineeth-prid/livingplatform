@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import {
-  BrandMark, Button, ForgotPasswordDialog, Input, installCommunityId, toast, useCommunityBranding,
+  Button, ForgotPasswordDialog, Input, LoginShell, installCommunityId, toast, useCommunityBranding,
 } from '@living/ui';
 
 /**
@@ -51,20 +51,8 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-between bg-page px-6 py-10">
-      <div className="pt-10">
-        {/* Branded when opened from a community's install link; Living otherwise. */}
-        {brand?.logoUrl ? (
-          <BrandMark logoUrl={brand.logoUrl} name={brand.name} />
-        ) : (
-          <span className="font-display text-3xl text-strong">Living<span className="text-accent">.</span></span>
-        )}
-        <h1 className="mt-8 font-display text-display-lg leading-tight tracking-tight text-strong">
-          Ready for work.
-        </h1>
-        <p className="mt-3 text-muted">Your assigned jobs, wherever the day takes you.</p>
-      </div>
-
+    <LoginShell brand={brand} eyebrow="Staff & vendors" title="Ready for work."
+      subtitle="Your assigned jobs, wherever the day takes you.">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <Input label="Mobile number" inputMode="tel" autoComplete="username"
           placeholder="9876543210" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required
@@ -88,9 +76,8 @@ export function LoginScreen() {
         >
           Forgot your password?
         </button>
-        <p className="text-center text-xs text-subtle">Life Happens Here.</p>
       </form>
       <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} />
-    </div>
+    </LoginShell>
   );
 }

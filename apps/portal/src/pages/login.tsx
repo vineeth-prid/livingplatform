@@ -2,7 +2,9 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
-import { Button, Card, ForgotPasswordDialog, Input, toast } from '@living/ui';
+import {
+  Button, ForgotPasswordDialog, Input, LoginShell, installCommunityId, toast, useCommunityBranding,
+} from '@living/ui';
 
 
 /**
@@ -12,6 +14,8 @@ import { Button, Card, ForgotPasswordDialog, Input, toast } from '@living/ui';
  */
 export function LoginPage() {
   const { login, status } = useAuth();
+  // The community from a `/login?c=<id>` link, or the one last signed in on this device.
+  const brand = useCommunityBranding(installCommunityId());
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,76 +48,52 @@ export function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
-      {/* Editorial brand panel */}
-      <div className="relative hidden flex-col justify-between bg-pine-800 p-12 lg:flex">
-        <span className="font-display text-2xl text-stone-50">
-          Living<span className="text-clay-400">.</span>
-        </span>
-        <div>
-          <h1 className="font-display text-display-lg leading-tight tracking-tight text-stone-50">
-            Life Happens Here.
-          </h1>
-          <p className="mt-4 max-w-md text-pine-100">
-            A calm operating system for residential communities.
-          </p>
-        </div>
-        <p className="text-2xs uppercase tracking-wider text-pine-200">Living · Since 2024</p>
-      </div>
-
-      {/* Form */}
-      <div className="flex items-center justify-center p-6">
-        <Card variant="elevated" className="w-full max-w-sm">
-          <div className="mb-6">
-            <h2 className="font-display text-h2 tracking-tight text-strong">Sign in</h2>
-            <p className="mt-1 text-sm text-muted">Welcome back to Living.</p>
-          </div>
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            <Input
-              label="Email or mobile"
-              type="text"
-              autoComplete="username"
-              placeholder="you@community.com or 9876543210"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              label="Password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            {needsCode && (
-              <Input
-                label="Authenticator code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="6-digit code"
-                maxLength={6}
-                value={mfaCode}
-                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                autoFocus
-                required
-              />
-            )}
-            <Button type="submit" block loading={submitting} className="mt-1">
-              Sign in
-            </Button>
-            <button
-              type="button"
-              onClick={() => setForgot(true)}
-              className="text-center text-sm text-brand underline-offset-2 hover:underline"
-            >
-              Forgot password?
-            </button>
-          </form>
-        </Card>
-        <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} />
-      </div>
-    </div>
+    <LoginShell split brand={brand} title="Sign in"
+      subtitle={`Welcome back to ${brand?.name ?? 'Living'}.`}>
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <Input
+          label="Email or mobile"
+          type="text"
+          autoComplete="username"
+          placeholder="you@community.com or 9876543210"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <Input
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        {needsCode && (
+          <Input
+            label="Authenticator code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="6-digit code"
+            maxLength={6}
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+            autoFocus
+            required
+          />
+        )}
+        <Button type="submit" block loading={submitting} className="mt-1">
+          Sign in
+        </Button>
+        <button
+          type="button"
+          onClick={() => setForgot(true)}
+          className="text-center text-sm text-brand underline-offset-2 hover:underline"
+        >
+          Forgot password?
+        </button>
+      </form>
+      <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} />
+    </LoginShell>
   );
 }

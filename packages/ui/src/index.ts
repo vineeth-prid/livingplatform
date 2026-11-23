@@ -8,6 +8,7 @@ export { Badge, badgeVariants, type BadgeProps } from './components/badge';
 export { Avatar, type AvatarProps } from './components/avatar';
 export { CommunityLogo } from './components/community-logo';
 export { BrandMark, installCommunityId, useCommunityBranding } from './components/community-branding';
+export { LoginShell } from './components/login-shell';
 export { recoverFromStaleBuild } from './stale-build';
 export { Skeleton } from './components/skeleton';
 export { Spinner } from './components/spinner';
