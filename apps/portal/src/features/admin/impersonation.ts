@@ -49,6 +49,16 @@ export function cancelImpersonation(): void {
   localStorage.removeItem(KEY);
 }
 
+/**
+ * Forget the stash without restoring it — on every sign-in and sign-out. The
+ * stash holds a platform admin's tokens; left behind, the next person to sign
+ * in on this browser (a community admin) got the "Exit to platform admin"
+ * banner and could walk into the platform console with them.
+ */
+export function clearImpersonation(): void {
+  localStorage.removeItem(KEY);
+}
+
 /** The community name currently being impersonated, or null. */
 export function getImpersonation(): string | null {
   const raw = localStorage.getItem(KEY);

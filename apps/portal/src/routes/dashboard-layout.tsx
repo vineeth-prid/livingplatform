@@ -14,7 +14,7 @@ import {
 import { applyCommunityTheme } from '@living/design-system';
 
 import { useCommunity } from '../features/community/community-context';
-import { exitImpersonation, getImpersonation } from '../features/admin/impersonation';
+import { clearImpersonation, exitImpersonation, getImpersonation } from '../features/admin/impersonation';
 import { ChangePasswordGate } from '../pages/change-password';
 import { MfaSetupGate } from '../pages/mfa-setup';
 import { RequireAuth } from './guards';
@@ -233,6 +233,7 @@ export function DashboardLayout() {
                 </DropdownMenuItem>
               }
               onSignOut={() => {
+                clearImpersonation();
                 void logout().then(() => navigate({ to: '/login' }));
               }}
             />

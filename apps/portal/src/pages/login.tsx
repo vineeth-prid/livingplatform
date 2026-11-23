@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { LivingApiError } from '@living/living-sdk';
 import { useAuth } from '@living/hooks';
 import {
   Button, ForgotPasswordDialog, Input, LoginShell, installCommunityId, toast, useCommunityBranding,
 } from '@living/ui';
+
+import { clearImpersonation } from '../features/admin/impersonation';
 
 
 /**
@@ -13,7 +15,7 @@ import {
  * on. (Seeded dev creds: admin@living.local / Living!2024.)
  */
 export function LoginPage() {
-  const { login, status } = useAuth();
+  const { login, logout, session, status } = useAuth();
   // The community from a `/login?c=<id>` link, or the one last signed in on this device.
   const brand = useCommunityBranding(installCommunityId());
   const navigate = useNavigate();
@@ -25,13 +27,25 @@ export function LoginPage() {
   const [needsCode, setNeedsCode] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
 
-  if (status === 'authenticated') return <Navigate to="/" />;
+  // A community's own link (`?c=`) must never open the platform console: a
+  // platform admin still signed in on this browser is signed out first, so the
+  // community's admin gets the sign-in form instead.
+  const communityLink = !!new URLSearchParams(window.location.search).get('c');
+  const platformSession = (session?.roles ?? []).some((r) => r.scope === 'PLATFORM');
+  const signOutFirst = status === 'authenticated' && communityLink && platformSession;
+  useEffect(() => {
+    if (signOutFirst) void logout();
+  }, [signOutFirst, logout]);
+
+  if (status === 'authenticated' && !signOutFirst) return <Navigate to="/" />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
       await login({ email, password, rememberMe: true, ...(needsCode ? { mfaCode } : {}) });
+      // A direct sign-in is never an impersonation — no way back to a platform session.
+      clearImpersonation();
       toast.success('Welcome back');
       navigate({ to: '/' });
     } catch (err) {
